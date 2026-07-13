@@ -1,0 +1,75 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout con Git LFS
+        uses: actions/checkout@v5
+        with:
+          lfs: true
+
+      - name: Obtener archivos LFS
+        run: git lfs pull && test -s public/maps/el-salvador.pmtiles
+
+      - name: Configurar Node.js para prueba de navegador
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar Playwright
+        run: npm ci && npx playwright install --with-deps chromium
+
+      - name: Construir imagen de prueba
+        run: docker build --tag rutas-perdidas:test .
+
+      - name: Iniciar contenedor
+        run: docker run --detach --rm --name rutas-perdidas --publish 8080:80 rutas-perdidas:test
+
+      - name: Verificar salud, SPA y Range Requests
+        run: |
+          for attempt in $(seq 1 20); do
+            curl --fail --silent http://127.0.0.1:8080/healthz && break
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8080/ | grep -q "root"
+          status=$(curl --silent --output /tmp/map-range.bin --write-out "%{http_code}" --header "Range: bytes=0-1023" http://127.0.0.1:8080/maps/el-salvador.pmtiles)
+          test "$status" = "206"
+          test "$(wc -c < /tmp/map-range.bin)" = "1024"
+
+      - name: Probar mapa y autonomía en navegador
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
+        run: npm run test:e2e
+
+      - name: Detener contenedor de prueba
+        if: always()
+        run: docker stop rutas-perdidas || true
+
+      - name: Iniciar sesión en GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publicar imagen por SHA
+        if: github.event_name != 'pull_request'
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          docker tag rutas-perdidas:test "$image:${GITHUB_SHA}"
+          docker tag rutas-perdidas:test "$image:latest"
+          docker push "$image:${GITHUB_SHA}"
+          docker push "$image:latest"

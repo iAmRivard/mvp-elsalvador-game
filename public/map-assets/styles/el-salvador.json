@@ -1,0 +1,234 @@
+{
+  "version": 8,
+  "name": "Rutas Perdidas — Selva nocturna",
+  "metadata": {
+    "game:runtime-autonomy": true,
+    "game:map-version": "2026-07-10"
+  },
+  "center": [-88.8965, 13.7942],
+  "zoom": 7.35,
+  "bearing": -8,
+  "pitch": 48,
+  "sprite": "/map-assets/sprites/basemap",
+  "glyphs": "/map-assets/fonts/{fontstack}/{range}.pbf",
+  "sources": {
+    "el-salvador": {
+      "type": "vector",
+      "url": "pmtiles:///maps/el-salvador.pmtiles",
+      "attribution": "© OpenStreetMap contributors · ODbL"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#162522" }
+    },
+    {
+      "id": "earth",
+      "type": "fill",
+      "source": "el-salvador",
+      "source-layer": "earth",
+      "paint": { "fill-color": "#26352e" }
+    },
+    {
+      "id": "landcover",
+      "type": "fill",
+      "source": "el-salvador",
+      "source-layer": "landcover",
+      "filter": ["in", ["get", "kind"], ["literal", ["forest", "grassland", "scrub"]]],
+      "paint": {
+        "fill-color": [
+          "match",
+          ["get", "kind"],
+          "forest",
+          "#1d3b2d",
+          "grassland",
+          "#40503a",
+          "scrub",
+          "#344638",
+          "#2d3d34"
+        ],
+        "fill-opacity": 0.86
+      }
+    },
+    {
+      "id": "parks-and-landuse",
+      "type": "fill",
+      "source": "el-salvador",
+      "source-layer": "landuse",
+      "filter": [
+        "in",
+        ["get", "kind"],
+        ["literal", ["park", "national_park", "nature_reserve", "forest", "wood", "farmland", "residential"]]
+      ],
+      "paint": {
+        "fill-color": [
+          "match",
+          ["get", "kind"],
+          "residential",
+          "#3c4540",
+          "farmland",
+          "#4a4b35",
+          "#254434"
+        ],
+        "fill-opacity": 0.64
+      }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "el-salvador",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "#173b47",
+        "fill-outline-color": "#2f6370"
+      }
+    },
+    {
+      "id": "water-lines",
+      "type": "line",
+      "source": "el-salvador",
+      "source-layer": "water",
+      "filter": ["==", ["geometry-type"], "LineString"],
+      "paint": {
+        "line-color": "#356a74",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 8, 0.4, 14, 1.8],
+        "line-opacity": 0.8
+      }
+    },
+    {
+      "id": "buildings",
+      "type": "fill",
+      "source": "el-salvador",
+      "source-layer": "buildings",
+      "minzoom": 13,
+      "paint": {
+        "fill-color": "#53615a",
+        "fill-outline-color": "#67766e",
+        "fill-opacity": 0.72
+      }
+    },
+    {
+      "id": "administrative-boundaries",
+      "type": "line",
+      "source": "el-salvador",
+      "source-layer": "boundaries",
+      "paint": {
+        "line-color": "#8a8f78",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.7, 12, 1.4],
+        "line-dasharray": [3, 3],
+        "line-opacity": 0.42
+      }
+    },
+    {
+      "id": "roads-casing",
+      "type": "line",
+      "source": "el-salvador",
+      "source-layer": "roads",
+      "filter": ["in", ["get", "kind"], ["literal", ["highway", "major_road", "minor_road"]]],
+      "paint": {
+        "line-color": "#15211f",
+        "line-width": [
+          "interpolate",
+          ["exponential", 1.45],
+          ["zoom"],
+          7,
+          1.4,
+          11,
+          3.2,
+          15,
+          9
+        ],
+        "line-opacity": 0.86
+      }
+    },
+    {
+      "id": "roads",
+      "type": "line",
+      "source": "el-salvador",
+      "source-layer": "roads",
+      "filter": ["in", ["get", "kind"], ["literal", ["highway", "major_road", "minor_road"]]],
+      "paint": {
+        "line-color": [
+          "match",
+          ["get", "kind"],
+          "highway",
+          "#d8a95b",
+          "major_road",
+          "#b7a272",
+          "#7f897a"
+        ],
+        "line-width": [
+          "interpolate",
+          ["exponential", 1.45],
+          ["zoom"],
+          7,
+          0.65,
+          11,
+          1.7,
+          15,
+          5.7
+        ],
+        "line-opacity": 0.95
+      }
+    },
+    {
+      "id": "local-roads",
+      "type": "line",
+      "source": "el-salvador",
+      "source-layer": "roads",
+      "minzoom": 11,
+      "filter": ["in", ["get", "kind"], ["literal", ["path", "rail", "pier"]]],
+      "paint": {
+        "line-color": "#7d887c",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.3, 15, 1.6],
+        "line-opacity": 0.6
+      }
+    },
+    {
+      "id": "place-labels",
+      "type": "symbol",
+      "source": "el-salvador",
+      "source-layer": "places",
+      "minzoom": 6,
+      "filter": [
+        "in",
+        ["get", "kind_detail"],
+        ["literal", ["city", "town", "village", "municipality"]]
+      ],
+      "layout": {
+        "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 7, 11, 12, 15],
+        "text-letter-spacing": 0.04,
+        "text-max-width": 9,
+        "text-allow-overlap": false
+      },
+      "paint": {
+        "text-color": "#ebe7d8",
+        "text-halo-color": "#172522",
+        "text-halo-width": 1.5,
+        "text-halo-blur": 0.5
+      }
+    },
+    {
+      "id": "poi-labels",
+      "type": "symbol",
+      "source": "el-salvador",
+      "source-layer": "pois",
+      "minzoom": 11,
+      "layout": {
+        "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 10,
+        "text-max-width": 8
+      },
+      "paint": {
+        "text-color": "#cbd2c4",
+        "text-halo-color": "#172522",
+        "text-halo-width": 1
+      }
+    }
+  ]
+}

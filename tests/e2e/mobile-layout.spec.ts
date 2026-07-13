@@ -1,0 +1,95 @@
+import { expect, type Page, test } from '@playwright/test';
+
+interface Rectangle {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function rectanglesOverlap(first: Rectangle, second: Rectangle): boolean {
+  return !(
+    first.x + first.width <= second.x ||
+    second.x + second.width <= first.x ||
+    first.y + first.height <= second.y ||
+    second.y + second.height <= first.y
+  );
+}
+
+async function enterExpedition(page: Page) {
+  await page.getByRole('button', { name: 'Comenzar expedición' }).click();
+  await page.getByRole('button', { name: 'Omitir' }).click();
+  await expect(page.getByText('El mapa local está listo.')).toBeAttached({
+    timeout: 20_000,
+  });
+}
+
+test('mantiene controles y paneles utilizables en viewport táctil', async ({
+  page,
+}, testInfo) => {
+  test.skip(!testInfo.project.name.startsWith('chromium-mobile'));
+  await page.addInitScript(() => window.localStorage.clear());
+  await page.goto('/');
+  await enterExpedition(page);
+
+  const touchControls = page.getByLabel('Controles táctiles');
+  await expect(touchControls).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Avanzar' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Acelerar' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Centrar cámara en el jugador' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Pausar partida' }).last(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Expandir panel de misiones' }),
+  ).toBeVisible();
+
+  const hudBox = await page.locator('.player-hud').boundingBox();
+  const missionBox = await page.locator('.mission-panel').boundingBox();
+  const dpadBox = await page.locator('.touch-dpad').boundingBox();
+  const actionsBox = await page.locator('.touch-actions').boundingBox();
+  expect(hudBox).not.toBeNull();
+  expect(missionBox).not.toBeNull();
+  expect(dpadBox).not.toBeNull();
+  expect(actionsBox).not.toBeNull();
+  expect(rectanglesOverlap(hudBox!, missionBox!)).toBe(false);
+  expect(rectanglesOverlap(dpadBox!, actionsBox!)).toBe(false);
+
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  for (const box of [hudBox!, missionBox!, dpadBox!, actionsBox!]) {
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport!.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport!.height);
+  }
+
+  const initialPosition = await page
+    .getByTestId('player-position')
+    .textContent();
+  const forwardBox = await page
+    .getByRole('button', { name: 'Avanzar' })
+    .boundingBox();
+  expect(forwardBox).not.toBeNull();
+  await page.mouse.move(
+    forwardBox!.x + forwardBox!.width / 2,
+    forwardBox!.y + forwardBox!.height / 2,
+  );
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  await page.mouse.up();
+  await expect
+    .poll(() => page.getByTestId('player-position').textContent())
+    .not.toBe(initialPosition);
+
+  const hasDocumentScroll = await page.evaluate(
+    () =>
+      document.documentElement.scrollHeight >
+        document.documentElement.clientHeight ||
+      document.documentElement.scrollWidth >
+        document.documentElement.clientWidth,
+  );
+  expect(hasDocumentScroll).toBe(false);
+});
