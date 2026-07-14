@@ -185,7 +185,9 @@ export function addMissionRoute(
     anchor: 'center',
     rotationAlignment: 'map',
     pitchAlignment: 'map',
-  }).addTo(map);
+  })
+    .setLngLat(map.getCenter())
+    .addTo(map);
 
   map.addSource(TARGETS_SOURCE_ID, { type: 'geojson', data: emptyTargets });
   map.addLayer({

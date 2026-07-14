@@ -8,8 +8,10 @@ GLYPH="$ROOT/public/map-assets/fonts/Noto Sans Regular/0-255.pbf"
 GLYPH_EXTENDED="$ROOT/public/map-assets/fonts/Noto Sans Regular/256-511.pbf"
 SPRITE_JSON="$ROOT/public/map-assets/sprites/basemap.json"
 SPRITE_PNG="$ROOT/public/map-assets/sprites/basemap.png"
+SPRITE_2X_JSON="$ROOT/public/map-assets/sprites/basemap@2x.json"
+SPRITE_2X_PNG="$ROOT/public/map-assets/sprites/basemap@2x.png"
 
-for file in "$MAP" "$STYLE" "$GLYPH" "$GLYPH_EXTENDED" "$SPRITE_JSON" "$SPRITE_PNG"; do
+for file in "$MAP" "$STYLE" "$GLYPH" "$GLYPH_EXTENDED" "$SPRITE_JSON" "$SPRITE_PNG" "$SPRITE_2X_JSON" "$SPRITE_2X_PNG"; do
   test -s "$file" || {
     echo "Error: falta el recurso cartográfico $file" >&2
     exit 1
