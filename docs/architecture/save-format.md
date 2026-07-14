@@ -28,7 +28,7 @@ La versión actual es `3` y utiliza este sobre:
     "lastSafeCheckpoint": {},
     "currentChapterId": "chapter-1",
     "completedChapterIds": [],
-    "roadNetworkVersion": 1
+    "roadNetworkVersion": 2
   }
 }
 ```
@@ -41,6 +41,8 @@ guarda: sólo se registra su versión y se vuelve a cargar desde el archivo est�
 Los cierres narrativos no duplican IDs de aristas en el documento. Se reconstruyen a partir de la
 misión, objetivos completados y `missionChoiceSelections`, por lo que **Camino bloqueado** conserva
 desvío y tiempo al cargar. Los overlays activos no se persisten; sus entradas de Bitácora sí.
+Los destinos temporales de ubicación o combustible tampoco se persisten: al cargar se recupera la
+ruta normal de la misión sin modificar su progreso.
 
 Cada checkpoint conserva posición, combustible, condición, inventario, energía, misión, objetivos
 completados y progreso parcial. `lastCheckpoint` permite reintentar una misión y

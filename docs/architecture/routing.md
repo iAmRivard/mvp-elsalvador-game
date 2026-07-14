@@ -39,14 +39,14 @@ grafo al hilo principal ni lo transfiere por cada misión.
 
 ## Ciclo de recálculo
 
-La ruta se calcula al iniciar misión, cambiar objetivo o cierres, pulsar `R` o usar el botón de la
-bitácora. La desviación se revisa una vez por segundo; superar 250 m activa un cálculo solo si
-pasaron al menos cinco segundos. Un token local y el `requestId` del worker impiden aplicar rutas de
-un objetivo anterior.
+La ruta se calcula al iniciar misión, cambiar objetivo o cierres, seleccionar un destino temporal,
+pulsar `R` o usar el botón de la bitácora. La desviación se revisa una vez por segundo; superar 250 m
+activa un cálculo solo si pasaron al menos cinco segundos. Un token local, una clave de destino y el
+`requestId` del worker impiden aplicar rutas de un objetivo anterior.
 
-MapLibre diferencia ruta vial sólida y fallback discontinuo, resalta el segmento inmediato y coloca
-una flecha hacia la próxima maniobra. La bitácora muestra cálculo, aviso fuera de ruta, distancia,
-duración y estado de recálculo sin bloquear conducción, cámara o audio.
+MapLibre diferencia ruta vial sólida, fallback discontinuo y conector celeste de reincorporación.
+El destino temporal de combustible sustituye visualmente a la misión, pero no borra misión ni
+progreso; recargar o cancelar restaura la clave anterior y dispara un nuevo A*.
 
 ## Navegación
 
@@ -54,6 +54,12 @@ duración y estado de recálculo sin bloquear conducción, cámara o audio.
 `slight-left`, `slight-right`, `turn-left`, `turn-right`, `u-turn` y `arrive`. Fusiona cambios
 menores y separa maniobras cercanas para no anunciar cada curva del trazado.
 
-Durante el movimiento se proyecta el jugador sobre la ruta, se elige la siguiente instrucción y se
-calcula su distancia restante. La instrucción visible cambia entre continuar, girar, llegar, fuera
-de ruta y calculando. No hay navegación por voz en v0.2.1.
+`recommendedRouteHeading()` busca primero alrededor del último segmento conocido, penaliza segmentos
+detrás del jugador, mantiene continuidad e histéresis y detecta si hace falta reincorporarse. Devuelve
+heading, índice y distancia al segmento. En retornos, paralelas y circuitos evita saltar a una parte
+lejana sólo porque esté cerca geográficamente.
+
+`ActiveNavigationState` es la única fuente para flecha, texto, tramo inmediato, maniobra y distancia.
+El triángulo y Three.js mantienen `physicalHeading`; la flecha hueca usa `recommendedHeading` y se
+oculta al quedar alineada. Con velocidad menor de 2 km/h y diferencia mayor de 45 grados se muestra
+una indicación para girar sin rotar el vehículo automáticamente. No hay navegación por voz.

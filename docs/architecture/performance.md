@@ -52,16 +52,20 @@ solicitud pendiente se cuentan como antiguas y no se aplican. El timeout es 4 s.
 sin Worker usa A* local como fallback, mientras una respuesta obsoleta se descarta para no reemplazar
 la ruta vigente. El router y su caché LRU de 32 entradas permanecen dentro del worker.
 
-## Tamaños del build
+## Tamaños del build v0.2.4
 
-- Grafo vial: 5,795,394 bytes; 17,048 nodos y 23,019 aristas.
-- Memoria vial aproximada: 9.5 MiB por índice y estructuras del hilo principal.
-- Worker vial: 22.86 KiB sin comprimir.
-- CSS: 132.59 KiB, 23.09 KiB gzip.
-- Chunk inicial: 309.49 KiB, 92.59 KiB gzip.
-- `GameMap`: 64.17 KiB, 22.12 KiB gzip.
+- Grafo vial: 6,317,168 bytes; 17,083 nodos y 23,054 aristas.
+- Worker vial: 23.12 KiB sin comprimir.
+- CSS: 159.41 KiB, 28.16 KiB gzip.
+- Chunk inicial: 361.66 KiB, 105.62 KiB gzip.
+- `GameMap`: 79.25 KiB, 26.35 KiB gzip.
 - Capa Three.js: 608.77 KiB, 154.48 KiB gzip.
 - Motor cartográfico diferido: 1,028.13 KiB, 273.19 KiB gzip.
+
+La ampliación incluye superficie vial, navegación sincronizada, marcadores adaptativos, tutorial
+compacto, joystick único y combustible. La validación de producción conserva una sola solicitud del
+grafo y A* dentro del worker; los valores de tiempo de la tabla v0.2.1 permanecen como referencia
+histórica hasta repetir una medición dedicada sin carga concurrente de Playwright.
 
 Los nombres hash y tamaños pueden variar con el bundler. `npm run build`, `npm run test:e2e` y los
 atributos de diagnóstico son la fuente para una medición nueva; CI no fija umbrales de FPS de

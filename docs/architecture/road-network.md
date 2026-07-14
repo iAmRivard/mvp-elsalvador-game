@@ -7,10 +7,11 @@ misma promesa para solicitudes concurrentes. Un fallo permite reintentar sin blo
 
 ## Contrato
 
-`public/data/roads/western-corridor.json` usa la versión 1. Sus nodos contienen ID y coordenadas;
-las aristas agregan extremos, geometría, distancia, clase, sentido y multiplicador de velocidad.
-No incluye nombres, etiquetas OSM ni metadatos que el juego no consume. El archivo mide 5.53 MiB
-sin comprimir y Nginx lo entrega comprimido cuando el cliente lo admite.
+`public/data/roads/western-corridor.json` usa la versión 2. Sus nodos contienen ID y coordenadas;
+las aristas agregan extremos, geometría, distancia, clase, superficie, sentido y multiplicador de
+velocidad. El generador conserva `surface` de OSM para distinguir vías no pavimentadas sin incluir
+nombres ni metadatos que el juego no consume. El archivo mide 6.02 MiB sin comprimir y Nginx lo
+entrega comprimido cuando el cliente lo admite.
 
 La generación conserva únicamente el mayor componente conexo. Esto evita que una entrada de
 estacionamiento aislada sea elegida como acceso a una misión y garantiza una base navegable entre
@@ -21,7 +22,19 @@ las zonas del capítulo.
 `RoadSpatialIndex` divide el corredor en celdas de `0.0025` grados. Cada segmento se registra solo
 en las celdas que toca. Una consulta convierte el radio en metros a una ventana de celdas, elimina
 segmentos repetidos y proyecta la posición únicamente sobre esos candidatos. El game loop no
-recorre las 23,019 aristas.
+recorre las 23,054 aristas ni los 17,083 nodos completos.
+
+## Superficies jugables
+
+La clase vial conserva el costo topológico de A*, mientras la superficie gobierna conducción y HUD.
+Las vías con superficie no pavimentada explícita usan `dirt-road`: ritmo `0.5`, combustible `1.35`
+y condición `1.25`. `track` queda para trazas transitables más débiles y `offroad` sólo se asigna
+cuando no existe una arista jugable cercana.
+
+La capa de superficie renderiza las mismas geometrías del grafo. Carreteras principales son sólidas,
+vías secundarias más delgadas y los 1,019 tramos `dirt-road` usan una línea discontinua diferenciada.
+Los caminos del mapa base que no pertenecen al grafo quedan atenuados para no prometer una vía con
+reglas distintas.
 
 Las métricas de desarrollo exponen cantidad de segmentos y celdas, número de búsquedas, candidatos
 de la última consulta y duración promedio. La red grande no se almacena en Zustand ni se persiste

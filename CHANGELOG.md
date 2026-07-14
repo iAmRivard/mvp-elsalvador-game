@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.2.4 - 2026-07-14
+
+### Navegación y mapa
+
+- La orientación física del vehículo permanece separada del heading recomendado; una flecha cian
+  independiente, el texto y el tramo inmediato derivan del mismo segmento activo.
+- La proyección de ruta prioriza continuidad local, aplica histéresis y distingue el conector
+  discontinuo de reincorporación de la ruta vial principal.
+- La red vial sube al esquema 2 con `dirt-road`, 17,083 nodos, 23,054 aristas y estilos jugables
+  coherentes para vías pavimentadas, caminos de tierra, senderos y terreno offroad.
+- Los marcadores limitan etiquetas según zoom, prioridad, colisión, pitch y viewport; sus detalles
+  muestran estado, distancia y una acción para marcar ruta.
+
+### Móvil, tutorial y combustible
+
+- Tutorial móvil compacto de nueve pasos para vehículo, ruta, objetivo, conducción, frenado, Turbo,
+  interacción, combustible y reincorporación, sin cubrir controles ni CTA de misión.
+- CTA persistente para iniciar, continuar o navegar a la siguiente misión desde la bitácora móvil
+  contraída.
+- Nuevo modo predeterminado `single-drive-joystick`: ambos ejes controlan aceleración, frenado,
+  reversa y giro; los tres modos anteriores siguen disponibles y las preferencias migran a v7.
+- Tres puntos narrativos de combustible con icono y color exclusivos, leyenda, distancia, destino
+  temporal A*, recarga gratuita de 45%, retorno automático a la misión y bidón de emergencia.
+- Alertas a 25% y 10% ofrecen estación, autonomía y bidón; 0% conserva checkpoint, lugar seguro y
+  recuperación de emergencia para evitar bloqueos.
+
+### Pruebas
+
+- 249 pruebas unitarias y de integración cubren heading, reincorporación, superficies, marcadores,
+  tutorial, joystick, migración, estaciones, recarga y softlocks.
+- Playwright termina con 30 pruebas aprobadas y 15 omisiones intencionales en escritorio, Pixel 7
+  vertical y horizontal, incluidos ruta vial a combustible, recarga, retorno a misión y separación
+  geométrica de ayuda, joystick y acciones.
+- El playtest físico de cinco personas continúa pendiente y no se sustituye por resultados
+  automatizados.
+
 ## v0.2.3 - 2026-07-14
 
 ### Historia y misiones

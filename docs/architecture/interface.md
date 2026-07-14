@@ -35,7 +35,8 @@ Estas preferencias no forman parte del guardado de la expedición. Reiniciar pro
 decisiones de accesibilidad. Cambiar calidad o movimiento recrea MapLibre para aplicar antialias,
 pixel ratio y tiempos de cámara de manera coherente; cambiar la atmósfera sólo actualiza una capa
 CSS sin interacción. La sensibilidad se lee desde el game loop y cambia sin reconstruir el mapa.
-La versión 6 agrega volumen y silencio de música, además del aviso opcional para migrar controles.
+La versión 7 agrega joystick único y un aviso opcional que no reemplaza el modo existente. La
+versión 6 agregó volumen y silencio de música, además del primer aviso para migrar controles.
 La versión 5 agregó controles móviles y migró documentos 1 a 4 con joystick fijo mediano, zona
 muerta `0.14`, pedales, crucero inicial desactivado y hápticos activos. La versión 4 agregó audio;
 documentos anteriores cargan volúmenes 0.7 y 0.8. La versión 3 agregó asistencia vial; versiones 1 y
@@ -43,7 +44,8 @@ documentos anteriores cargan volúmenes 0.7 y 0.8. La versión 3 agregó asisten
 
 ## Indicadores
 
-- El combustible cambia a advertencia bajo 20 % y a estado crítico bajo 10 %.
+- El combustible cambia a advertencia a 25% y a estado crítico a 10%; la ayuda muestra estación,
+  distancia, autonomía, ruta temporal, bidón o recarga según contexto.
 - El bloque de terreno muestra clase de vía, porcentaje de ritmo y consumo, estado offroad y una
   advertencia textual cuando agua, un bloqueo o los límites detienen el vehículo.
 - La ruta activa anuncia que el objetivo está cercano al entrar a 1,5 veces su radio de validación.

@@ -18,6 +18,10 @@ Coatepeque y Cerro Verde. Conserva `motorway`, `trunk`, `primary`, `secondary`, 
 `residential`, `service` y `track`, incluidos enlaces de las primeras cinco clases. Excluye áreas,
 accesos privados y vías no aptas para vehículos.
 
+El esquema 2 conserva `surface`. Asfalto, concreto y pavimento permanecen en su clase vial; tierra,
+grava, suelo, arena y superficies no pavimentadas se normalizan como `dirt-road`. El snapshot final
+contiene 17,083 nodos, 23,054 aristas y 1,019 tramos de tierra en 6,317,168 bytes.
+
 Las vías principales usan un corredor amplio. Las residenciales, de servicio y pistas se limitan a
 bandas y núcleos jugables para evitar descargar barrios sin función narrativa. Los cruces se
 preservan, los tramos compatibles se unen, los puntos interiores se simplifican a 2.5 m y se elimina

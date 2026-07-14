@@ -1,9 +1,9 @@
 # El Salvador: Rutas Perdidas
 
 Videojuego web de conducción y exploración sobre una cartografía estilizada de El Salvador. La
-v0.2.3 incluye mapa MapLibre 2.5D autónomo, controles móviles de dos pulgares, corredor vial local,
-rutas A* en Web Worker, historia guiada, elección persistente, combustible balanceado, música local,
-vehículo y referencias 3D, progreso, Docker y despliegue en Dokploy.
+v0.2.4 incluye mapa MapLibre 2.5D autónomo, navegación sincronizada, joystick móvil de conducción,
+red vial local con caminos de tierra, rutas A* en Web Worker, historia guiada, estaciones de
+combustible, música local, vehículo y referencias 3D, progreso, Docker y despliegue en Dokploy.
 
 ## Requisitos
 
@@ -32,14 +32,14 @@ Abre la dirección que muestra Vite. El mapa permite zoom, rotación, inclinaci�
 - `Escape`: pausar o reanudar.
 - `E`: realizar la acción contextual del objetivo cercano.
 - `Espacio`: alternativa temporal para la misma interacción.
-- En pantallas táctiles aparece joystick de dirección, crucero explícito, freno/reversa, Turbo por
-  toque y acción contextual.
+- En pantallas táctiles, un joystick único combina aceleración, frenado, reversa y giro; permanecen
+  Turbo por toque, acción contextual, pausa y recentrado.
 
-Las instalaciones nuevas usan **Joystick + crucero**: `AUTO` comienza apagado y requiere un toque;
-Turbo dura 2.5 segundos y luego enfría 1.8 segundos. **Joystick + pedales** y **Botones clásicos**
-siguen disponibles sin sobrescribir preferencias existentes. Frenar, pausar, perder foco, cambiar
-orientación, abrir un diálogo o iniciar recuperación cancela crucero y Turbo. La bitácora inicia
-contraída en teléfonos y reserva espacio para controles tanto en vertical como en horizontal.
+Las instalaciones nuevas usan **Joystick único**: arriba acelera, abajo frena y sólo activa reversa
+después de detenerse, mientras el eje horizontal gira. **Joystick + crucero**, **Joystick + pedales**
+y **Botones clásicos** siguen disponibles sin sobrescribir preferencias existentes. Turbo dura 2.5
+segundos y enfría 1.8 segundos. Pausar, perder foco, cambiar orientación, abrir un diálogo o iniciar
+recuperación limpia la entrada. La bitácora inicia contraída y conserva un CTA visible.
 
 El vehículo inicia en San Salvador. La cámara se acerca al detenerse, se abre de forma progresiva
 con la velocidad y coloca el vehículo debajo del centro para mostrar más camino por delante. Una
@@ -70,8 +70,8 @@ configuración. Al pausar con `Escape` o `Ⅱ` se puede continuar, guardar, ajus
 volver al inicio.
 
 La calidad gráfica, sensibilidad, asistencia vial, movimiento reducido, atmósfera, audio, tutorial
-y controles móviles se guardan en este dispositivo, separados del progreso. Preferencias v1 a v4
-migran al formato v6 sin perder ajustes. Cambiar la calidad reconstruye el mapa con el perfil
+y controles móviles se guardan en este dispositivo, separados del progreso. Preferencias v1 a v6
+migran al formato v7 sin perder ajustes ni el modo elegido. Cambiar la calidad reconstruye el mapa con el perfil
 solicitado. Consulta `docs/architecture/interface.md`, `docs/architecture/mobile.md` y
 `docs/architecture/audio.md`.
 
@@ -100,23 +100,23 @@ una cuenta `3-2-1` y un temporizador de 4:30. Consulta `docs/gameplay/story-flow
 `docs/gameplay/mission-progression.md` y `docs/gameplay/interactions.md`.
 
 El botón `↻` o la tecla `R` recalculan en un Web Worker; una desviación de 250 m también lo hace con
-enfriamiento. La ruta resalta el segmento inmediato y muestra próxima maniobra, flecha y distancia.
-La ruta principal usa cian con borde oscuro, el tramo inmediato es claro, el objetivo amarillo y el
-fallback naranja discontinuo. Si un objetivo queda fuera del corredor, el fallback no bloquea la
-misión. Hay objetivos de llegada, exploración, interacción, recolección, elección, reparación,
-combustible y tiempo. Consulta `docs/gameplay/chapter-1.md` y `docs/architecture/routing.md`.
+enfriamiento. Triángulo y vehículo 3D conservan el heading físico, mientras una flecha cian
+separada, el texto y el tramo inmediato comparten el heading recomendado. Fuera de ruta aparece un
+conector celeste discontinuo de reincorporación. La ruta principal usa cian con borde oscuro y el
+fallback naranja discontinuo. Consulta `docs/gameplay/chapter-1.md` y
+`docs/architecture/routing.md`.
 
 ## Red vial local
 
-La v0.2 incluye un corredor transitable derivado de OpenStreetMap entre San Salvador, Santa Tecla,
-Santa Ana, Coatepeque y Cerro Verde. El grafo de 5.53 MiB se sirve desde el mismo origen, se precarga
-una vez durante la pantalla inicial y usa una cuadrícula para detectar tramos cercanos sin recorrer
-la red completa. No existe ninguna consulta a un servicio de rutas externo.
+La v0.2.4 incluye un corredor transitable derivado de OpenStreetMap entre San Salvador, Santa Tecla,
+Santa Ana, Coatepeque y Cerro Verde. El grafo de 6.02 MiB, 17,083 nodos y 23,054 aristas se sirve
+desde el mismo origen, se precarga una vez durante la pantalla inicial y usa una cuadrícula para
+detectar tramos cercanos sin recorrer la red completa. No consulta servicios de rutas externos.
 
 La conducción puntúa distancia, heading, continuidad, ruta activa, arista previa y clase para no
-saltar entre calles paralelas. El movimiento geográfico usa subpasos de hasta 10 m para comprobar
-agua, bloqueos y objetivos aun con frames lentos. La asistencia predeterminada es suave, conserva
-libertad para salir del camino y puede cambiarse a **Libre** o **Firme**.
+saltar entre calles paralelas. `dirt-road` identifica vías visibles no pavimentadas con ritmo 50%,
+consumo 135% y desgaste 125%; `offroad` queda reservado para terreno sin vía. El movimiento usa
+subpasos de hasta 10 m para comprobar agua, bloqueos y objetivos aun con frames lentos.
 
 Para reconstruirlo se requiere `osmium-tool`:
 
@@ -133,7 +133,9 @@ licencia, actualización y limitaciones.
 
 El HUD muestra nivel, experiencia y energía. La experiencia de las misiones sube de nivel al
 alcanzar los umbrales definidos, y la recompensa de Suchitoto aumenta la capacidad de energía. El
-HUD también destaca combustible bajo o crítico, objetivos próximos y cada subida de nivel.
+HUD destaca combustible bajo a 25% y crítico a 10%. Tres puntos narrativos de abastecimiento pueden
+marcarse como destino temporal; al detenerse dentro del radio, una recarga gratuita agrega hasta
+45% y restaura la ruta de misión. Un bidón agrega 30%, incluso desde recuperación por 0%.
 
 La partida se guarda automáticamente en este navegador e incluye posición, combustible, distancia,
 condición, inventario, checkpoints, progreso de objetivos, descubrimientos, misiones y recompensas.
@@ -176,13 +178,13 @@ VITE_ENABLE_DIAGNOSTICS=true npm run dev
 ```
 
 La validación automática y el protocolo físico pendiente para cinco personas están en
-`docs/gameplay/playtest-v0.2.3.md`.
+`docs/gameplay/playtest-v0.2.4.md`.
 
 ## Docker
 
 ```sh
-docker build -t el-salvador-rutas-perdidas:v0.2.3 .
-docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.3
+docker build -t el-salvador-rutas-perdidas:v0.2.4 .
+docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.4
 curl http://localhost:8080/healthz
 ```
 
@@ -195,7 +197,16 @@ El navegador lee exclusivamente `/maps/el-salvador.pmtiles` y los recursos de `/
 Consulta `data/SOURCES.md`, `data/LICENSES.md` y `scripts/maps/README.md` para procedencia,
 licencias y reconstrucción.
 
-## Estado de la v0.2.3
+## Estado de la v0.2.4
+
+- Heading físico y recomendado separados, flecha cian independiente y conector de reincorporación.
+- Red vial esquema 2 con `dirt-road`, estilos coherentes y marcadores generales sin texto flotante.
+- Tutorial móvil compacto, orientación inicial y CTA de misión persistente sin scroll.
+- Joystick único para acelerar, frenar, retroceder y girar; tres alternativas y migración v7.
+- Estaciones visibles, ruta temporal A*, recarga +45%, bidón +30% y retorno a la misión.
+- E2E en escritorio, Pixel 7 vertical y horizontal; playtest físico de cinco personas pendiente.
+
+### Base v0.2.3
 
 - Continuación de historia, recomendación pura, CTA compacto y misiones bloqueadas agrupadas.
 - Premisa directa, radio no bloqueante, bitácora por categorías e interacción contextual con `E`.

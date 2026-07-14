@@ -1,5 +1,8 @@
 # Playtest de controles móviles v0.2.2
 
+Este documento conserva la base de validación de v0.2.2. El protocolo actualizado para joystick
+único, navegación y combustible está en `playtest-v0.2.4.md`.
+
 Este documento separa la validación automatizada de la prueba física. Playwright comprueba contratos
 de entrada, layout y recuperación, pero no sustituye la fatiga, el agarre, las barras reales del
 navegador, la vibración ni la percepción de cinco personas.
@@ -11,7 +14,11 @@ export interface MobilePlaytestResult {
   device: string;
   browser: string;
   orientation: 'portrait' | 'landscape';
-  controlMode: 'joystick-pedals' | 'joystick-auto-throttle' | 'classic-buttons';
+  controlMode:
+    | 'single-drive-joystick'
+    | 'joystick-pedals'
+    | 'joystick-auto-throttle'
+    | 'classic-buttons';
   completedTutorial: boolean;
   completedFirstMission: boolean;
   minutesToCompleteFirstMission: number;

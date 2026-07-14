@@ -49,9 +49,9 @@ El corredor vial se sirve como JSON compacto desde el mismo origen. Se carga una
 permanece fuera de Zustand y se indexa en celdas de `0.0025` grados. Las búsquedas inspeccionan
 segmentos vecinos y registran mediciones simples de duración; consulta `road-network.md`.
 
-Zustand conserva el estado de ubicación y misión a una frecuencia adecuada para la interfaz. La
-posición sigue perteneciendo al game loop; las rutas de misión son capas GeoJSON locales que
-enlazan al jugador con el objetivo pendiente más cercano.
+Zustand conserva ubicación, misión y destinos temporales a una frecuencia adecuada para la interfaz.
+La posición sigue perteneciendo al game loop; las rutas son capas GeoJSON locales que enlazan al
+jugador con el objetivo pendiente, ubicación marcada o estación sin persistir el desvío temporal.
 
 La partida se hidrata sincrónicamente desde `localStorage` antes de iniciar MapLibre. Guardar no
 modifica el game loop y el autosave agrupa cambios para evitar escrituras a 10 Hz. Cargar o reiniciar
@@ -65,7 +65,7 @@ decisiones se detallan en `interface.md`.
 
 La interfaz inicial queda separada del motor cartográfico. MapLibre se carga al entrar a la
 expedición y Three.js usa otro `import()` que sólo se solicita en calidad media o alta. En el build
-de la v0.2, el chunk inicial mide 283.58 KiB, el motor cartográfico 1,028.13 KiB y la capa Three.js
+de la v0.2.4, el chunk inicial mide 361.66 KiB, el motor cartográfico 1,028.13 KiB y la capa Three.js
 608.77 KiB, todos sin comprimir. Los modelos GLB se solicitan después de crear la capa y no bloquean
 el fallback 2D. Las mediciones de runtime y tamaños gzip están en `performance.md`.
 

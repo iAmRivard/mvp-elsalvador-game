@@ -26,3 +26,12 @@ snapshot vial; no afirman la existencia de instalaciones reales. Las demás coor
 un punto de referencia jugable, no límites administrativos ni rutas de acceso. Los radios de
 descubrimiento compensan el tamaño físico de lagos, ciudades y complejos volcánicos. No se realiza
 ninguna consulta a estas fuentes durante la ejecución.
+
+En zoom lejano se muestran sólo iconos; zoom medio usa nombres cortos y zoom cercano habilita nombre
+completo y estado. El layout limita etiquetas, aplica prioridad, colisión, clamping y offset por pitch.
+El popup calcula distancia y permite marcar ruta para ubicaciones desbloqueadas.
+
+Los puntos de combustible forman una categoría separada y narrativa: San Salvador
+`[-89.193303, 13.699119]`, Las Delicias y El Congo. Usan bomba y verde exclusivos, aparecen en la
+leyenda y no representan comercios reales. Su disponibilidad, radio y recarga se documentan en
+`docs/gameplay/fuel-balance.md`.
