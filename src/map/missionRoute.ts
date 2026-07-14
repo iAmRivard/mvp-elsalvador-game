@@ -10,6 +10,7 @@ import {
   objectiveCoordinates,
 } from '../game/missions';
 import { localRoutingService } from '../roads/routingService';
+import { getRoadWorkerClient } from '../roads/roadWorkerClient';
 import { useGameStore } from '../store/gameStore';
 import type { RoadCoordinates } from '../types/roads';
 
@@ -252,6 +253,22 @@ export function addMissionRoute(
     map.getContainer().dataset.routeCalculationMs = (
       performance.now() - calculationStartedAt
     ).toFixed(2);
+    const workerDiagnostics = getRoadWorkerClient()?.getDiagnostics();
+    if (typeof workerDiagnostics?.lastRouteDurationMilliseconds === 'number') {
+      map.getContainer().dataset.routeWorkerMs =
+        workerDiagnostics.lastRouteDurationMilliseconds.toFixed(2);
+    }
+    if (workerDiagnostics?.lastRoutingDiagnostics) {
+      map.getContainer().dataset.routeExpandedNodes = String(
+        workerDiagnostics.lastRoutingDiagnostics.lastExpandedNodeCount,
+      );
+      map.getContainer().dataset.routeCacheHits = String(
+        workerDiagnostics.lastRoutingDiagnostics.cacheHits,
+      );
+      map.getContainer().dataset.routeCacheEntries = String(
+        workerDiagnostics.lastRoutingDiagnostics.cacheEntries,
+      );
+    }
     if (disposed || token !== calculationToken) return;
     if (targetKey() !== `${target.mission.id}:${target.next.objective.id}`) {
       void calculateRoute();
