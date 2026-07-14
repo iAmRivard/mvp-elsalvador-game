@@ -39,6 +39,7 @@ import {
 import { createPlayerMarkerElement } from '../../map/playerMarker';
 import { registerPmtilesProtocol } from '../../map/pmtilesProtocol';
 import { addRoadDebugLayer } from '../../map/roadDebugLayer';
+import { addPlayableRoadSurfaceLayer } from '../../map/roadSurfaceLayer';
 import { createStyleResourceTransform } from '../../map/styleResources';
 import type { ThreeGameLayerController } from '../../map/threeLayer';
 import { shouldUseThreePlayer } from '../../map/threeTransforms';
@@ -218,6 +219,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let removeLocationMarkers: (() => void) | null = null;
     let removeMissionRoute: (() => void) | null = null;
     let removeRoadDebugLayer: (() => void) | null = null;
+    let removeRoadSurfaceLayer: (() => void) | null = null;
     let unsubscribeRuntime: (() => void) | null = null;
     let unsubscribeSettings: (() => void) | null = null;
     let lastCameraUpdate = 0;
@@ -317,55 +319,65 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         containerRef.current.dataset.roadNetworkStatus = 'loading';
       }
       void loadRoadNetwork()
-        .then(({ index, loadDurationMilliseconds, fileSizeBytes, metrics }) => {
-          if (!effectActive) return;
-          roadTracker = new RoadTracker(index);
-          const currentPlayer =
-            gameLoop?.getPlayer() ??
-            runtimeFromTelemetry(useGameStore.getState().telemetry);
-          roadContact = roadTracker.update(
-            [currentPlayer.longitude, currentPlayer.latitude],
-            roadContextFor(currentPlayer),
-          );
-          if (
-            roadContact &&
-            roadContact.nearest.distanceMeters <=
-              roadAssistConfig.disengageDistanceMeters
-          ) {
-            useGameStore
-              .getState()
-              .alignInitialPlayerToRoad(
-                roadContact.nearest.coordinates,
-                alignedRoadHeading(
-                  currentPlayer.heading,
-                  roadContact.nearest.heading,
-                  roadContact.edge.oneWay,
-                ),
-              );
-          }
-          roadNetworkEnabled = true;
-          useGameStore.getState().setRoadNetworkStatus('ready');
-          if (containerRef.current) {
-            containerRef.current.dataset.roadNetworkStatus = 'ready';
-            containerRef.current.dataset.roadLoadMs =
-              loadDurationMilliseconds.toFixed(1);
-            containerRef.current.dataset.roadFileBytes = String(fileSizeBytes);
-            containerRef.current.dataset.roadDownloadMs =
-              metrics.downloadDurationMilliseconds.toFixed(1);
-            containerRef.current.dataset.roadParseMs =
-              metrics.parseDurationMilliseconds.toFixed(1);
-            containerRef.current.dataset.roadValidationMs =
-              metrics.validationDurationMilliseconds.toFixed(1);
-            containerRef.current.dataset.roadIndexMs =
-              metrics.indexDurationMilliseconds.toFixed(1);
-            containerRef.current.dataset.roadMemoryMb = (
-              metrics.approximateMemoryBytes /
-              1024 /
-              1024
-            ).toFixed(1);
-          }
-          finishStartup();
-        })
+        .then(
+          ({
+            network,
+            index,
+            loadDurationMilliseconds,
+            fileSizeBytes,
+            metrics,
+          }) => {
+            if (!effectActive) return;
+            removeRoadSurfaceLayer = addPlayableRoadSurfaceLayer(map, network);
+            roadTracker = new RoadTracker(index);
+            const currentPlayer =
+              gameLoop?.getPlayer() ??
+              runtimeFromTelemetry(useGameStore.getState().telemetry);
+            roadContact = roadTracker.update(
+              [currentPlayer.longitude, currentPlayer.latitude],
+              roadContextFor(currentPlayer),
+            );
+            if (
+              roadContact &&
+              roadContact.nearest.distanceMeters <=
+                roadAssistConfig.disengageDistanceMeters
+            ) {
+              useGameStore
+                .getState()
+                .alignInitialPlayerToRoad(
+                  roadContact.nearest.coordinates,
+                  alignedRoadHeading(
+                    currentPlayer.heading,
+                    roadContact.nearest.heading,
+                    roadContact.edge.oneWay,
+                  ),
+                );
+            }
+            roadNetworkEnabled = true;
+            useGameStore.getState().setRoadNetworkStatus('ready');
+            if (containerRef.current) {
+              containerRef.current.dataset.roadNetworkStatus = 'ready';
+              containerRef.current.dataset.roadLoadMs =
+                loadDurationMilliseconds.toFixed(1);
+              containerRef.current.dataset.roadFileBytes =
+                String(fileSizeBytes);
+              containerRef.current.dataset.roadDownloadMs =
+                metrics.downloadDurationMilliseconds.toFixed(1);
+              containerRef.current.dataset.roadParseMs =
+                metrics.parseDurationMilliseconds.toFixed(1);
+              containerRef.current.dataset.roadValidationMs =
+                metrics.validationDurationMilliseconds.toFixed(1);
+              containerRef.current.dataset.roadIndexMs =
+                metrics.indexDurationMilliseconds.toFixed(1);
+              containerRef.current.dataset.roadMemoryMb = (
+                metrics.approximateMemoryBytes /
+                1024 /
+                1024
+              ).toFixed(1);
+            }
+            finishStartup();
+          },
+        )
         .catch(() => {
           if (!effectActive) return;
           roadNetworkEnabled = false;
@@ -838,6 +850,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       removeLocationMarkers?.();
       removeMissionRoute?.();
       removeRoadDebugLayer?.();
+      removeRoadSurfaceLayer?.();
       threeLayer?.remove();
       playerMarker?.remove();
       unbindKeyboard();

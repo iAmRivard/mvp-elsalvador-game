@@ -201,11 +201,12 @@
       "source": "el-salvador",
       "source-layer": "roads",
       "minzoom": 11,
-      "filter": ["in", ["get", "kind"], ["literal", ["path", "rail", "pier"]]],
+      "filter": ["==", ["get", "kind"], "path"],
       "paint": {
-        "line-color": "#7d887c",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.3, 15, 1.6],
-        "line-opacity": 0.6
+        "line-color": "#786851",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.25, 15, 1.25],
+        "line-dasharray": [1, 2.25],
+        "line-opacity": 0.28
       }
     },
     {
