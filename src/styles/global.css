@@ -5852,3 +5852,27 @@ html[data-reduced-motion='true'] *::after {
     top: max(340px, calc(env(safe-area-inset-top) + 330px));
   }
 }
+
+.game-shell:has(.fuel-assist) .gameplay-toast {
+  bottom: max(190px, calc(env(safe-area-inset-bottom) + 180px));
+}
+
+@media (max-width: 600px) {
+  .fuel-assist {
+    bottom: max(186px, calc(env(safe-area-inset-bottom) + 176px));
+  }
+
+  .game-shell:has(.fuel-assist) .gameplay-toast {
+    bottom: max(344px, calc(env(safe-area-inset-bottom) + 334px));
+  }
+}
+
+@media (orientation: landscape) and (max-height: 560px) and (pointer: coarse) {
+  .fuel-assist {
+    bottom: max(10px, calc(env(safe-area-inset-bottom) + 6px));
+  }
+
+  .game-shell:has(.fuel-assist) .gameplay-toast {
+    bottom: max(160px, calc(env(safe-area-inset-bottom) + 154px));
+  }
+}

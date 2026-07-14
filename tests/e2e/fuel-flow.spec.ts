@@ -97,10 +97,21 @@ async function openSavedGame(
   );
 }
 
+function rectanglesOverlap(
+  first: { x: number; y: number; width: number; height: number },
+  second: { x: number; y: number; width: number; height: number },
+) {
+  return !(
+    first.x + first.width <= second.x ||
+    second.x + second.width <= first.x ||
+    first.y + first.height <= second.y ||
+    second.y + second.height <= first.y
+  );
+}
+
 test('marca una ruta vial real hacia la estación desde 20%', async ({
   page,
 }, testInfo) => {
-  test.skip(testInfo.project.name !== 'chromium-mobile');
   await openSavedGame(page, initialPosition, 20);
 
   const assist = page.getByTestId('fuel-assist');
@@ -124,12 +135,25 @@ test('marca una ruta vial real hacia la estación desde 20%', async ({
   await expect(
     page.getByRole('button', { name: 'Volver a misión' }),
   ).toBeVisible();
+  if (testInfo.project.name !== 'chromium-desktop') {
+    const assistBox = await assist.boundingBox();
+    const joystickBox = await page
+      .getByLabel('Joystick de conducción')
+      .boundingBox();
+    const actionsBox = await page
+      .locator('.touch-actions--analog')
+      .boundingBox();
+    expect(assistBox).not.toBeNull();
+    expect(joystickBox).not.toBeNull();
+    expect(actionsBox).not.toBeNull();
+    expect(rectanglesOverlap(assistBox!, joystickBox!)).toBe(false);
+    expect(rectanglesOverlap(assistBox!, actionsBox!)).toBe(false);
+  }
 });
 
 test('recarga en el marcador y recupera la ruta de misión', async ({
   page,
-}, testInfo) => {
-  test.skip(testInfo.project.name !== 'chromium-mobile');
+}) => {
   await openSavedGame(page, capitalStation, 18);
   const map = page.getByTestId('game-map');
 
