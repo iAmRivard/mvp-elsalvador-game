@@ -9,7 +9,6 @@
   "zoom": 7.35,
   "bearing": -8,
   "pitch": 48,
-  "sprite": "/map-assets/sprites/basemap",
   "glyphs": "/map-assets/fonts/{fontstack}/{range}.pbf",
   "sources": {
     "el-salvador": {
@@ -36,7 +35,11 @@
       "type": "fill",
       "source": "el-salvador",
       "source-layer": "landcover",
-      "filter": ["in", ["get", "kind"], ["literal", ["forest", "grassland", "scrub"]]],
+      "filter": [
+        "in",
+        ["get", "kind"],
+        ["literal", ["forest", "grassland", "scrub"]]
+      ],
       "paint": {
         "fill-color": [
           "match",
@@ -60,7 +63,18 @@
       "filter": [
         "in",
         ["get", "kind"],
-        ["literal", ["park", "national_park", "nature_reserve", "forest", "wood", "farmland", "residential"]]
+        [
+          "literal",
+          [
+            "park",
+            "national_park",
+            "nature_reserve",
+            "forest",
+            "wood",
+            "farmland",
+            "residential"
+          ]
+        ]
       ],
       "paint": {
         "fill-color": [
@@ -126,7 +140,11 @@
       "type": "line",
       "source": "el-salvador",
       "source-layer": "roads",
-      "filter": ["in", ["get", "kind"], ["literal", ["highway", "major_road", "minor_road"]]],
+      "filter": [
+        "in",
+        ["get", "kind"],
+        ["literal", ["highway", "major_road", "minor_road"]]
+      ],
       "paint": {
         "line-color": "#15211f",
         "line-width": [
@@ -148,7 +166,11 @@
       "type": "line",
       "source": "el-salvador",
       "source-layer": "roads",
-      "filter": ["in", ["get", "kind"], ["literal", ["highway", "major_road", "minor_road"]]],
+      "filter": [
+        "in",
+        ["get", "kind"],
+        ["literal", ["highway", "major_road", "minor_road"]]
+      ],
       "paint": {
         "line-color": [
           "match",

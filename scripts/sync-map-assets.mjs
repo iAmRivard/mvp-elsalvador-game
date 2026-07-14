@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const root = process.cwd();
@@ -9,7 +9,6 @@ const fontDirectory = join(
   'fonts',
   'Noto Sans Regular',
 );
-const spriteDirectory = join(root, 'public', 'map-assets', 'sprites');
 const glyphSourceDirectory = join(
   root,
   'node_modules',
@@ -19,7 +18,6 @@ const glyphSourceDirectory = join(
 );
 
 await mkdir(fontDirectory, { recursive: true });
-await mkdir(spriteDirectory, { recursive: true });
 const glyphFiles = (await readdir(glyphSourceDirectory)).filter((file) =>
   file.endsWith('.pbf'),
 );
@@ -30,22 +28,4 @@ for (const glyphFile of glyphFiles) {
   );
 }
 
-// PNG transparente: el estilo no usa icon-image todavía, pero MapLibre solicita
-// variantes 1x y 2x del sprite según la densidad de pantalla.
-const transparentPng = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64',
-);
-for (const suffix of ['', '@2x']) {
-  await writeFile(
-    join(spriteDirectory, `basemap${suffix}.png`),
-    transparentPng,
-  );
-  await writeFile(
-    join(spriteDirectory, `basemap${suffix}.json`),
-    '{}\n',
-    'utf8',
-  );
-}
-
-console.log('Glyphs y sprite técnico sincronizados en public/map-assets.');
+console.log('Glyphs sincronizados en public/map-assets.');

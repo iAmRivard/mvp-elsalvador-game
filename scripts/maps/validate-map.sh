@@ -6,17 +6,22 @@ MAP="$ROOT/public/maps/el-salvador.pmtiles"
 STYLE="$ROOT/public/map-assets/styles/el-salvador.json"
 GLYPH="$ROOT/public/map-assets/fonts/Noto Sans Regular/0-255.pbf"
 GLYPH_EXTENDED="$ROOT/public/map-assets/fonts/Noto Sans Regular/256-511.pbf"
-SPRITE_JSON="$ROOT/public/map-assets/sprites/basemap.json"
-SPRITE_PNG="$ROOT/public/map-assets/sprites/basemap.png"
-SPRITE_2X_JSON="$ROOT/public/map-assets/sprites/basemap@2x.json"
-SPRITE_2X_PNG="$ROOT/public/map-assets/sprites/basemap@2x.png"
 
-for file in "$MAP" "$STYLE" "$GLYPH" "$GLYPH_EXTENDED" "$SPRITE_JSON" "$SPRITE_PNG" "$SPRITE_2X_JSON" "$SPRITE_2X_PNG"; do
+for file in "$MAP" "$STYLE" "$GLYPH" "$GLYPH_EXTENDED"; do
   test -s "$file" || {
     echo "Error: falta el recurso cartográfico $file" >&2
     exit 1
   }
 done
+
+node -e '
+  const style = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+  if (Object.hasOwn(style, "sprite")) throw new Error("El estilo no debe declarar un sprite sin consumidores");
+  const serializedLayers = JSON.stringify(style.layers ?? []);
+  for (const property of ["icon-image", "fill-pattern", "line-pattern", "background-pattern"]) {
+    if (serializedLayers.includes(`"${property}"`)) throw new Error(`El estilo usa ${property}; revisa la política de sprites`);
+  }
+' "$STYLE"
 
 if head -n 1 "$MAP" | grep -q "git-lfs.github.com/spec"; then
   echo "Error: el PMTiles es un puntero de Git LFS, no el archivo real." >&2
