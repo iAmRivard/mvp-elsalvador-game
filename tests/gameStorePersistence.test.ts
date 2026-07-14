@@ -49,4 +49,48 @@ describe('acciones de guardado del estado global', () => {
     expect(state.completedMissionIds).toEqual([]);
     expect(window.localStorage.getItem(GAME_SAVE_KEY)).toBeNull();
   });
+
+  it('activa recuperación al cargar una condición cero válida', () => {
+    useGameStore.setState({
+      experience: 650,
+      inventory: [{ itemId: 'bidon-combustible', quantity: 2 }],
+      vehicle: { ...useGameStore.getState().vehicle, condition: 0 },
+    });
+    expect(useGameStore.getState().saveGame()).toBe(true);
+
+    useGameStore.setState({
+      experience: 0,
+      inventory: [],
+      vehicle: { ...useGameStore.getState().vehicle, condition: 70 },
+      recoveryReason: null,
+      isPaused: false,
+    });
+    expect(useGameStore.getState().loadGame()).toBe(true);
+
+    expect(useGameStore.getState()).toMatchObject({
+      experience: 650,
+      inventory: [{ itemId: 'bidon-combustible', quantity: 2 }],
+      vehicle: { condition: 0 },
+      recoveryReason: 'condition',
+      isPaused: true,
+      needsInitialRoadAlignment: false,
+    });
+  });
+
+  it('migra una partida sin condición sin abrir recuperación', () => {
+    useGameStore.getState().addExperience(200);
+    expect(useGameStore.getState().saveGame()).toBe(true);
+    const envelope = JSON.parse(
+      window.localStorage.getItem(GAME_SAVE_KEY)!,
+    ) as { game: { vehicle: Record<string, unknown> } };
+    delete envelope.game.vehicle.condition;
+    window.localStorage.setItem(GAME_SAVE_KEY, JSON.stringify(envelope));
+
+    expect(useGameStore.getState().loadGame()).toBe(true);
+    expect(useGameStore.getState()).toMatchObject({
+      experience: 200,
+      vehicle: { condition: 100 },
+      recoveryReason: null,
+    });
+  });
 });

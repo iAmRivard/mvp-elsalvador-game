@@ -1847,6 +1847,50 @@ html[data-tutorial-target='recalculate'] .mission-route-summary__header button {
   text-align: right;
 }
 
+.condition-warning {
+  position: absolute;
+  z-index: 24;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 250px;
+  padding: 11px 14px;
+  border: 1px solid rgb(255 225 105 / 48%);
+  border-radius: 7px;
+  color: #f6f1df;
+  background: rgb(22 31 29 / 94%);
+  box-shadow: 0 14px 38px rgb(0 0 0 / 38%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.condition-warning > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 2px solid currentcolor;
+  border-radius: 50%;
+  font-weight: 800;
+}
+
+.condition-warning > div {
+  display: grid;
+  gap: 2px;
+}
+
+.condition-warning small {
+  color: #cfd3ca;
+}
+
+.condition-warning--critical,
+.condition-warning--broken {
+  border-color: rgb(240 130 104 / 62%);
+}
+
 .fuel-meter {
   height: 6px;
   margin-top: 7px;

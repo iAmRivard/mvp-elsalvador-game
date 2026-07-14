@@ -13,6 +13,10 @@ import {
 import type { RoadSurface } from '../config/roadHandling.config';
 import { vehicleStateConfig } from '../config/vehicleState.config';
 import {
+  conditionWarningForTransition,
+  type ConditionWarningLevel,
+} from '../game/conditionWarnings';
+import {
   advanceMissionObjectives,
   initialMissionObjectiveProgress,
   missionStartBlockReason,
@@ -31,6 +35,7 @@ import {
 import type { PlayerStepEnvironment } from '../game/movement';
 import type { PlayerRuntime, PlayerTelemetry } from '../types/game';
 import type { RouteNavigationInstruction } from '../types/navigation';
+import type { RoadCoordinates } from '../types/roads';
 import type {
   CheckpointReason,
   CheckpointSnapshot,
@@ -124,8 +129,11 @@ interface GameStore extends GameData {
   missionRoute: MissionRouteRuntimeState;
   temporarilyClosedRoadEdgeIds: number[];
   recoveryReason: RecoveryReason | null;
+  conditionWarning: ConditionWarningLevel | null;
+  conditionWarningsShown: ConditionWarningLevel[];
   activeNarrativeEventId: string | null;
   playerRuntimeRevision: number;
+  needsInitialRoadAlignment: boolean;
   hasSavedGame: boolean;
   lastSavedAt: string | null;
   saveMessage: SaveMessage;
@@ -138,6 +146,10 @@ interface GameStore extends GameData {
     surface: RoadSurface,
     blockedImpact: boolean,
   ) => void;
+  alignInitialPlayerToRoad: (
+    coordinates: RoadCoordinates,
+    heading: number,
+  ) => boolean;
   createCheckpoint: (reason: CheckpointReason, safe?: boolean) => void;
   retryFromCheckpoint: () => boolean;
   recoverAtLastSafeCheckpoint: (abandonMission?: boolean) => boolean;
@@ -178,6 +190,7 @@ interface GameStore extends GameData {
   loadGame: () => boolean;
   resetGame: () => void;
   dismissSaveMessage: () => void;
+  dismissConditionWarning: () => void;
 }
 
 function appendUnique(
@@ -377,6 +390,12 @@ const initialClosedRoadEdgeIds = chapterRoadClosureEdgeIds(
   initialGameData.activeMissionId,
   initialGameData.activeMissionCompletedObjectiveIds,
 );
+const recoveryReasonForGame = (game: GameData): RecoveryReason | null => {
+  if (game.vehicle.condition <= 0) return 'condition';
+  if (game.telemetry.fuel <= 0) return 'fuel';
+  return null;
+};
+const initialRecoveryReason = recoveryReasonForGame(initialGameData);
 
 const defaultDrivingState: DrivingRuntimeState = {
   roadNetworkStatus: 'loading',
@@ -402,12 +421,16 @@ const defaultMissionRouteState: MissionRouteRuntimeState = {
 
 export const useGameStore = create<GameStore>((set, get) => ({
   ...initialGameData,
+  isPaused: initialRecoveryReason ? true : initialGameData.isPaused,
   driving: defaultDrivingState,
   missionRoute: defaultMissionRouteState,
   temporarilyClosedRoadEdgeIds: initialClosedRoadEdgeIds,
-  recoveryReason: null,
+  recoveryReason: initialRecoveryReason,
+  conditionWarning: null,
+  conditionWarningsShown: [],
   activeNarrativeEventId: null,
   playerRuntimeRevision: 0,
+  needsInitialRoadAlignment: initialLoad.status !== 'loaded',
   hasSavedGame: initialLoad.status === 'loaded',
   lastSavedAt:
     initialLoad.status === 'loaded' ? initialLoad.save.savedAt : null,
@@ -457,6 +480,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     })),
   applyDrivingWear: (vehicleDistanceMeters, surface, blockedImpact) =>
     set((state) => {
+      if (state.driving.roadNetworkStatus !== 'ready') return state;
       const distanceDamage =
         Math.max(0, vehicleDistanceMeters) *
         (surface === 'offroad'
@@ -469,8 +493,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
         (blockedImpact ? vehicleStateConfig.blockedImpactCondition : 0);
       if (damage <= 0) return state;
       const condition = Math.max(0, state.vehicle.condition - damage);
+      const nextWarning = conditionWarningForTransition(
+        state.vehicle.condition,
+        condition,
+      );
+      const shouldShowWarning =
+        nextWarning !== null &&
+        !state.conditionWarningsShown.includes(nextWarning);
       return {
         vehicle: { ...state.vehicle, condition },
+        conditionWarning: shouldShowWarning
+          ? nextWarning
+          : state.conditionWarning,
+        conditionWarningsShown: shouldShowWarning
+          ? [...state.conditionWarningsShown, nextWarning]
+          : state.conditionWarningsShown,
         recoveryReason:
           condition <= 0
             ? (state.recoveryReason ?? 'condition')
@@ -478,6 +515,34 @@ export const useGameStore = create<GameStore>((set, get) => ({
         isPaused: condition <= 0 ? true : state.isPaused,
       };
     }),
+  alignInitialPlayerToRoad: (coordinates, heading) => {
+    let aligned = false;
+    set((state) => {
+      if (!state.needsInitialRoadAlignment) return state;
+      const telemetry = telemetryFromPlayer({
+        ...state.telemetry,
+        longitude: coordinates[0],
+        latitude: coordinates[1],
+        heading,
+        speedMetersPerSecond: 0,
+      });
+      const checkpoint = checkpointFromState(
+        { ...state, telemetry },
+        'new-game',
+        'checkpoint-new-game',
+        new Date(0).toISOString(),
+      );
+      aligned = true;
+      return {
+        telemetry,
+        lastCheckpoint: checkpoint,
+        lastSafeCheckpoint: checkpoint,
+        needsInitialRoadAlignment: false,
+        playerRuntimeRevision: state.playerRuntimeRevision + 1,
+      };
+    });
+    return aligned;
+  },
   createCheckpoint: (reason, safe = false) =>
     set((state) => {
       const checkpoint = checkpointFromState(state, reason);
@@ -534,7 +599,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   setRoadNetworkStatus: (roadNetworkStatus) =>
     set((state) => ({
-      driving: { ...state.driving, roadNetworkStatus },
+      driving:
+        roadNetworkStatus === 'ready'
+          ? { ...state.driving, roadNetworkStatus }
+          : { ...defaultDrivingState, roadNetworkStatus },
     })),
   setDrivingEnvironment: (environment) =>
     set((state) => {
@@ -977,20 +1045,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ saveMessage: 'No hay una partida válida' });
       return false;
     }
-    set((state) => ({
-      ...gameDataFromPersistence(loaded.save.game),
-      playerRuntimeRevision: state.playerRuntimeRevision + 1,
-      hasSavedGame: true,
-      lastSavedAt: loaded.save.savedAt,
-      saveMessage: 'Partida cargada',
-      recoveryReason: null,
-      activeNarrativeEventId: null,
-      temporarilyClosedRoadEdgeIds: chapterRoadClosureEdgeIds(
-        loaded.save.game.activeMissionId,
-        loaded.save.game.activeMissionCompletedObjectiveIds,
-      ),
-      missionRoute: defaultMissionRouteState,
-    }));
+    set((state) => {
+      const game = gameDataFromPersistence(loaded.save.game);
+      const recoveryReason = recoveryReasonForGame(game);
+      return {
+        ...game,
+        isPaused: recoveryReason ? true : game.isPaused,
+        playerRuntimeRevision: state.playerRuntimeRevision + 1,
+        hasSavedGame: true,
+        lastSavedAt: loaded.save.savedAt,
+        saveMessage: 'Partida cargada',
+        recoveryReason,
+        conditionWarning: null,
+        conditionWarningsShown: [],
+        activeNarrativeEventId: null,
+        needsInitialRoadAlignment: false,
+        temporarilyClosedRoadEdgeIds: chapterRoadClosureEdgeIds(
+          loaded.save.game.activeMissionId,
+          loaded.save.game.activeMissionCompletedObjectiveIds,
+        ),
+        missionRoute: defaultMissionRouteState,
+      };
+    });
     if (loaded.migrated) writeGameSave(loaded.save.game);
     return true;
   },
@@ -1002,7 +1078,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       missionRoute: defaultMissionRouteState,
       temporarilyClosedRoadEdgeIds: [],
       recoveryReason: null,
+      conditionWarning: null,
+      conditionWarningsShown: [],
       activeNarrativeEventId: null,
+      needsInitialRoadAlignment: true,
       playerRuntimeRevision: state.playerRuntimeRevision + 1,
       hasSavedGame: false,
       lastSavedAt: null,
@@ -1010,6 +1089,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }));
   },
   dismissSaveMessage: () => set({ saveMessage: null }),
+  dismissConditionWarning: () => set({ conditionWarning: null }),
 }));
 
 if (initialLoad.status === 'loaded' && initialLoad.migrated) {

@@ -6,8 +6,9 @@ const recoveryCopy = {
     description: 'El vehículo no puede continuar desde esta posición.',
   },
   condition: {
-    title: 'Vehículo inmovilizado',
-    description: 'La condición llegó a cero y requiere una recuperación.',
+    title: 'Vehículo averiado',
+    description:
+      'La condición del vehículo llegó a 0%. Regresa al último punto seguro para continuar.',
   },
   'timed-objective': {
     title: 'Objetivo agotado',
@@ -44,12 +45,23 @@ export function VehicleRecoveryDialog() {
         <h2 id="recovery-title">{copy.title}</h2>
         <p id="recovery-description">{copy.description}</p>
         <div>
-          <button type="button" onClick={retryFromCheckpoint}>
-            Reintentar checkpoint
+          <button
+            type="button"
+            onClick={() =>
+              reason === 'condition'
+                ? recoverAtSafe(false)
+                : retryFromCheckpoint()
+            }
+          >
+            {reason === 'condition'
+              ? 'Recuperar vehículo'
+              : 'Reintentar checkpoint'}
           </button>
-          <button type="button" onClick={() => recoverAtSafe(false)}>
-            Último lugar seguro
-          </button>
+          {reason !== 'condition' && (
+            <button type="button" onClick={() => recoverAtSafe(false)}>
+              Último lugar seguro
+            </button>
+          )}
           {activeMissionId && (
             <button
               type="button"

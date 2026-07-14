@@ -1,5 +1,9 @@
+import { useEffect } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { experienceProgress } from '../../game/progression';
+import { conditionWarningCopy } from '../../game/conditionWarnings';
+import { triggerHaptic } from '../../game/haptics';
+import { useSettingsStore } from '../../store/settingsStore';
 import type { RoadSurface } from '../../config/roadHandling.config';
 import { locations } from '../../data/locations';
 
@@ -33,10 +37,22 @@ export function PlayerHud() {
   const maxEnergy = useGameStore((state) => state.maxEnergy);
   const driving = useGameStore((state) => state.driving);
   const vehicle = useGameStore((state) => state.vehicle);
+  const conditionWarning = useGameStore((state) => state.conditionWarning);
+  const dismissConditionWarning = useGameStore(
+    (state) => state.dismissConditionWarning,
+  );
+  const hapticsEnabled = useSettingsStore((state) => state.hapticsEnabled);
   const inventoryCount = useGameStore((state) =>
     state.inventory.reduce((total, entry) => total + entry.quantity, 0),
   );
   const progress = experienceProgress(experience);
+
+  useEffect(() => {
+    if (!conditionWarning) return;
+    triggerHaptic('condition-warning', hapticsEnabled);
+    const timer = window.setTimeout(dismissConditionWarning, 4_500);
+    return () => window.clearTimeout(timer);
+  }, [conditionWarning, dismissConditionWarning, hapticsEnabled]);
 
   return (
     <>
@@ -201,6 +217,18 @@ export function PlayerHud() {
           </div>
         </dl>
       </aside>
+      {conditionWarning && (
+        <div
+          className={`condition-warning condition-warning--${conditionWarning}`}
+          role="status"
+        >
+          <span aria-hidden="true">!</span>
+          <div>
+            <strong>{conditionWarningCopy[conditionWarning].title}</strong>
+            <small>{conditionWarningCopy[conditionWarning].message}</small>
+          </div>
+        </div>
+      )}
     </>
   );
 }

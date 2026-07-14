@@ -200,7 +200,8 @@ describe('estado de misiones y capítulo', () => {
     store.createCheckpoint('objective');
 
     useGameStore.getState().consumeInventoryItem('bidon-combustible', 1);
-    useGameStore.getState().applyDrivingWear(3_000, 'offroad', false);
+    useGameStore.getState().setRoadNetworkStatus('ready');
+    useGameStore.getState().applyDrivingWear(4_100, 'offroad', false);
     expect(useGameStore.getState()).toMatchObject({
       recoveryReason: 'condition',
       isPaused: true,

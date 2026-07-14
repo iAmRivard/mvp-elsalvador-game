@@ -40,6 +40,7 @@ import type { ThreeGameLayerController } from '../../map/threeLayer';
 import { shouldUseThreePlayer } from '../../map/threeTransforms';
 import { loadRoadNetwork } from '../../roads/roadNetwork';
 import { RoadTracker } from '../../roads/roadTracker';
+import { alignedRoadHeading } from '../../roads/initialRoadPosition';
 import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import type { PlayerRuntime, PlayerTelemetry } from '../../types/game';
@@ -316,6 +317,22 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             [currentPlayer.longitude, currentPlayer.latitude],
             roadContextFor(currentPlayer),
           );
+          if (
+            roadContact &&
+            roadContact.nearest.distanceMeters <=
+              roadAssistConfig.disengageDistanceMeters
+          ) {
+            useGameStore
+              .getState()
+              .alignInitialPlayerToRoad(
+                roadContact.nearest.coordinates,
+                alignedRoadHeading(
+                  currentPlayer.heading,
+                  roadContact.nearest.heading,
+                  roadContact.edge.oneWay,
+                ),
+              );
+          }
           roadNetworkEnabled = true;
           useGameStore.getState().setRoadNetworkStatus('ready');
           if (containerRef.current) {
