@@ -8,8 +8,8 @@ export interface PlayerRuntime {
 }
 
 export interface PlayerInput {
-  throttle: -1 | 0 | 1;
-  turn: -1 | 0 | 1;
+  throttle: number;
+  turn: number;
   boost: boolean;
   interact: boolean;
 }

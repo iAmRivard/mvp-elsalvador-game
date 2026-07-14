@@ -32,4 +32,59 @@ describe('keyboard route controls', () => {
     expect(input.snapshot().interact).toBe(false);
     vi.useRealTimers();
   });
+
+  it('combina teclado y fuentes táctiles con suma limitada', () => {
+    const input = new InputController();
+    const unbind = input.bindKeyboard(window, vi.fn());
+    input.setJoystickTurn(0.35);
+    input.setTouchThrottle(0.62);
+
+    expect(input.snapshot()).toMatchObject({ throttle: 0.62, turn: 0.35 });
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }));
+    expect(input.snapshot().turn).toBe(1);
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyD' }));
+    expect(input.snapshot().turn).toBe(0.35);
+    unbind();
+  });
+
+  it('suspende el crucero por entrada manual y lo cancela al frenar', () => {
+    const input = new InputController();
+    input.setAutoThrottle(true, 0.72);
+    expect(input.snapshot().throttle).toBe(0.72);
+    expect(input.getAutoThrottleStatus()).toBe('active');
+
+    input.setTouchThrottle(0.4);
+    expect(input.snapshot().throttle).toBe(0.4);
+    expect(input.getAutoThrottleStatus()).toBe('suspended');
+    input.setTouchThrottle(0);
+    expect(input.snapshot().throttle).toBe(0.72);
+
+    input.setTouchThrottle(-1);
+    expect(input.snapshot().throttle).toBe(-1);
+    expect(input.getAutoThrottleStatus()).toBe('off');
+  });
+
+  it('limpia todas las fuentes y temporizadores de forma central', () => {
+    vi.useFakeTimers();
+    const input = new InputController();
+    input.setPointerAction('boost', true);
+    input.setPointerAction('interact', true);
+    input.releasePointerAction('interact', 250);
+    input.setTouchThrottle(1);
+    input.setJoystickTurn(-0.4);
+    input.setAutoThrottle(true);
+    input.setPointerActive(true);
+
+    input.clearAllInput();
+    expect(input.snapshot()).toEqual({
+      throttle: 0,
+      turn: 0,
+      boost: false,
+      interact: false,
+    });
+    expect(input.getDiagnostics().pointerActive).toBe(false);
+    vi.runAllTimers();
+    expect(input.snapshot().interact).toBe(false);
+    vi.useRealTimers();
+  });
 });
