@@ -1,4 +1,8 @@
 import type { PlayerInput } from '../types/game';
+import {
+  mobileBoostConfig,
+  type MobileBoostState,
+} from '../config/mobileControls.config';
 import { clampAnalogInput } from './analogInput';
 
 export type InputAction =
@@ -28,6 +32,12 @@ export interface InputDiagnostics extends InputSources {
   interact: boolean;
   autoThrottleStatus: AutoThrottleStatus;
   pointerActive: boolean;
+  mobileBoost: MobileBoostState;
+}
+
+export interface MobileBoostAvailability {
+  fuel: number;
+  condition: number;
 }
 
 const keyActions: Readonly<Record<string, InputAction>> = {
@@ -68,6 +78,14 @@ export class InputController {
   };
   private autoThrottleScale = 1;
   private readonly activePointerIds = new Set<number>();
+  private mobileBoostActiveUntil = 0;
+  private mobileBoostCooldownUntil = 0;
+  private mobileBoostTimer: ReturnType<typeof setTimeout> | null = null;
+  private mobileBoostState: MobileBoostState = {
+    active: false,
+    remainingMilliseconds: 0,
+    cooldownRemainingMilliseconds: 0,
+  };
 
   bindKeyboard(
     target: Window,
@@ -95,7 +113,10 @@ export class InputController {
       if (!action || event.metaKey || event.ctrlKey || event.altKey) return;
       const sizeBefore = this.keyboardActions.size;
       this.keyboardActions.add(action);
-      if (action === 'backward') this.disableAutoThrottle();
+      if (action === 'backward') {
+        this.disableAutoThrottle();
+        this.cancelMobileBoost();
+      }
       if (this.keyboardActions.size !== sizeBefore) this.notify();
       event.preventDefault();
     };
@@ -139,7 +160,10 @@ export class InputController {
       : this.pointerActions.has(action);
     if (active) this.pointerActions.add(action);
     else this.pointerActions.delete(action);
-    if (active && action === 'backward') this.disableAutoThrottle();
+    if (active && action === 'backward') {
+      this.disableAutoThrottle();
+      this.cancelMobileBoost();
+    }
     if (changed) this.notify();
   }
 
@@ -163,7 +187,10 @@ export class InputController {
 
   setTouchThrottle(value: number): void {
     const next = clampAnalogInput(value);
-    if (next < 0) this.disableAutoThrottle();
+    if (next < 0) {
+      this.disableAutoThrottle();
+      this.cancelMobileBoost();
+    }
     if (this.touchThrottle === next) return;
     this.touchThrottle = next;
     this.notify();
@@ -202,6 +229,52 @@ export class InputController {
     this.notify();
   }
 
+  activateMobileBoost(
+    availability: MobileBoostAvailability = { fuel: 1, condition: 1 },
+  ): boolean {
+    const state = this.mobileBoostState;
+    if (
+      availability.fuel <= 0 ||
+      availability.condition <= 0 ||
+      state.active ||
+      state.cooldownRemainingMilliseconds > 0
+    ) {
+      return false;
+    }
+    const now = Date.now();
+    this.mobileBoostActiveUntil = now + mobileBoostConfig.durationMilliseconds;
+    this.mobileBoostCooldownUntil =
+      this.mobileBoostActiveUntil + mobileBoostConfig.cooldownMilliseconds;
+    this.updateMobileBoostState();
+    this.startMobileBoostTicker();
+    this.notify();
+    return true;
+  }
+
+  cancelMobileBoost(): void {
+    if (this.resetMobileBoost()) this.notify();
+  }
+
+  getMobileBoostState(): MobileBoostState {
+    return this.mobileBoostState;
+  }
+
+  private updateMobileBoostState(): void {
+    const now = Date.now();
+    const remainingMilliseconds = Math.max(
+      0,
+      this.mobileBoostActiveUntil - now,
+    );
+    const active = remainingMilliseconds > 0;
+    this.mobileBoostState = {
+      active,
+      remainingMilliseconds,
+      cooldownRemainingMilliseconds: active
+        ? 0
+        : Math.max(0, this.mobileBoostCooldownUntil - now),
+    };
+  }
+
   setAutoThrottleScale(value: number): void {
     const next = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
     if (this.autoThrottleScale === next) return;
@@ -219,11 +292,13 @@ export class InputController {
   }
 
   clearPointerActions(): void {
+    const boostChanged = this.resetMobileBoost();
     const changed =
       this.pointerActions.size > 0 ||
       this.touchThrottle !== 0 ||
       this.joystickTurn !== 0 ||
-      this.activePointerIds.size > 0;
+      this.activePointerIds.size > 0 ||
+      boostChanged;
     for (const timer of this.pointerReleaseTimers.values()) clearTimeout(timer);
     this.pointerReleaseTimers.clear();
     this.pointerActions.clear();
@@ -234,6 +309,7 @@ export class InputController {
   }
 
   clearAllInput(): void {
+    const boostChanged = this.resetMobileBoost();
     const changed =
       this.keyboardActions.size > 0 ||
       this.pointerActions.size > 0 ||
@@ -241,7 +317,8 @@ export class InputController {
       this.touchThrottle !== 0 ||
       this.joystickTurn !== 0 ||
       this.autoThrottle.enabled ||
-      this.activePointerIds.size > 0;
+      this.activePointerIds.size > 0 ||
+      boostChanged;
     for (const timer of this.pointerReleaseTimers.values()) clearTimeout(timer);
     this.pointerReleaseTimers.clear();
     this.keyboardActions.clear();
@@ -289,6 +366,7 @@ export class InputController {
       ...this.snapshot(),
       autoThrottleStatus: this.getAutoThrottleStatus(),
       pointerActive: this.activePointerIds.size > 0,
+      mobileBoost: this.getMobileBoostState(),
     };
   }
 
@@ -307,7 +385,9 @@ export class InputController {
       throttle: manualThrottle === 0 ? sources.autoThrottle : manualThrottle,
       turn: manualTurn,
       boost:
-        this.keyboardActions.has('boost') || this.pointerActions.has('boost'),
+        this.keyboardActions.has('boost') ||
+        this.pointerActions.has('boost') ||
+        this.getMobileBoostState().active,
       interact:
         this.keyboardActions.has('interact') ||
         this.pointerActions.has('interact'),
@@ -316,5 +396,40 @@ export class InputController {
 
   private notify(): void {
     for (const listener of this.listeners) listener();
+  }
+
+  private resetMobileBoost(): boolean {
+    const changed =
+      this.mobileBoostActiveUntil > 0 ||
+      this.mobileBoostCooldownUntil > 0 ||
+      this.mobileBoostTimer !== null;
+    if (this.mobileBoostTimer) clearTimeout(this.mobileBoostTimer);
+    this.mobileBoostTimer = null;
+    this.mobileBoostActiveUntil = 0;
+    this.mobileBoostCooldownUntil = 0;
+    this.mobileBoostState = {
+      active: false,
+      remainingMilliseconds: 0,
+      cooldownRemainingMilliseconds: 0,
+    };
+    return changed;
+  }
+
+  private startMobileBoostTicker(): void {
+    if (this.mobileBoostTimer) clearTimeout(this.mobileBoostTimer);
+    const tick = () => {
+      this.mobileBoostTimer = null;
+      this.updateMobileBoostState();
+      const state = this.mobileBoostState;
+      if (!state.active && state.cooldownRemainingMilliseconds <= 0) {
+        this.mobileBoostActiveUntil = 0;
+        this.mobileBoostCooldownUntil = 0;
+        this.notify();
+        return;
+      }
+      this.notify();
+      this.mobileBoostTimer = setTimeout(tick, 50);
+    };
+    this.mobileBoostTimer = setTimeout(tick, 50);
   }
 }

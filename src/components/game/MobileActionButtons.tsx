@@ -1,7 +1,18 @@
-import { useSyncExternalStore } from 'react';
-import { autoThrottleConfig } from '../../config/mobileControls.config';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from 'react';
+import {
+  autoThrottleConfig,
+  mobileBoostConfig,
+} from '../../config/mobileControls.config';
 import { triggerHaptic } from '../../game/haptics';
 import type { InputController } from '../../game/inputController';
+import { consumeAutoThrottleHint } from '../../game/mobileControlHelp';
+import { useGameStore } from '../../store/gameStore';
 import { pointerActionHandlers } from './pointerControlHandlers';
 
 interface MobileActionButtonsProps {
@@ -23,10 +34,49 @@ export function MobileActionButtons({
   autoThrottleAvailable = false,
   hapticsEnabled,
 }: MobileActionButtonsProps) {
+  const fuel = useGameStore((state) => state.telemetry.fuel);
+  const condition = useGameStore((state) => state.vehicle.condition);
+  const [showCruiseHint, setShowCruiseHint] = useState(false);
+  const cruiseHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoThrottleStatus = useSyncExternalStore(
     (listener) => input.subscribe(listener),
     () => input.getAutoThrottleStatus(),
     () => 'off',
+  );
+  const mobileBoost = useSyncExternalStore(
+    (listener) => input.subscribe(listener),
+    () => input.getMobileBoostState(),
+    () => ({
+      active: false,
+      remainingMilliseconds: 0,
+      cooldownRemainingMilliseconds: 0,
+    }),
+  );
+  const boostUnavailableReason =
+    condition <= 0 ? 'Averiado' : fuel <= 0 ? 'Sin combustible' : null;
+  const boostStatus = boostUnavailableReason
+    ? 'unavailable'
+    : mobileBoost.active
+      ? 'active'
+      : mobileBoost.cooldownRemainingMilliseconds > 0
+        ? 'cooldown'
+        : 'available';
+  const boostRemaining = mobileBoost.active
+    ? mobileBoost.remainingMilliseconds
+    : mobileBoost.cooldownRemainingMilliseconds;
+  const boostProgress = mobileBoost.active
+    ? mobileBoost.remainingMilliseconds / mobileBoostConfig.durationMilliseconds
+    : boostStatus === 'cooldown'
+      ? 1 -
+        mobileBoost.cooldownRemainingMilliseconds /
+          mobileBoostConfig.cooldownMilliseconds
+      : 0;
+
+  useEffect(
+    () => () => {
+      if (cruiseHintTimer.current) clearTimeout(cruiseHintTimer.current);
+    },
+    [],
   );
 
   return (
@@ -65,14 +115,28 @@ export function MobileActionButtons({
         )}
         <button
           type="button"
-          className="touch-button touch-button--boost"
+          className={`touch-button touch-button--boost touch-button--boost-${boostStatus}`}
           aria-label="Turbo"
-          {...pointerActionHandlers(input, 'boost', 0, () =>
-            triggerHaptic('boost', hapticsEnabled),
-          )}
+          aria-describedby="mobile-boost-status"
+          disabled={boostStatus === 'unavailable'}
+          style={
+            {
+              '--boost-progress': Math.max(0, Math.min(1, boostProgress)),
+            } as CSSProperties
+          }
+          onClick={() => {
+            if (input.activateMobileBoost({ fuel, condition })) {
+              triggerHaptic('boost', hapticsEnabled);
+            }
+          }}
         >
-          <span aria-hidden="true">＋</span>
-          <small>Turbo</small>
+          <strong>TURBO</strong>
+          <small id="mobile-boost-status">
+            {boostRemaining > 0
+              ? `${(boostRemaining / 1_000).toFixed(1)} s`
+              : (boostUnavailableReason ?? 'Listo')}
+          </small>
+          <i className="touch-button__progress" aria-hidden="true" />
         </button>
         {autoThrottleAvailable && (
           <button
@@ -87,7 +151,19 @@ export function MobileActionButtons({
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              input.toggleAutoThrottle(autoThrottleConfig.targetThrottle);
+              const enabled = input.toggleAutoThrottle(
+                autoThrottleConfig.targetThrottle,
+              );
+              if (enabled && consumeAutoThrottleHint()) {
+                setShowCruiseHint(true);
+                if (cruiseHintTimer.current) {
+                  clearTimeout(cruiseHintTimer.current);
+                }
+                cruiseHintTimer.current = setTimeout(
+                  () => setShowCruiseHint(false),
+                  4_500,
+                );
+              }
               triggerHaptic('auto-throttle', hapticsEnabled);
             }}
           >
@@ -102,6 +178,12 @@ export function MobileActionButtons({
           </button>
         )}
       </div>
+      {showCruiseHint && (
+        <div className="mobile-cruise-hint" role="status">
+          <strong>El vehículo mantendrá la marcha.</strong>
+          <span>Toca FRENO para detenerlo.</span>
+        </div>
+      )}
     </div>
   );
 }

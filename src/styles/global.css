@@ -2908,6 +2908,10 @@ html[data-tutorial-target='recalculate'] .mission-route-summary__header button {
   align-items: flex-end;
 }
 
+.mobile-actions {
+  position: relative;
+}
+
 .mobile-actions .touch-primary-actions {
   flex-direction: column;
 }
@@ -3011,6 +3015,7 @@ html[data-tutorial-target='recalculate'] .mission-route-summary__header button {
 }
 
 .touch-button--boost {
+  position: relative;
   width: 68px;
   height: 68px;
   border-color: rgb(217 170 86 / 48%);
@@ -3018,16 +3023,83 @@ html[data-tutorial-target='recalculate'] .mission-route-summary__header button {
   color: #f5cf85;
 }
 
-.touch-button--boost span {
-  font-size: 1.25rem;
-  line-height: 0.8;
+.touch-button--boost strong {
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
 }
 
 .touch-button--boost small {
-  font-size: 0.53rem;
+  font-size: 0.48rem;
   font-weight: 750;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.touch-button--boost-active {
+  border-color: #d8fbff;
+  color: #d8fbff;
+  background: rgb(15 75 84 / 88%);
+}
+
+.touch-button--boost-cooldown {
+  border-color: rgb(163 176 170 / 42%);
+  color: #b7c2bd;
+}
+
+.touch-button--boost-unavailable {
+  border-color: rgb(211 132 108 / 38%);
+  color: #be9b90;
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.touch-button__progress {
+  position: absolute;
+  right: 9px;
+  bottom: 7px;
+  left: 9px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 16%);
+}
+
+.touch-button__progress::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: currentcolor;
+  transform: scaleX(var(--boost-progress));
+  transform-origin: left;
+  transition: transform 50ms linear;
+}
+
+.mobile-cruise-hint {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  display: grid;
+  gap: 2px;
+  width: min(270px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: 1px solid rgb(216 251 255 / 38%);
+  border-radius: 7px;
+  color: #eefcfc;
+  background: rgb(8 36 42 / 94%);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 34%);
+  font-size: 0.66rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.mobile-cruise-hint span {
+  color: #bdd3d2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .touch-button__progress::after {
+    transition: none;
+  }
 }
 
 .touch-button--auto {

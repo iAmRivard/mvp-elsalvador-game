@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InputController } from '../src/game/inputController';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('keyboard route controls', () => {
   it('requests one recalculation for a non-repeated R press', () => {
@@ -30,7 +34,6 @@ describe('keyboard route controls', () => {
     expect(input.snapshot().interact).toBe(true);
     vi.advanceTimersByTime(1);
     expect(input.snapshot().interact).toBe(false);
-    vi.useRealTimers();
   });
 
   it('combina teclado y fuentes táctiles con suma limitada', () => {
@@ -85,7 +88,6 @@ describe('keyboard route controls', () => {
     expect(input.getDiagnostics().pointerActive).toBe(false);
     vi.runAllTimers();
     expect(input.snapshot().interact).toBe(false);
-    vi.useRealTimers();
   });
 
   it('limpia teclado, punteros y crucero cuando la ventana pierde foco', () => {
@@ -95,6 +97,7 @@ describe('keyboard route controls', () => {
     input.setJoystickTurn(0.6);
     input.setAutoThrottle(true);
     input.setPointerAction('boost', true);
+    input.activateMobileBoost();
 
     window.dispatchEvent(new Event('blur'));
 
@@ -105,6 +108,89 @@ describe('keyboard route controls', () => {
       interact: false,
     });
     expect(input.getAutoThrottleStatus()).toBe('off');
+    expect(input.getMobileBoostState().active).toBe(false);
+    unbind();
+  });
+
+  it('activa Turbo móvil por toque, termina y respeta el enfriamiento', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-14T12:00:00.000Z'));
+    const input = new InputController();
+
+    expect(input.activateMobileBoost({ fuel: 50, condition: 80 })).toBe(true);
+    expect(input.snapshot().boost).toBe(true);
+    expect(input.getMobileBoostState()).toMatchObject({
+      active: true,
+      remainingMilliseconds: 2_500,
+      cooldownRemainingMilliseconds: 0,
+    });
+    expect(input.activateMobileBoost()).toBe(false);
+
+    vi.advanceTimersByTime(2_500);
+    expect(input.snapshot().boost).toBe(false);
+    expect(input.getMobileBoostState()).toMatchObject({
+      active: false,
+      remainingMilliseconds: 0,
+      cooldownRemainingMilliseconds: 1_800,
+    });
+    expect(input.activateMobileBoost()).toBe(false);
+
+    vi.advanceTimersByTime(1_800);
+    expect(input.getMobileBoostState()).toEqual({
+      active: false,
+      remainingMilliseconds: 0,
+      cooldownRemainingMilliseconds: 0,
+    });
+    expect(input.activateMobileBoost()).toBe(true);
+    input.clearAllInput();
+  });
+
+  it('cancela AUTO y Turbo móvil al frenar o limpiar una interrupción', () => {
+    vi.useFakeTimers();
+    const input = new InputController();
+    input.setAutoThrottle(true);
+    input.activateMobileBoost();
+
+    input.setPointerAction('backward', true);
+    expect(input.getAutoThrottleStatus()).toBe('off');
+    expect(input.getMobileBoostState().active).toBe(false);
+    expect(input.snapshot()).toMatchObject({ throttle: -1, boost: false });
+
+    input.setPointerAction('backward', false);
+    input.setAutoThrottle(true);
+    input.activateMobileBoost();
+    input.clearAllInput();
+    expect(input.getAutoThrottleStatus()).toBe('off');
+    expect(input.getMobileBoostState()).toEqual({
+      active: false,
+      remainingMilliseconds: 0,
+      cooldownRemainingMilliseconds: 0,
+    });
+  });
+
+  it('rechaza Turbo móvil sin combustible o con condición cero', () => {
+    const input = new InputController();
+    expect(input.activateMobileBoost({ fuel: 0, condition: 100 })).toBe(false);
+    expect(input.activateMobileBoost({ fuel: 50, condition: 0 })).toBe(false);
+    expect(input.snapshot().boost).toBe(false);
+  });
+
+  it('permite Turbo temporal mientras el crucero mantiene la marcha', () => {
+    vi.useFakeTimers();
+    const input = new InputController();
+    input.setAutoThrottle(true, 0.72);
+    expect(input.activateMobileBoost()).toBe(true);
+    expect(input.snapshot()).toMatchObject({ throttle: 0.72, boost: true });
+    input.clearAllInput();
+  });
+
+  it('mantiene Shift como Turbo sostenido de escritorio', () => {
+    const input = new InputController();
+    const unbind = input.bindKeyboard(window, vi.fn());
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ShiftLeft' }));
+    expect(input.snapshot().boost).toBe(true);
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ShiftLeft' }));
+    expect(input.snapshot().boost).toBe(false);
     unbind();
   });
 });

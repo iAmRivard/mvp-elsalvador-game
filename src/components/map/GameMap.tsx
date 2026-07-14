@@ -566,6 +566,12 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             containerRef.current.dataset.inputBoost = String(
               inputDiagnostics.boost,
             );
+            containerRef.current.dataset.inputMobileBoost = inputDiagnostics
+              .mobileBoost.active
+              ? 'active'
+              : inputDiagnostics.mobileBoost.cooldownRemainingMilliseconds > 0
+                ? 'cooldown'
+                : 'off';
             containerRef.current.dataset.inputInteract = String(
               inputDiagnostics.interact,
             );
