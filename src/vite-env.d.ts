@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_TERRAIN?: string;
   readonly VITE_ENABLE_THREE_PLAYER?: string;
   readonly VITE_DEFAULT_GRAPHICS_QUALITY?: string;
+  readonly VITE_ENABLE_DIAGNOSTICS?: string;
 }
 
 interface ImportMeta {

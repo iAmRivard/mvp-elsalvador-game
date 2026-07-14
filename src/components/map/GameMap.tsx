@@ -526,6 +526,12 @@ export function GameMap({ inputController }: GameMapProps) {
               );
               containerRef.current.dataset.roadSelectedScore =
                 roadDiagnostics.selectedScore?.toFixed(2) ?? '';
+              const selectedCandidate = roadDiagnostics.candidates.find(
+                (candidate) =>
+                  candidate.edgeId === roadDiagnostics.selectedEdgeId,
+              );
+              containerRef.current.dataset.roadDistanceMeters =
+                selectedCandidate?.distanceMeters.toFixed(1) ?? '';
               containerRef.current.dataset.roadCandidateScores =
                 roadDiagnostics.candidates
                   .map(

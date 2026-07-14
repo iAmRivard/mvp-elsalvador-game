@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { DiagnosticsPanel } from '../components/dev/DiagnosticsPanel';
 import { GameActions } from '../components/hud/GameActions';
 import { GameAudioBridge } from '../components/audio/GameAudioBridge';
 import { CurrentRegion } from '../components/hud/CurrentRegion';
@@ -21,6 +22,9 @@ const GameMap = lazy(async () => {
   const module = await import('../components/map/GameMap');
   return { default: module.GameMap };
 });
+
+const diagnosticsEnabled =
+  import.meta.env.DEV && import.meta.env.VITE_ENABLE_DIAGNOSTICS === 'true';
 
 export function App() {
   const [sessionStarted, setSessionStarted] = useState(false);
@@ -93,6 +97,7 @@ export function App() {
         <DiscoveryToast />
         <MissionToast />
         <LevelUpToast />
+        {diagnosticsEnabled && <DiagnosticsPanel input={inputController} />}
 
         <div className="controls-hint" aria-label="Controles disponibles">
           <span>WASD o flechas para conducir</span>
