@@ -2482,16 +2482,21 @@ html[data-tutorial-target='recalculate'] .mission-route-summary__header button {
 
 .mission-route-arrow {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 48px;
+  height: 48px;
   place-items: center;
-  border: 2px solid #d8fbff;
+  border: 1px dashed rgb(216 251 255 / 78%);
   border-radius: 50%;
-  color: #06242c;
-  background: #28d7f5;
-  box-shadow: 0 3px 12px rgb(9 18 17 / 48%);
-  font-size: 1rem;
+  color: #d8fbff;
+  background: rgb(6 36 44 / 42%);
+  box-shadow:
+    0 0 0 3px rgb(40 215 245 / 12%),
+    0 3px 12px rgb(9 18 17 / 48%);
+  font-size: 1.35rem;
   font-weight: 800;
+  pointer-events: none;
+  text-shadow: 0 2px 5px rgb(0 0 0 / 70%);
+  transform: translateY(-34px);
 }
 
 .mission-route-summary--off-route {

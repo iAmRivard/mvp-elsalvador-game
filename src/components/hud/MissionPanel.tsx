@@ -18,6 +18,7 @@ import {
   nearestPendingObjective,
 } from '../../game/missions';
 import { formatNavigationInstruction } from '../../map/navigationInstructions';
+import { navigationGuidanceMessage } from '../../map/navigationGuidance';
 import { useGameStore, type StoryLogSection } from '../../store/gameStore';
 import type { NavigationInstructionType } from '../../types/navigation';
 import type { StoryLogEntry } from '../../types/progression';
@@ -205,6 +206,13 @@ export function MissionPanel() {
           fuelMultiplier: selectedChoice?.fuelMultiplier ?? 1,
         });
   const rangeMeters = estimateFuelRange(telemetry.fuel, driving.surface);
+  const navigationGuidance = navigationGuidanceMessage(
+    missionRoute.activeNavigation,
+    missionRoute.orientation,
+    telemetry.speedKilometersPerHour,
+    driving.roadDistanceMeters,
+    telemetry.speedKilometersPerHour < -0.5,
+  );
   const optionalMissions = missions.filter(
     (mission) => mission.optional && !completedMissionIds.includes(mission.id),
   );
@@ -319,14 +327,16 @@ export function MissionPanel() {
               <p className="mission-panel__description">{active.description}</p>
 
               <div
-                className={`mission-route-summary ${missionRoute.offRoute ? 'mission-route-summary--off-route' : ''}`}
+                className={`mission-route-summary ${missionRoute.offRoute || missionRoute.activeNavigation?.requiresRejoin ? 'mission-route-summary--off-route' : ''}`}
                 data-route-status={missionRoute.status}
               >
                 <div className="mission-route-summary__header">
                   <span>
-                    {missionRoute.offRoute
-                      ? 'Te alejaste de la ruta'
-                      : 'Ruta por carretera'}
+                    {missionRoute.status === 'fallback'
+                      ? 'Ruta vial no disponible'
+                      : missionRoute.activeNavigation?.requiresRejoin
+                        ? 'Reincorporación'
+                        : 'Ruta por carretera'}
                   </span>
                   <button
                     type="button"
@@ -338,23 +348,36 @@ export function MissionPanel() {
                     <span aria-hidden="true">↻</span>
                   </button>
                 </div>
-                {missionRoute.nextInstruction &&
-                  missionRoute.distanceToNextInstructionMeters !== null && (
-                    <div className="mission-navigation-next">
-                      <span aria-hidden="true">
-                        {maneuverSymbol(missionRoute.nextInstruction.type)}
-                      </span>
-                      <div>
-                        <small>Próxima maniobra</small>
-                        <strong>
-                          {formatNavigationInstruction(
-                            missionRoute.nextInstruction,
-                            missionRoute.distanceToNextInstructionMeters,
-                          )}
-                        </strong>
-                      </div>
+                {(navigationGuidance ||
+                  (missionRoute.nextInstruction &&
+                    missionRoute.distanceToNextInstructionMeters !== null)) && (
+                  <div className="mission-navigation-next">
+                    <span aria-hidden="true">
+                      {maneuverSymbol(
+                        missionRoute.activeNavigation?.maneuverType ??
+                          missionRoute.nextInstruction?.type ??
+                          'continue',
+                      )}
+                    </span>
+                    <div>
+                      <small>
+                        {missionRoute.activeNavigation?.requiresRejoin
+                          ? 'Vuelve al camino'
+                          : 'Próxima maniobra'}
+                      </small>
+                      <strong>
+                        {navigationGuidance ??
+                          (missionRoute.nextInstruction &&
+                          missionRoute.distanceToNextInstructionMeters !== null
+                            ? formatNavigationInstruction(
+                                missionRoute.nextInstruction,
+                                missionRoute.distanceToNextInstructionMeters,
+                              )
+                            : '')}
+                      </strong>
                     </div>
-                  )}
+                  </div>
+                )}
                 <strong>
                   {next?.objective.label ?? 'Objetivo registrado'}
                 </strong>

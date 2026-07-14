@@ -42,7 +42,11 @@ import {
 } from '../game/progression';
 import type { PlayerStepEnvironment } from '../game/movement';
 import type { PlayerRuntime, PlayerTelemetry } from '../types/game';
-import type { RouteNavigationInstruction } from '../types/navigation';
+import type {
+  ActiveNavigationState,
+  RouteNavigationInstruction,
+  VehicleOrientation,
+} from '../types/navigation';
 import type { RoadCoordinates } from '../types/roads';
 import type {
   CheckpointReason,
@@ -110,6 +114,8 @@ export interface MissionRouteRuntimeState {
   nextInstruction: RouteNavigationInstruction | null;
   distanceToNextInstructionMeters: number | null;
   offRoute: boolean;
+  activeNavigation: ActiveNavigationState | null;
+  orientation: VehicleOrientation;
   recalculationRevision: number;
 }
 
@@ -182,12 +188,22 @@ interface GameStore extends GameData {
   setRoadNetworkStatus: (status: RoadNetworkStatus) => void;
   setDrivingEnvironment: (environment: PlayerStepEnvironment) => void;
   setMissionRoute: (
-    route: Omit<MissionRouteRuntimeState, 'recalculationRevision'>,
+    route: Omit<
+      MissionRouteRuntimeState,
+      'recalculationRevision' | 'activeNavigation' | 'orientation'
+    > &
+      Partial<
+        Pick<MissionRouteRuntimeState, 'activeNavigation' | 'orientation'>
+      >,
   ) => void;
   setMissionNavigation: (
     navigation: Pick<
       MissionRouteRuntimeState,
-      'nextInstruction' | 'distanceToNextInstructionMeters' | 'offRoute'
+      | 'nextInstruction'
+      | 'distanceToNextInstructionMeters'
+      | 'offRoute'
+      | 'activeNavigation'
+      | 'orientation'
     >,
   ) => void;
   requestMissionRouteRecalculation: () => void;
@@ -512,6 +528,12 @@ const defaultMissionRouteState: MissionRouteRuntimeState = {
   nextInstruction: null,
   distanceToNextInstructionMeters: null,
   offRoute: false,
+  activeNavigation: null,
+  orientation: {
+    physicalHeading: INITIAL_PLAYER.heading,
+    recommendedHeading: null,
+    headingDifference: null,
+  },
   recalculationRevision: 0,
 };
 
@@ -788,6 +810,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set((state) => ({
       missionRoute: {
         ...route,
+        activeNavigation: route.activeNavigation ?? null,
+        orientation: route.orientation ?? state.missionRoute.orientation,
         recalculationRevision: state.missionRoute.recalculationRevision,
       },
     })),
@@ -797,7 +821,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
         state.missionRoute.nextInstruction === navigation.nextInstruction &&
         state.missionRoute.distanceToNextInstructionMeters ===
           navigation.distanceToNextInstructionMeters &&
-        state.missionRoute.offRoute === navigation.offRoute
+        state.missionRoute.offRoute === navigation.offRoute &&
+        state.missionRoute.activeNavigation === navigation.activeNavigation &&
+        state.missionRoute.orientation.physicalHeading ===
+          navigation.orientation.physicalHeading &&
+        state.missionRoute.orientation.recommendedHeading ===
+          navigation.orientation.recommendedHeading &&
+        state.missionRoute.orientation.headingDifference ===
+          navigation.orientation.headingDifference
       ) {
         return state;
       }
