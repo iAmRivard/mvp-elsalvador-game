@@ -65,6 +65,19 @@ describe('keyboard route controls', () => {
     unbind();
   });
 
+  it('aplica ambos ejes del joystick de conducción y los libera juntos', () => {
+    const input = new InputController();
+    input.setDriveJoystick(0.68, -0.42);
+    expect(input.snapshot()).toMatchObject({ throttle: 0.68, turn: -0.42 });
+    expect(input.getDiagnostics()).toMatchObject({
+      joystickThrottle: 0.68,
+      joystickTurn: -0.42,
+    });
+
+    input.setDriveJoystick(0, 0);
+    expect(input.snapshot()).toMatchObject({ throttle: 0, turn: 0 });
+  });
+
   it('suspende el crucero por entrada manual y lo cancela al frenar', () => {
     const input = new InputController();
     input.setAutoThrottle(true, 0.72);
@@ -201,6 +214,19 @@ describe('keyboard route controls', () => {
     input.setAutoThrottle(true, 0.72);
     expect(input.activateMobileBoost()).toBe(true);
     expect(input.snapshot()).toMatchObject({ throttle: 0.72, boost: true });
+    input.clearAllInput();
+  });
+
+  it('permite Turbo junto al joystick único', () => {
+    vi.useFakeTimers();
+    const input = new InputController();
+    input.setDriveJoystick(0.7, 0.35);
+    expect(input.activateMobileBoost()).toBe(true);
+    expect(input.snapshot()).toMatchObject({
+      throttle: 0.7,
+      turn: 0.35,
+      boost: true,
+    });
     input.clearAllInput();
   });
 

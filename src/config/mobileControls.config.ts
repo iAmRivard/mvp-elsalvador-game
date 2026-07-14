@@ -1,5 +1,8 @@
 export type MobileControlMode =
-  'joystick-pedals' | 'joystick-auto-throttle' | 'classic-buttons';
+  | 'single-drive-joystick'
+  | 'joystick-auto-throttle'
+  | 'joystick-pedals'
+  | 'classic-buttons';
 
 export type JoystickPositionMode = 'fixed' | 'floating';
 export type JoystickSize = 'small' | 'medium' | 'large';
@@ -38,13 +41,22 @@ export const virtualJoystickConfig: VirtualJoystickConfig = {
 };
 
 export const defaultMobileControlsSettings: MobileControlsSettings = {
-  controlMode: 'joystick-auto-throttle',
+  controlMode: 'single-drive-joystick',
   joystickPositionMode: 'fixed',
   joystickSize: 'medium',
-  joystickDeadZone: virtualJoystickConfig.deadZone,
+  joystickDeadZone: 0.12,
   autoThrottleDefault: false,
   hapticsEnabled: true,
 };
+
+export const driveJoystickConfig = {
+  horizontalDeadZone: 0.12,
+  verticalDeadZone: 0.16,
+  steeringExponent: 1.4,
+  throttleExponent: 1.25,
+  reverseMaximum: 0.55,
+  brakeThreshold: -0.18,
+} as const;
 
 export const mobileBoostConfig = {
   durationMilliseconds: 2_500,

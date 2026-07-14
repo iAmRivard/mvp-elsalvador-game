@@ -277,11 +277,17 @@ function stepPlayerOnce(
       : isChangingDirection || exceedsSurfaceLimit
         ? handling.braking
         : handling.acceleration;
-  const speedMetersPerSecond = approach(
+  const approachedSpeed = approach(
     player.speedMetersPerSecond,
     targetSpeed,
     acceleration * deltaTime,
   );
+  const speedMetersPerSecond =
+    isChangingDirection &&
+    player.speedMetersPerSecond !== 0 &&
+    Math.sign(approachedSpeed) !== Math.sign(player.speedMetersPerSecond)
+      ? 0
+      : approachedSpeed;
   const speedDirection = speedMetersPerSecond < 0 ? -1 : 1;
   const absoluteSpeed = Math.abs(speedMetersPerSecond);
   const steeringAuthority = Math.min(

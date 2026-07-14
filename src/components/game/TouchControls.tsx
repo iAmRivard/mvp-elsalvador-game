@@ -54,6 +54,7 @@ export function TouchControls({ input }: TouchControlsProps) {
       ? interactionLabelForObjective(interactionObjective)
       : null;
   const sizeMultiplier = joystickSizeMultipliers[joystickSize];
+  const singleDriveJoystick = controlMode === 'single-drive-joystick';
 
   useEffect(() => {
     input.clearAllInput();
@@ -94,6 +95,9 @@ export function TouchControls({ input }: TouchControlsProps) {
               virtualJoystickConfig.returnDurationMilliseconds
             }
             positionMode={joystickPositionMode}
+            driveMode={singleDriveJoystick}
+            speedMetersPerSecond={telemetry.speedMetersPerSecond}
+            hapticsEnabled={hapticsEnabled}
           />
           <div className="touch-actions touch-actions--analog">
             <MobileActionButtons
@@ -105,11 +109,13 @@ export function TouchControls({ input }: TouchControlsProps) {
               autoThrottleAvailable={controlMode === 'joystick-auto-throttle'}
               hapticsEnabled={hapticsEnabled}
             />
-            <MobilePedals
-              input={input}
-              showAccelerator={controlMode === 'joystick-pedals'}
-              hapticsEnabled={hapticsEnabled}
-            />
+            {!singleDriveJoystick && (
+              <MobilePedals
+                input={input}
+                showAccelerator={controlMode === 'joystick-pedals'}
+                hapticsEnabled={hapticsEnabled}
+              />
+            )}
           </div>
         </>
       )}

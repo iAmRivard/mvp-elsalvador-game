@@ -5,8 +5,13 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import type { JoystickPositionMode } from '../../config/mobileControls.config';
+import {
+  driveJoystickConfig,
+  type JoystickPositionMode,
+} from '../../config/mobileControls.config';
 import { applyDeadZone, applyResponseCurve } from '../../game/analogInput';
+import { driveJoystickOutput } from '../../game/driveJoystick';
+import { triggerHaptic } from '../../game/haptics';
 import type { InputController } from '../../game/inputController';
 
 interface VirtualJoystickProps {
@@ -17,6 +22,9 @@ interface VirtualJoystickProps {
   responseExponent: number;
   returnDurationMilliseconds: number;
   positionMode: JoystickPositionMode;
+  driveMode?: boolean;
+  speedMetersPerSecond?: number;
+  hapticsEnabled?: boolean;
 }
 
 interface Point {
@@ -51,18 +59,26 @@ export function VirtualJoystick({
   responseExponent,
   returnDurationMilliseconds,
   positionMode,
+  driveMode = false,
+  speedMetersPerSecond = 0,
+  hapticsEnabled = false,
 }: VirtualJoystickProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
   const pointerIdRef = useRef<number | null>(null);
   const centerRef = useRef<Point>({ x: 0, y: 0 });
+  const driveThrottleRef = useRef(0);
+  const reverseHapticRef = useRef(false);
   const [floatingCenter, setFloatingCenter] = useState<Point | null>(null);
 
   const reset = () => {
     const pointerId = pointerIdRef.current;
     if (pointerId !== null) input.setPointerActive(pointerId, false);
     pointerIdRef.current = null;
-    input.setJoystickTurn(0);
+    driveThrottleRef.current = 0;
+    reverseHapticRef.current = false;
+    if (driveMode) input.setDriveJoystick(0, 0);
+    else input.setJoystickTurn(0);
     if (knobRef.current) {
       knobRef.current.style.transitionDuration = `${returnDurationMilliseconds}ms`;
       knobRef.current.style.transform = 'translate3d(0, 0, 0)';
@@ -80,6 +96,17 @@ export function VirtualJoystick({
     // Reset uses the current input instance and configuration on unmount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input, positionMode, returnDurationMilliseconds]);
+
+  useEffect(() => {
+    const reversing =
+      driveMode &&
+      driveThrottleRef.current <= driveJoystickConfig.brakeThreshold &&
+      Math.abs(speedMetersPerSecond) <= 0.35;
+    if (reversing && !reverseHapticRef.current) {
+      triggerHaptic('reverse', hapticsEnabled);
+    }
+    reverseHapticRef.current = reversing;
+  }, [driveMode, hapticsEnabled, speedMetersPerSecond]);
 
   const start = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (pointerIdRef.current !== null) return;
@@ -124,8 +151,17 @@ export function VirtualJoystick({
     if (knobRef.current) {
       knobRef.current.style.transform = `translate3d(${String(visualX)}px, ${String(visualY)}px, 0)`;
     }
-    const normalized = applyDeadZone(deltaX / radiusPixels, deadZone);
-    input.setJoystickTurn(applyResponseCurve(normalized, responseExponent));
+    if (driveMode) {
+      const output = driveJoystickOutput(
+        visualX / radiusPixels,
+        visualY / radiusPixels,
+      );
+      driveThrottleRef.current = output.throttle;
+      input.setDriveJoystick(output.throttle, output.turn);
+    } else {
+      const normalized = applyDeadZone(visualX / radiusPixels, deadZone);
+      input.setJoystickTurn(applyResponseCurve(normalized, responseExponent));
+    }
   };
 
   const release = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -154,9 +190,11 @@ export function VirtualJoystick({
   return (
     <div
       ref={surfaceRef}
-      className={`virtual-joystick virtual-joystick--${positionMode} ${floatingCenter ? 'virtual-joystick--active' : ''}`}
+      className={`virtual-joystick virtual-joystick--${positionMode} ${driveMode ? 'virtual-joystick--drive' : ''} ${floatingCenter ? 'virtual-joystick--active' : ''}`}
       style={style}
-      aria-label="Joystick de dirección"
+      aria-label={
+        driveMode ? 'Joystick de conducción' : 'Joystick de dirección'
+      }
       onPointerDown={start}
       onPointerMove={move}
       onPointerUp={release}

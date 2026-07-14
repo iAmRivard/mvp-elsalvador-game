@@ -5,6 +5,7 @@ export type HapticEvent =
   | 'collision'
   | 'objective'
   | 'auto-throttle'
+  | 'reverse'
   | 'condition-warning'
   | 'timer-warning';
 
@@ -15,6 +16,7 @@ const hapticPatterns: Readonly<Record<HapticEvent, number | number[]>> = {
   collision: [35, 25, 35],
   objective: [16, 35, 28],
   'auto-throttle': [12, 24, 12],
+  reverse: 14,
   'condition-warning': [28, 45, 28],
   'timer-warning': [18, 24, 18],
 };

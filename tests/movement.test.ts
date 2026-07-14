@@ -131,6 +131,18 @@ describe('movimiento geografico del jugador', () => {
     expect(20 - braking.speedMetersPerSecond).toBeCloseTo(0.7, 8);
   });
 
+  it('se detiene antes de cambiar directamente de avance a reversa', () => {
+    const stopped = stepPlayer(
+      { ...player, speedMetersPerSecond: 0.2 },
+      { ...idleInput, throttle: -1 },
+      0.05,
+    );
+    expect(stopped.speedMetersPerSecond).toBe(0);
+
+    const reversing = stepPlayer(stopped, { ...idleInput, throttle: -1 }, 0.05);
+    expect(reversing.speedMetersPerSecond).toBeLessThan(0);
+  });
+
   it('se desplaza y gira en sentido inverso al retroceder', () => {
     const reversing = stepPlayer(
       { ...player, speedMetersPerSecond: -4 },

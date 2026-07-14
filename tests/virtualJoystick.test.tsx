@@ -17,7 +17,7 @@ describe('joystick virtual', () => {
     });
   });
 
-  function setup() {
+  function setup(driveMode = false) {
     const input = new InputController();
     const view = render(
       <VirtualJoystick
@@ -30,9 +30,12 @@ describe('joystick virtual', () => {
           virtualJoystickConfig.returnDurationMilliseconds
         }
         positionMode="fixed"
+        driveMode={driveMode}
       />,
     );
-    const joystick = view.getByLabelText('Joystick de dirección');
+    const joystick = view.getByLabelText(
+      driveMode ? 'Joystick de conducción' : 'Joystick de dirección',
+    );
     vi.spyOn(joystick, 'getBoundingClientRect').mockReturnValue({
       x: 0,
       y: 0,
@@ -118,5 +121,80 @@ describe('joystick virtual', () => {
     });
     window.dispatchEvent(new Event('orientationchange'));
     expect(input.snapshot().turn).toBe(0);
+  });
+
+  it('controla aceleración y giro diagonal y libera ambos ejes', () => {
+    const { input, joystick } = setup(true);
+    fireEvent.pointerDown(joystick, {
+      pointerId: 9,
+      clientX: 72,
+      clientY: 72,
+    });
+    fireEvent.pointerMove(joystick, {
+      pointerId: 9,
+      clientX: 112,
+      clientY: 24,
+    });
+    expect(input.snapshot().throttle).toBeGreaterThan(0);
+    expect(input.snapshot().turn).toBeGreaterThan(0);
+
+    fireEvent.pointerUp(joystick, {
+      pointerId: 9,
+      clientX: 112,
+      clientY: 24,
+    });
+    expect(input.snapshot()).toMatchObject({ throttle: 0, turn: 0 });
+  });
+
+  it('emite háptica al pasar de freno a reversa cerca de cero', () => {
+    const vibrate = vi.fn();
+    Object.defineProperty(navigator, 'vibrate', {
+      configurable: true,
+      value: vibrate,
+    });
+    const input = new InputController();
+    const renderJoystick = (speedMetersPerSecond: number) => (
+      <VirtualJoystick
+        input={input}
+        radiusPixels={virtualJoystickConfig.radiusPixels}
+        knobRadiusPixels={virtualJoystickConfig.knobRadiusPixels}
+        deadZone={virtualJoystickConfig.deadZone}
+        responseExponent={virtualJoystickConfig.responseExponent}
+        returnDurationMilliseconds={
+          virtualJoystickConfig.returnDurationMilliseconds
+        }
+        positionMode="fixed"
+        driveMode
+        speedMetersPerSecond={speedMetersPerSecond}
+        hapticsEnabled
+      />
+    );
+    const view = render(renderJoystick(5));
+    const joystick = view.getByLabelText('Joystick de conducción');
+    vi.spyOn(joystick, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 144,
+      bottom: 144,
+      width: 144,
+      height: 144,
+      toJSON: () => ({}),
+    });
+    fireEvent.pointerDown(joystick, {
+      pointerId: 10,
+      clientX: 72,
+      clientY: 72,
+    });
+    fireEvent.pointerMove(joystick, {
+      pointerId: 10,
+      clientX: 72,
+      clientY: 138,
+    });
+    expect(vibrate).not.toHaveBeenCalled();
+
+    view.rerender(renderJoystick(0.2));
+    expect(vibrate).toHaveBeenCalledWith(14);
   });
 });

@@ -14,6 +14,7 @@ export interface InputSources {
   pointerThrottle: number;
   pointerTurn: number;
   touchThrottle: number;
+  joystickThrottle: number;
   joystickTurn: number;
   autoThrottle: number;
 }
@@ -72,6 +73,7 @@ export class InputController {
   >();
   private readonly listeners = new Set<() => void>();
   private touchThrottle = 0;
+  private joystickThrottle = 0;
   private joystickTurn = 0;
   private autoThrottle: AutoThrottleState = {
     enabled: false,
@@ -204,6 +206,24 @@ export class InputController {
     this.notify();
   }
 
+  setDriveJoystick(throttle: number, turn: number): void {
+    const nextThrottle = clampAnalogInput(throttle);
+    const nextTurn = clampAnalogInput(turn);
+    if (nextThrottle < 0) {
+      this.disableAutoThrottle();
+      this.cancelActiveMobileBoostPreservingCooldown();
+    }
+    if (
+      this.joystickThrottle === nextThrottle &&
+      this.joystickTurn === nextTurn
+    ) {
+      return;
+    }
+    this.joystickThrottle = nextThrottle;
+    this.joystickTurn = nextTurn;
+    this.notify();
+  }
+
   setAutoThrottle(enabled: boolean, targetThrottle = 0.72): void {
     const next = {
       enabled,
@@ -307,6 +327,7 @@ export class InputController {
     const changed =
       this.pointerActions.size > 0 ||
       this.touchThrottle !== 0 ||
+      this.joystickThrottle !== 0 ||
       this.joystickTurn !== 0 ||
       this.activePointerIds.size > 0 ||
       boostWasActive;
@@ -314,6 +335,7 @@ export class InputController {
     this.pointerReleaseTimers.clear();
     this.pointerActions.clear();
     this.touchThrottle = 0;
+    this.joystickThrottle = 0;
     this.joystickTurn = 0;
     this.activePointerIds.clear();
     if (changed) this.notify();
@@ -327,6 +349,7 @@ export class InputController {
       this.pointerActions.size > 0 ||
       this.pointerReleaseTimers.size > 0 ||
       this.touchThrottle !== 0 ||
+      this.joystickThrottle !== 0 ||
       this.joystickTurn !== 0 ||
       this.autoThrottle.enabled ||
       this.activePointerIds.size > 0 ||
@@ -336,6 +359,7 @@ export class InputController {
     this.keyboardActions.clear();
     this.pointerActions.clear();
     this.touchThrottle = 0;
+    this.joystickThrottle = 0;
     this.joystickTurn = 0;
     this.autoThrottle = { ...this.autoThrottle, enabled: false };
     this.autoThrottleScale = 1;
@@ -354,6 +378,7 @@ export class InputController {
       pointerThrottle: digitalAxis(this.pointerActions, 'forward', 'backward'),
       pointerTurn: digitalAxis(this.pointerActions, 'right', 'left'),
       touchThrottle: this.touchThrottle,
+      joystickThrottle: this.joystickThrottle,
       joystickTurn: this.joystickTurn,
       autoThrottle: this.autoThrottle.enabled
         ? this.autoThrottle.targetThrottle * this.autoThrottleScale
@@ -367,7 +392,8 @@ export class InputController {
     const manualThrottle = clampAnalogInput(
       sources.keyboardThrottle +
         sources.pointerThrottle +
-        sources.touchThrottle,
+        sources.touchThrottle +
+        sources.joystickThrottle,
     );
     return manualThrottle === 0 ? 'active' : 'suspended';
   }
@@ -387,7 +413,8 @@ export class InputController {
     const manualThrottle = clampAnalogInput(
       sources.keyboardThrottle +
         sources.pointerThrottle +
-        sources.touchThrottle,
+        sources.touchThrottle +
+        sources.joystickThrottle,
     );
     const manualTurn = clampAnalogInput(
       sources.keyboardTurn + sources.pointerTurn + sources.joystickTurn,

@@ -3064,6 +3064,16 @@ html[data-tutorial-target='target'] .map-canvas {
   background: rgb(242 231 194 / 18%);
 }
 
+.virtual-joystick--drive .virtual-joystick__base::after {
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 50%;
+  width: 1px;
+  background: rgb(242 231 194 / 18%);
+  content: '';
+}
+
 .virtual-joystick__knob {
   position: absolute;
   top: calc(50% - var(--joystick-knob-radius));
@@ -3085,6 +3095,10 @@ html[data-tutorial-target='target'] .map-canvas {
   grid-template-columns: auto auto;
   gap: 10px;
   align-items: end;
+}
+
+.touch-controls--single-drive-joystick .touch-actions--analog {
+  grid-template-columns: auto;
 }
 
 .mobile-actions,
