@@ -26,6 +26,9 @@ export function App() {
   const hasSavedGame = useGameStore((state) => state.hasSavedGame);
   const isPaused = useGameStore((state) => state.isPaused);
   const recoveryReason = useGameStore((state) => state.recoveryReason);
+  const activeNarrativeEventId = useGameStore(
+    (state) => state.activeNarrativeEventId,
+  );
   const setPaused = useGameStore((state) => state.setPaused);
   const loadGame = useGameStore((state) => state.loadGame);
   const resetGame = useGameStore((state) => state.resetGame);
@@ -104,14 +107,17 @@ export function App() {
           }}
         />
       )}
-      {isPaused && !showTutorial && !recoveryReason && (
-        <PauseMenu
-          onExitToTitle={() => {
-            setPaused(true);
-            setSessionStarted(false);
-          }}
-        />
-      )}
+      {isPaused &&
+        !showTutorial &&
+        !recoveryReason &&
+        !activeNarrativeEventId && (
+          <PauseMenu
+            onExitToTitle={() => {
+              setPaused(true);
+              setSessionStarted(false);
+            }}
+          />
+        )}
       <VehicleRecoveryDialog />
       <NarrativeDialog />
     </main>
