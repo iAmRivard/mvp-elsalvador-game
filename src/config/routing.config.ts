@@ -4,5 +4,6 @@ export const routingConfig = {
   deviationCheckIntervalMilliseconds: 1_000,
   automaticRecalculationCooldownMilliseconds: 5_000,
   maximumCacheEntries: 32,
+  workerTimeoutMilliseconds: 4_000,
   averageCruisingSpeedRatio: 0.72,
 } as const;

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { AStarRouter } from '../src/roads/routingService';
+import { describe, expect, it, vi } from 'vitest';
+import type { LoadedRoadNetwork } from '../src/roads/roadNetwork';
+import { AStarRouter, LocalRoutingService } from '../src/roads/routingService';
 import { RoadSpatialIndex } from '../src/roads/spatialIndex';
 import type { RoadNetwork } from '../src/types/roads';
 import { createRoadTestNetwork } from './roadTestNetwork';
@@ -64,6 +65,28 @@ function alternateRouteNetwork(): RoadNetwork {
 
 function routerFor(network: RoadNetwork): AStarRouter {
   return new AStarRouter(network, new RoadSpatialIndex(network));
+}
+
+function loadedNetwork(network: RoadNetwork): LoadedRoadNetwork {
+  const index = new RoadSpatialIndex(network);
+  return {
+    network,
+    index,
+    loadDurationMilliseconds: 10,
+    fileSizeBytes: 1_024,
+    metrics: {
+      downloadDurationMilliseconds: 2,
+      decodeDurationMilliseconds: 1,
+      parseDurationMilliseconds: 2,
+      validationDurationMilliseconds: 1,
+      indexDurationMilliseconds: 4,
+      totalDurationMilliseconds: 10,
+      fileSizeBytes: 1_024,
+      approximateMemoryBytes: 4_096,
+      nodeCount: network.nodes.length,
+      edgeCount: network.edges.length,
+    },
+  };
 }
 
 describe('local A* routing', () => {
@@ -140,5 +163,54 @@ describe('local A* routing', () => {
     expect(
       router.getDiagnostics().lastExpandedNodeCount,
     ).toBeGreaterThanOrEqual(0);
+  });
+
+  it('evicts the least recently used route when the cache is full', () => {
+    const router = routerFor(createRoadTestNetwork());
+    const requestAt = (index: number) => ({
+      origin: [-89.3 + index * 0.00001, 13.7] as [number, number],
+      destination: [-89.298, 13.7] as [number, number],
+    });
+    for (let index = 0; index < 32; index += 1) {
+      router.getRoute(requestAt(index));
+    }
+    router.getRoute(requestAt(0));
+    router.getRoute(requestAt(32));
+    router.getRoute(requestAt(1));
+
+    expect(router.getDiagnostics()).toMatchObject({
+      calculations: 34,
+      cacheHits: 1,
+      cacheEntries: 32,
+    });
+  });
+
+  it('uses the worker first and falls back to local A star on worker errors', async () => {
+    const network = createRoadTestNetwork();
+    const loaded = loadedNetwork(network);
+    const request = {
+      origin: network.nodes[0].coordinates,
+      destination: network.nodes[2].coordinates,
+    };
+    const expectedRoute = routerFor(network).getRoute(request);
+    const loader = vi.fn(() => Promise.resolve(loaded));
+    const workerRoute = vi.fn(() => Promise.resolve(expectedRoute));
+    const workerService = new LocalRoutingService(loader, {
+      getRoute: workerRoute,
+    });
+
+    await expect(workerService.getRoute(request)).resolves.toEqual(
+      expectedRoute,
+    );
+    expect(workerRoute).toHaveBeenCalledOnce();
+    expect(loader).not.toHaveBeenCalled();
+
+    const fallbackService = new LocalRoutingService(loader, {
+      getRoute: () => Promise.reject(new Error('worker unavailable')),
+    });
+    await expect(fallbackService.getRoute(request)).resolves.toEqual(
+      expectedRoute,
+    );
+    expect(loader).toHaveBeenCalledOnce();
   });
 });

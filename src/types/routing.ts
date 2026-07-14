@@ -22,6 +22,8 @@ export interface RoutingService {
 export interface RoutingDiagnostics {
   calculations: number;
   cacheHits: number;
+  cacheEntries: number;
   averageDurationMilliseconds: number;
+  lastDurationMilliseconds: number;
   lastExpandedNodeCount: number;
 }

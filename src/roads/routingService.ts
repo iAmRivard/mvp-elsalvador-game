@@ -14,6 +14,10 @@ import type {
   RoadNetwork,
 } from '../types/roads';
 import { loadRoadNetwork, type LoadedRoadNetwork } from './roadNetwork';
+import {
+  getRoadWorkerClient,
+  RoadWorkerStaleResponseError,
+} from './roadWorkerClient';
 import type { RoadSpatialIndex } from './spatialIndex';
 
 interface GraphArc {
@@ -39,6 +43,10 @@ interface CameFromEntry {
 interface QueueEntry {
   nodeId: number;
   priority: number;
+}
+
+interface RouteWorkerClient {
+  getRoute(request: RouteRequest): Promise<RouteResult | null>;
 }
 
 class MinimumQueue {
@@ -211,7 +219,11 @@ function routeDurationSeconds(distanceMeters: number): number {
   );
 }
 
-function cacheKey(request: RouteRequest): string {
+function cacheKey(
+  request: RouteRequest,
+  network: RoadNetwork,
+  costProfileVersion: string,
+): string {
   const coordinates = [...request.origin, ...request.destination]
     .map((value) => value.toFixed(5))
     .join(',');
@@ -225,7 +237,7 @@ function cacheKey(request: RouteRequest): string {
     .sort(([a], [b]) => Number(a) - Number(b))
     .map(([edgeId, multiplier]) => `${edgeId}:${String(multiplier)}`)
     .join(',');
-  return `${coordinates}|${blocked}|${closed}|${penalties}`;
+  return `${network.sourceId}@${String(network.version)}|${costProfileVersion}|${coordinates}|${blocked}|${closed}|${penalties}`;
 }
 
 export class AStarRouter {
@@ -236,11 +248,13 @@ export class AStarRouter {
   private calculations = 0;
   private cacheHits = 0;
   private totalDurationMilliseconds = 0;
+  private lastDurationMilliseconds = 0;
   private lastExpandedNodeCount = 0;
 
   constructor(
     private readonly network: RoadNetwork,
     private readonly index: RoadSpatialIndex,
+    private readonly costProfileVersion = 'default-v1',
   ) {
     this.nodesById = network.nodes;
     this.edgesById = new Map(network.edges.map((edge) => [edge.id, edge]));
@@ -254,15 +268,20 @@ export class AStarRouter {
   }
 
   getRoute(request: RouteRequest): RouteResult | null {
-    const key = cacheKey(request);
+    const key = cacheKey(request, this.network, this.costProfileVersion);
     if (this.cache.has(key)) {
       this.cacheHits += 1;
-      return this.cache.get(key) ?? null;
+      const cached = this.cache.get(key) ?? null;
+      this.cache.delete(key);
+      this.cache.set(key, cached);
+      this.lastDurationMilliseconds = 0;
+      return cached;
     }
     const startedAt = performance.now();
     const result = this.calculate(request);
     this.calculations += 1;
-    this.totalDurationMilliseconds += performance.now() - startedAt;
+    this.lastDurationMilliseconds = performance.now() - startedAt;
+    this.totalDurationMilliseconds += this.lastDurationMilliseconds;
     this.cache.set(key, result);
     if (this.cache.size > routingConfig.maximumCacheEntries) {
       const oldestKey = this.cache.keys().next().value;
@@ -418,10 +437,12 @@ export class AStarRouter {
     return {
       calculations: this.calculations,
       cacheHits: this.cacheHits,
+      cacheEntries: this.cache.size,
       averageDurationMilliseconds:
         this.calculations === 0
           ? 0
           : this.totalDurationMilliseconds / this.calculations,
+      lastDurationMilliseconds: this.lastDurationMilliseconds,
       lastExpandedNodeCount: this.lastExpandedNodeCount,
     };
   }
@@ -432,9 +453,22 @@ export class LocalRoutingService implements RoutingService {
 
   constructor(
     private readonly networkLoader: () => Promise<LoadedRoadNetwork> = loadRoadNetwork,
+    private readonly workerClient:
+      RouteWorkerClient | null | undefined = undefined,
   ) {}
 
   async getRoute(request: RouteRequest): Promise<RouteResult | null> {
+    const workerClient =
+      this.workerClient === undefined
+        ? getRoadWorkerClient()
+        : this.workerClient;
+    if (workerClient) {
+      try {
+        return await workerClient.getRoute(request);
+      } catch (error) {
+        if (error instanceof RoadWorkerStaleResponseError) throw error;
+      }
+    }
     this.routerPromise ??= this.networkLoader().then(
       ({ network, index }) => new AStarRouter(network, index),
     );
