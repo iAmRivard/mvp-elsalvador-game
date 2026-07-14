@@ -59,6 +59,9 @@ jobs:
           printf "%s" "$missing_headers" | grep -q "404 Not Found"
           printf "%s" "$missing_headers" | grep -qi "cache-control: no-cache, must-revalidate"
           ! printf "%s" "$missing_headers" | grep -qi "immutable"
+          missing_model_headers=$(curl --silent --head http://127.0.0.1:8080/models/does-not-exist.glb)
+          printf "%s" "$missing_model_headers" | grep -q "404 Not Found"
+          ! printf "%s" "$missing_model_headers" | grep -qi "max-age"
 
       - name: Probar mapa y autonomía en navegador
         env:

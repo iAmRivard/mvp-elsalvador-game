@@ -577,24 +577,39 @@ export const useGameStore = create<GameStore>((set, get) => ({
   recoverAtLastSafeCheckpoint: (abandonMission = false) => {
     const checkpoint = get().lastSafeCheckpoint;
     if (!checkpoint) return false;
-    set((state) => ({
-      telemetry: telemetryFromPlayer(checkpoint.player),
-      vehicle: { ...checkpoint.vehicle },
-      inventory: checkpoint.inventory.map((entry) => ({ ...entry })),
-      energy: Math.min(state.maxEnergy, checkpoint.energy),
-      activeMissionId: abandonMission ? null : checkpoint.activeMissionId,
-      activeMissionCompletedObjectiveIds: abandonMission
-        ? []
-        : [...checkpoint.activeMissionCompletedObjectiveIds],
-      activeMissionObjectiveProgress: abandonMission
-        ? {}
-        : structuredClone(checkpoint.activeMissionObjectiveProgress),
-      recoveryReason: null,
-      activeNarrativeEventId: null,
-      isPaused: false,
-      playerRuntimeRevision: state.playerRuntimeRevision + 1,
-      missionRoute: defaultMissionRouteState,
-    }));
+    set((state) => {
+      const vehicle = {
+        ...checkpoint.vehicle,
+        condition:
+          state.recoveryReason === 'condition'
+            ? Math.max(
+                checkpoint.vehicle.condition,
+                vehicleStateConfig.emergencyRecoveryCondition,
+              )
+            : checkpoint.vehicle.condition,
+      };
+      return {
+        telemetry: telemetryFromPlayer({
+          ...checkpoint.player,
+          fuel: vehicle.fuel,
+        }),
+        vehicle,
+        inventory: checkpoint.inventory.map((entry) => ({ ...entry })),
+        energy: Math.min(state.maxEnergy, checkpoint.energy),
+        activeMissionId: abandonMission ? null : checkpoint.activeMissionId,
+        activeMissionCompletedObjectiveIds: abandonMission
+          ? []
+          : [...checkpoint.activeMissionCompletedObjectiveIds],
+        activeMissionObjectiveProgress: abandonMission
+          ? {}
+          : structuredClone(checkpoint.activeMissionObjectiveProgress),
+        recoveryReason: null,
+        activeNarrativeEventId: null,
+        isPaused: false,
+        playerRuntimeRevision: state.playerRuntimeRevision + 1,
+        missionRoute: defaultMissionRouteState,
+      };
+    });
     return true;
   },
   setRoadNetworkStatus: (roadNetworkStatus) =>

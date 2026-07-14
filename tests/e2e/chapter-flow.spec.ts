@@ -92,6 +92,16 @@ async function expandMissions(page: Page) {
   if (await expand.isVisible()) await expand.click();
 }
 
+async function openInventory(page: Page) {
+  const desktopButton = page.getByRole('button', { name: 'Inventario' });
+  if (await desktopButton.isVisible()) {
+    await desktopButton.click();
+    return;
+  }
+  await page.getByRole('button', { name: 'Partida y guardado' }).click();
+  await page.getByRole('menuitem', { name: 'Inventario' }).click();
+}
+
 test('recoge combustible, repara el vehículo y completa misiones', async ({
   page,
 }) => {
@@ -148,7 +158,7 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
     position: [-89.44672, 13.84092],
   });
   await interact(page);
-  await page.getByRole('button', { name: 'Inventario' }).click();
+  await openInventory(page);
   const inventory = page.getByRole('dialog', { name: 'Inventario' });
   await expect(inventory).toContainText('Bidón de combustible');
   await inventory.getByRole('button', { name: 'Cerrar inventario' }).click();
@@ -160,7 +170,7 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
     position: [-89.4479, 13.84048],
   });
   await interact(page);
-  await page.getByRole('button', { name: 'Inventario' }).click();
+  await openInventory(page);
   await expect(page.getByRole('dialog', { name: 'Inventario' })).toContainText(
     'Relé de encendido',
   );
@@ -200,7 +210,7 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
   await expect(
     page.getByRole('meter', { name: 'Condición del vehículo' }),
   ).toHaveAttribute('aria-valuenow', '100');
-  await page.getByRole('button', { name: 'Inventario' }).click();
+  await openInventory(page);
   await expect(page.getByRole('dialog', { name: 'Inventario' })).toContainText(
     'No llevas objetos',
   );

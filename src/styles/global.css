@@ -3999,6 +3999,12 @@ html[data-graphics-quality='low'] .map-atmosphere {
   }
 }
 
+@media (orientation: portrait) and (max-width: 600px) {
+  .game-shell:has(.mobile-action-labels) .player-hud {
+    top: max(100px, calc(env(safe-area-inset-top) + 90px));
+  }
+}
+
 @media (orientation: landscape) and (max-height: 560px) and (pointer: coarse) {
   .start-screen {
     padding: 10px max(16px, calc(env(safe-area-inset-right) + 10px)) 10px
@@ -4119,18 +4125,75 @@ html[data-graphics-quality='low'] .map-atmosphere {
       max(12px, calc(env(safe-area-inset-left) + 8px));
   }
 
+  .brand-title--full,
+  .game-action--desktop,
+  .game-action__desktop-icon {
+    display: none;
+  }
+
+  .brand-title--compact,
+  .region-label--compact,
+  .game-action__mobile-icon {
+    display: inline;
+  }
+
+  .save-menu > .save-menu__mobile-action {
+    display: grid;
+  }
+
   .brand-lockup h1 {
-    max-width: 190px;
+    max-width: none;
     font-size: 0.92rem;
+    white-space: nowrap;
   }
 
   .region-pill {
     display: none;
   }
 
+  .region-label--compact {
+    color: #c9cfca;
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
+  .mobile-action-labels {
+    position: fixed;
+    top: max(7px, calc(env(safe-area-inset-top) + 4px));
+    right: auto;
+    left: max(12px, calc(env(safe-area-inset-left) + 8px));
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    flex-wrap: nowrap;
+    width: auto;
+    max-width: calc(100vw - 190px);
+    padding: 6px 8px;
+    overflow: hidden;
+    border: 1px solid rgb(242 231 194 / 16%);
+    border-radius: 7px;
+    color: #d8ddd6;
+    background: rgb(9 24 22 / 92%);
+    box-shadow: 0 10px 28px rgb(0 0 0 / 32%);
+    font-size: 0.48rem;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .game-shell:has(.mobile-action-labels) .brand-lockup {
+    visibility: hidden;
+  }
+
   .icon-button {
     width: 36px;
     height: 36px;
+  }
+
+  .save-menu {
+    top: 42px;
+    width: min(258px, calc(100vw - 24px));
+    max-height: calc(100dvh - 54px);
+    overflow-y: auto;
   }
 
   .player-hud {

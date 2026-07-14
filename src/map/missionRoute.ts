@@ -128,6 +128,13 @@ export function addMissionRoute(
   map: MapLibreMap,
   minimumUpdateIntervalMilliseconds = 100,
 ): () => void {
+  const mapContainer = map.getContainer();
+  mapContainer.dataset.missionRouteCasingColor = missionRouteColors.casing;
+  mapContainer.dataset.missionRouteRoadColor = missionRouteColors.road;
+  mapContainer.dataset.missionRouteImmediateColor =
+    missionRouteColors.immediate;
+  mapContainer.dataset.missionRouteFallbackColor = missionRouteColors.fallback;
+  mapContainer.dataset.missionRouteTargetColor = missionRouteColors.target;
   map.addSource(ROUTE_SOURCE_ID, { type: 'geojson', data: emptyRoute });
   map.addLayer({
     id: ROAD_CASING_LAYER_ID,
@@ -527,5 +534,10 @@ export function addMissionRoute(
     if (map.getLayer(ROAD_CASING_LAYER_ID))
       map.removeLayer(ROAD_CASING_LAYER_ID);
     if (map.getSource(ROUTE_SOURCE_ID)) map.removeSource(ROUTE_SOURCE_ID);
+    delete mapContainer.dataset.missionRouteCasingColor;
+    delete mapContainer.dataset.missionRouteRoadColor;
+    delete mapContainer.dataset.missionRouteImmediateColor;
+    delete mapContainer.dataset.missionRouteFallbackColor;
+    delete mapContainer.dataset.missionRouteTargetColor;
   };
 }

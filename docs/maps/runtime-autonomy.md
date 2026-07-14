@@ -1,8 +1,8 @@
 # Autonomía cartográfica
 
 El navegador solo necesita acceder al origen que sirve el juego. El estilo MapLibre apunta al
-protocolo `pmtiles:///maps/el-salvador.pmtiles`; glyphs, sprites y tipografía se sirven desde
-`/map-assets`. El grafo vial usa `/data/roads`, los modelos `/models` y el audio `/audio`; todas son
+protocolo `pmtiles:///maps/el-salvador.pmtiles`; glyphs y tipografía se sirven desde `/map-assets`.
+El estilo no declara sprites porque no tiene consumidores. El grafo vial usa `/data/roads`, los modelos `/models` y el audio `/audio`; todas son
 rutas absolutas del mismo origen.
 
 `npm run check:external-resources` inspecciona HTML, TypeScript, CSS, JSON, SVG y GLTF de runtime.

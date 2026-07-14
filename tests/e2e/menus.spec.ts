@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-test('recorre inicio, tutorial, pausa y configuración', async ({ page }) => {
+test('recorre inicio, tutorial, pausa y configuración', async ({
+  page,
+}, testInfo) => {
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto('/');
 
@@ -52,6 +54,16 @@ test('recorre inicio, tutorial, pausa y configuración', async ({ page }) => {
     /^(ready|fallback)$/,
     { timeout: 20_000 },
   );
+  if (testInfo.project.name === 'chromium-desktop') {
+    const inventoryButton = page.getByRole('button', { name: 'Inventario' });
+    const tooltip = page.getByRole('tooltip', { name: 'Inventario' });
+    await inventoryButton.hover();
+    await expect(tooltip).toBeVisible();
+    await inventoryButton.focus();
+    await expect(tooltip).toBeVisible();
+    await inventoryButton.press('Escape');
+    await expect(tooltip).toBeHidden();
+  }
   await page.keyboard.press('Escape');
 
   const pauseMenu = page.getByRole('dialog', { name: 'Partida en pausa' });

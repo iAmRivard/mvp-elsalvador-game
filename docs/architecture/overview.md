@@ -26,7 +26,7 @@ Las responsabilidades se separan así:
 - `src/roads`: carga validada, índice de cuadrícula y consultas sobre el corredor vial.
 - `src/data`: ubicaciones, capítulo, misiones, objetos, restricciones y escenario declarativos.
 - `src/game`: movimiento y reglas puras de proximidad, objetivos y recompensas.
-- `public/map-assets`: estilo, glyphs, sprites, iconos y texturas locales.
+- `public/map-assets`: estilo y glyphs locales; los sprites técnicos heredados no forman parte del runtime.
 - `public/models`: modelos GLB propios y autocontenidos.
 - `public/audio`: diez señales WAV locales generadas dentro del proyecto.
 - `scripts/maps`: adquisición, construcción, validación y checksums reproducibles.

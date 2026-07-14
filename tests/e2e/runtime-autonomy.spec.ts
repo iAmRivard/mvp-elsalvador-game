@@ -217,6 +217,26 @@ test('carga el mapa sin solicitudes a terceros', async ({
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road', {
     timeout: 20_000,
   });
+  await expect(gameMap).toHaveAttribute(
+    'data-mission-route-casing-color',
+    '#06242C',
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-mission-route-road-color',
+    '#28D7F5',
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-mission-route-immediate-color',
+    '#D8FBFF',
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-mission-route-fallback-color',
+    '#FF9F43',
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-mission-route-target-color',
+    '#FFE169',
+  );
   const routeCoordinateCount = Number(
     await gameMap.getAttribute('data-mission-route-coordinate-count'),
   );
@@ -308,13 +328,17 @@ test('carga el mapa sin solicitudes a terceros', async ({
     });
     await page.mouse.up();
   }
-  await expect(
-    page.getByRole('button', { name: 'Seguir al jugador' }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Seguir al jugador' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Desactivar seguimiento' }),
-  ).toBeVisible();
+  const followButton = page.getByRole('button', { name: 'Seguir vehículo' });
+  if (await followButton.isVisible()) {
+    await expect(followButton).toHaveAttribute('aria-pressed', 'false');
+    await followButton.click();
+    await expect(followButton).toHaveAttribute('aria-pressed', 'true');
+  } else {
+    await page
+      .getByRole('button', { name: 'Centrar cámara en el jugador' })
+      .click();
+    await expect(page.locator('.telemetry-grid')).toContainText('Siguiendo');
+  }
 
   expect(externalRequests).toEqual([]);
   expect(criticalErrors).toEqual([]);

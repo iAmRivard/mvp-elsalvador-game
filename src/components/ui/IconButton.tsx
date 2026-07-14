@@ -41,7 +41,11 @@ export function IconButton({
       onFocus={() => setTooltipVisible(true)}
       onBlur={() => setTooltipVisible(false)}
       onKeyDown={(event) => {
-        if (event.key === 'Escape') setTooltipVisible(false);
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          setTooltipVisible(false);
+          event.currentTarget.blur();
+        }
         onKeyDown?.(event);
       }}
     >

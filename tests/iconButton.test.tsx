@@ -25,9 +25,12 @@ describe('botón de icono accesible', () => {
     const button = screen.getByRole('button', { name: 'Configuración' });
     const tooltip = screen.getByRole('tooltip', { hidden: true });
 
+    button.focus();
     fireEvent.focus(button);
+    expect(document.activeElement).toBe(button);
     expect(tooltip.getAttribute('data-visible')).toBe('true');
     fireEvent.keyDown(button, { key: 'Escape' });
     expect(tooltip.getAttribute('data-visible')).toBe('false');
+    expect(document.activeElement).not.toBe(button);
   });
 });

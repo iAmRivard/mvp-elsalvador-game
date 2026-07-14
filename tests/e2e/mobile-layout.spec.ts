@@ -19,6 +19,15 @@ function rectanglesOverlap(first: Rectangle, second: Rectangle): boolean {
 async function enterExpedition(page: Page) {
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
   await page.getByRole('button', { name: 'Omitir' }).click();
+
+  const labels = page.locator('.mobile-action-labels');
+  await expect(labels).toBeVisible();
+  const labelsBox = await labels.boundingBox();
+  const initialHudBox = await page.locator('.player-hud').boundingBox();
+  expect(labelsBox).not.toBeNull();
+  expect(initialHudBox).not.toBeNull();
+  expect(rectanglesOverlap(labelsBox!, initialHudBox!)).toBe(false);
+
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,
   });
@@ -35,7 +44,9 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
   const touchControls = page.getByLabel('Controles táctiles');
   await expect(touchControls).toBeVisible();
   await expect(page.getByLabel('Joystick de dirección')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Acelerar' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Activar crucero' }),
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Frenar o retroceder' }),
   ).toBeVisible();
@@ -49,6 +60,17 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
   await expect(
     page.getByRole('button', { name: 'Expandir panel de misiones' }),
   ).toBeVisible();
+  await expect(page.getByText('Rutas Perdidas', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('El Salvador: Rutas Perdidas', { exact: true }),
+  ).toBeHidden();
+
+  await page.getByRole('button', { name: 'Partida y guardado' }).click();
+  await expect(
+    page.getByRole('menuitem', { name: 'Inventario' }),
+  ).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Controles' })).toBeVisible();
+  await page.getByRole('button', { name: 'Partida y guardado' }).click();
 
   const hudBox = await page.locator('.player-hud').boundingBox();
   const missionBox = await page.locator('.mission-panel').boundingBox();
@@ -92,17 +114,8 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
   const initialPosition = await page
     .getByTestId('player-position')
     .textContent();
-  const forwardBox = await page
-    .getByRole('button', { name: 'Acelerar' })
-    .boundingBox();
-  expect(forwardBox).not.toBeNull();
-  await page.mouse.move(
-    forwardBox!.x + forwardBox!.width / 2,
-    forwardBox!.y + forwardBox!.height / 2,
-  );
-  await page.mouse.down();
+  await page.getByRole('button', { name: 'Activar crucero' }).click();
   await page.waitForTimeout(650);
-  await page.mouse.up();
   await expect
     .poll(() => page.getByTestId('player-position').textContent())
     .not.toBe(initialPosition);

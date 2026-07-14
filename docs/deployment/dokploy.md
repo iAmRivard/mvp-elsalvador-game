@@ -22,18 +22,19 @@ curl --fail --header "Range: bytes=0-1023" --output map.part --write-out "%{http
   https://DOMINIO/maps/el-salvador.pmtiles
 curl --fail https://DOMINIO/data/roads/western-corridor.json --output /dev/null
 curl --fail https://DOMINIO/audio/engine-idle.wav --output /dev/null
-curl --fail https://DOMINIO/map-assets/sprites/basemap@2x.json --output /dev/null
-curl --fail https://DOMINIO/map-assets/sprites/basemap@2x.png --output /dev/null
+curl --fail --head https://DOMINIO/map-assets/styles/el-salvador.json
+curl --head https://DOMINIO/map-assets/sprites/does-not-exist.json
 ```
 
-La segunda orden debe responder `206` y descargar exactamente 1024 bytes. Las dos últimas comprueban
-la red jugable, audio y sprites de alta densidad del mismo origen. Abre el juego, revisa mapa,
+La segunda orden debe responder `206` y descargar exactamente 1024 bytes. El estilo debe responder
+JSON con `Cache-Control: no-cache, must-revalidate`; el sprite inexistente debe responder 404 con
+esa misma política, nunca `index.html` ni caché larga. Abre el juego, revisa mapa,
 joystick, ruta, vehículo y una misión, y confirma en Network que:
 
 - no haya solicitudes a terceros;
 - el JSON vial se solicite una sola vez;
 - exista un worker `road.worker-*.js` servido por el mismo origen;
-- no aparezcan errores de sprite, CSP, PMTiles o respuestas de ruta obsoletas.
+- no existan solicitudes de sprite ni errores de CSP, PMTiles o respuestas de ruta obsoletas.
 
 La configuración de Nginx ya permite `worker-src 'self' blob:` y Range Requests. No reemplaces los
 headers de la imagen con una política CSP más restrictiva en el proxy de Dokploy.

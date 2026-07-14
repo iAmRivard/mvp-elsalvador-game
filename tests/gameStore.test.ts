@@ -237,6 +237,30 @@ describe('estado de misiones y capítulo', () => {
     expect(useGameStore.getState().recoveryReason).toBeNull();
   });
 
+  it('aplica reparación de emergencia si el checkpoint seguro también está averiado', () => {
+    const state = useGameStore.getState();
+    useGameStore.setState({
+      experience: 650,
+      recoveryReason: 'condition',
+      isPaused: true,
+      vehicle: { ...state.vehicle, condition: 0 },
+      lastSafeCheckpoint: {
+        ...state.lastSafeCheckpoint,
+        vehicle: { ...state.lastSafeCheckpoint.vehicle, condition: 0 },
+        inventory: [{ itemId: 'bidon-combustible', quantity: 2 }],
+      },
+    });
+
+    expect(useGameStore.getState().recoverAtLastSafeCheckpoint()).toBe(true);
+    expect(useGameStore.getState()).toMatchObject({
+      experience: 650,
+      vehicle: { condition: 35 },
+      inventory: [{ itemId: 'bidon-combustible', quantity: 2 }],
+      recoveryReason: null,
+      isPaused: false,
+    });
+  });
+
   it('activa recuperación al encontrar el límite jugable', () => {
     useGameStore.getState().setDrivingEnvironment({
       surface: 'offroad',

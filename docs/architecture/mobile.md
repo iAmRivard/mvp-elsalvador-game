@@ -16,13 +16,21 @@ Se ejecuta al perder foco o visibilidad, pausar, abrir un diálogo, cambiar modo
 recuperar la partida, fallar una misión y desmontar el mapa. Liberar o cancelar un puntero también
 restaura su control sin dejar valores retenidos.
 
+Turbo de teclado continúa siendo sostenido con `Shift`. Turbo móvil usa un estado independiente:
+2.5 segundos activo y 1.8 segundos de enfriamiento. Un ticker de 50 ms actualiza sólo suscriptores de
+interfaz; el game loop sigue leyendo un booleano desde `snapshot()`. Freno y toda interrupción central
+cancelan el temporizador.
+
 ## Modos
 
-- **Joystick y pedales**, predeterminado: dirección izquierda; turbo, acelerador y freno/reversa a
-  la derecha; interacción contextual solo cuando existe una acción.
-- **Joystick y crucero**: el botón `AUTO` mantiene throttle `0.72`; el jugador conserva dirección,
-  freno, turbo e interacción. Fuera de carretera baja a 55 % y no se reactiva solo.
+- **Joystick + crucero**, predeterminado para instalaciones nuevas: el botón `AUTO` mantiene throttle
+  `0.72`; comienza apagado y nunca se reactiva solo. Joystick queda a la izquierda; Turbo por toque,
+  freno e interacción quedan a la derecha.
+- **Joystick + pedales**: conserva acelerador y freno sostenidos como control manual.
 - **Botones clásicos**: conserva la cruceta digital completa como alternativa accesible.
+
+Documentos de preferencias existentes mantienen su modo. Un documento antiguo sin `controlMode`
+recibe `joystick-pedals`; sólo la ausencia total de preferencias usa el nuevo recomendado.
 
 El joystick fijo tiene radio de 72 px, knob de 30 px, zona muerta inicial `0.14` y curva `1.45`.
 También existe posición flotante dentro de una zona válida del lado izquierdo. Pointer Events,
@@ -32,11 +40,11 @@ el gesto y el valor vuelve a cero al liberar, cancelar o perder captura.
 ## Preferencias y hápticos
 
 La sección **Controles móviles** permite modo, posición fija o flotante, tamaño pequeño/mediano/grande,
-zona muerta, crucero inicial y vibración. La sensibilidad de dirección existente se aplica también
+zona muerta y vibración. La sensibilidad de dirección existente se aplica también
 al joystick. `settingsStore` usa versión 5 y migra documentos 1 a 4 conservando calidad, audio,
 asistencia y accesibilidad.
 
-Los eventos hápticos son pulsos cortos para botón, turbo, offroad, colisión, objetivo y crucero. Se
+Los eventos hápticos son pulsos cortos para botón, turbo, offroad, colisión, condición, objetivo y crucero. Se
 pueden desactivar y `navigator.vibrate` es opcional; nunca se mantiene una vibración por frame.
 
 ## MapLibre y layout
@@ -67,11 +75,11 @@ puntero y movimiento reducido.
 ## Pruebas
 
 Playwright usa Chrome de escritorio, Pixel 7 vertical y Pixel 7 horizontal. Comprueba joystick
-analógico, dos punteros simultáneos, pedales, turbo, crucero, cancelaciones, persistencia, cruceta,
+analógico, flujo de dos pulgares, pedales alternativos, Turbo temporal, crucero, cancelaciones, persistencia, cruceta,
 interacción, MapLibre fuera del control, ausencia de scroll y separación geométrica de HUD, misión,
 joystick, acciones y atribución. La prueba de autonomía también inspecciona píxeles del canvas antes
 y después de conducir.
 
-La matriz automatizada final fue `15 passed` y `3 skipped`; las omisiones son casos táctiles no
-aplicables a escritorio. La validación física y sus límites están en
+También abre contextos DPR 2 y 3 y confirma que el mapa no solicita sprites. La validación física y
+sus límites están en
 `docs/gameplay/mobile-controls-playtest.md`.

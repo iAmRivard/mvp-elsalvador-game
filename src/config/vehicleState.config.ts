@@ -6,4 +6,5 @@ export const vehicleStateConfig = {
   trackConditionPerVehicleMeter: 0.008,
   blockedImpactCondition: 1.5,
   blockedImpactCooldownMilliseconds: 1_200,
+  emergencyRecoveryCondition: 35,
 } as const;

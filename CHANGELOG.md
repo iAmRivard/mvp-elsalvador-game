@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.2.2 - 2026-07-14
+
+### Agregado
+
+- Modo móvil recomendado **Joystick + crucero**, con `AUTO` apagado al entrar y ayuda de primer uso.
+- Turbo móvil por toque durante 2.5 segundos, cooldown de 1.8 segundos, cuenta regresiva y estados
+  disponible, activo, enfriando, sin combustible y averiado.
+- Reintento de MapLibre sin recargar la página ni perder progreso, con error técnico colapsado.
+- Advertencias únicas de condición a 25 %, 10 % y 0 %, háptico opcional y recuperación de emergencia.
+- Tooltips visibles y accesibles para acciones de escritorio, menú `⋯` y cabecera móvil compacta.
+
+### Corregido
+
+- Eliminada la dependencia de sprite vacío que provocaba `basemap@2x.json` 404 en DPR alto.
+- Nginx ya no aplica caché larga a 404 y revalida estilos/sprites sin versión.
+- Condición ausente o inválida migra a 100; una condición numérica 0 se conserva y activa recuperación.
+- La preparación o indisponibilidad vial usa superficie neutral, sin desgaste ni penalización offroad.
+- La partida nueva se alinea una vez con la vía cercana y actualiza su checkpoint inicial.
+- Desgaste offroad rebalanceado para no averiar el vehículo durante los primeros minutos.
+
+### Interfaz y pruebas
+
+- Ruta cian `#28D7F5`, casing `#06242C`, tramo inmediato `#D8FBFF`, fallback `#FF9F43` y objetivo
+  `#FFE169`.
+- Cobertura unitaria para temporizadores, cancelaciones, migración, recuperación, desgaste, posición
+  inicial, colores y tooltips.
+- Playwright cubre móvil vertical/horizontal, reintento fatal, condición 0, guardado antiguo, canvas,
+  autonomía y DPR 2/3 sin solicitudes de sprite.
+- La prueba física en teléfono continúa explícitamente pendiente y debe completarse antes del visto
+  bueno humano de la versión.
+
 ## v0.2.1 - 2026-07-14
 
 ### Agregado

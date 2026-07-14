@@ -1,7 +1,7 @@
 # El Salvador: Rutas Perdidas
 
 Videojuego web de conducción y exploración sobre una cartografía estilizada de El Salvador. La
-v0.2.1 incluye mapa MapLibre 2.5D autónomo, controles móviles analógicos, corredor vial local,
+v0.2.2 incluye mapa MapLibre 2.5D autónomo, controles móviles de dos pulgares, corredor vial local,
 rutas A* en Web Worker, navegación básica, vehículo y referencias 3D, seis misiones conectadas,
 inventario, recuperación, audio local, progreso persistente, Docker y despliegue en Dokploy.
 
@@ -31,13 +31,14 @@ Abre la dirección que muestra Vite. El mapa permite zoom, rotación, inclinaci�
 - `R`: recalcular la ruta activa.
 - `Escape`: pausar o reanudar.
 - `Espacio`: realizar la acción del objetivo cercano.
-- En pantallas táctiles aparece joystick de dirección, acelerador, freno/reversa, turbo y acción
-  contextual.
+- En pantallas táctiles aparece joystick de dirección, crucero explícito, freno/reversa, Turbo por
+  toque y acción contextual.
 
-El modo predeterminado usa joystick fijo y pedales. Configuración también ofrece joystick flotante,
-tres tamaños, zona muerta, crucero `AUTO` y la cruceta clásica. Frenar, pausar, perder foco, cambiar
-orientación o abrir un diálogo limpia la entrada y desactiva el crucero. La bitácora inicia contraída
-en teléfonos y reserva espacio para controles tanto en vertical como en horizontal.
+Las instalaciones nuevas usan **Joystick + crucero**: `AUTO` comienza apagado y requiere un toque;
+Turbo dura 2.5 segundos y luego enfría 1.8 segundos. **Joystick + pedales** y **Botones clásicos**
+siguen disponibles sin sobrescribir preferencias existentes. Frenar, pausar, perder foco, cambiar
+orientación, abrir un diálogo o iniciar recuperación cancela crucero y Turbo. La bitácora inicia
+contraída en teléfonos y reserva espacio para controles tanto en vertical como en horizontal.
 
 El vehículo inicia en San Salvador. La cámara se acerca al detenerse, se abre de forma progresiva
 con la velocidad y coloca el vehículo debajo del centro para mostrar más camino por delante. Una
@@ -91,7 +92,8 @@ A* una ruta sobre carreteras locales.
 
 El botón `↻` o la tecla `R` recalculan en un Web Worker; una desviación de 250 m también lo hace con
 enfriamiento. La ruta resalta el segmento inmediato y muestra próxima maniobra, flecha y distancia.
-Si un objetivo queda fuera del corredor, una línea discontinua actúa como fallback sin bloquear la
+La ruta principal usa cian con borde oscuro, el tramo inmediato es claro, el objetivo amarillo y el
+fallback naranja discontinuo. Si un objetivo queda fuera del corredor, el fallback no bloquea la
 misión. Hay objetivos de llegada, exploración, interacción, recolección, elección, reparación,
 combustible y tiempo. Consulta `docs/gameplay/chapter-1.md` y `docs/architecture/routing.md`.
 
@@ -128,7 +130,8 @@ La partida se guarda automáticamente en este navegador e incluye posición, com
 condición, inventario, checkpoints, progreso de objetivos, descubrimientos, misiones y recompensas.
 El botón `▤` abre el inventario y `▣` permite guardar, cargar o reiniciar con confirmación. Si se
 agota el combustible, la condición llega a cero o falla un objetivo con tiempo, se puede reintentar,
-volver a un lugar seguro o abandonar la misión. El formato v2 migra partidas anteriores; consulta
+volver a un lugar seguro o abandonar la misión. Una condición `0` válida se conserva y abre
+recuperación; sólo un campo ausente o inválido migra a `100`. El formato v2 migra partidas anteriores; consulta
 `docs/architecture/save-format.md` y `docs/gameplay/progression-systems.md`.
 
 ## Audio local
@@ -167,8 +170,8 @@ La matriz y el protocolo pendiente para cinco personas están en
 ## Docker
 
 ```sh
-docker build -t el-salvador-rutas-perdidas:v0.2.1 .
-docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.1
+docker build -t el-salvador-rutas-perdidas:v0.2.2 .
+docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.2
 curl http://localhost:8080/healthz
 ```
 
@@ -181,10 +184,12 @@ El navegador lee exclusivamente `/maps/el-salvador.pmtiles` y los recursos de `/
 Consulta `data/SOURCES.md`, `data/LICENSES.md` y `scripts/maps/README.md` para procedencia,
 licencias y reconstrucción.
 
-## Estado de la v0.2.1
+## Estado de la v0.2.2
 
-- Entrada analógica continua con teclado, joystick, pedales, crucero y limpieza central.
-- Joystick fijo o flotante, tres tamaños, cruceta clásica, safe areas y hápticos opcionales.
+- Modo móvil recomendado de dos pulgares con AUTO explícito, Turbo temporal y freno cancelable.
+- Sprite vacío eliminado, reintento recuperable de MapLibre y caché segura para recursos sin hash.
+- Condición `0` válida preservada, reparación de emergencia y desgaste neutral durante carga vial.
+- Ruta cian de alto contraste, tooltips de escritorio, cabecera y menú móvil compactos.
 - Subpasos geográficos, selección vial por puntuación, continuidad e histéresis.
 - Precarga única, métricas, A* en worker, cancelación, timeout, fallback y caché LRU.
 - Próxima maniobra, segmento inmediato, flecha de ruta y tutorial progresivo de nueve pasos.
