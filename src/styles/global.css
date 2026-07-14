@@ -3903,12 +3903,12 @@ html[data-graphics-quality='low'] .map-atmosphere {
   .mission-panel,
   .mission-panel--collapsed {
     top: max(54px, calc(env(safe-area-inset-top) + 48px));
-    right: max(12px, calc(env(safe-area-inset-right) + 8px));
-    width: min(285px, calc(100% - 258px));
+    right: max(160px, calc(env(safe-area-inset-right) + 152px));
+    width: min(285px, calc(100% - 418px));
   }
 
   .mission-panel--collapsed {
-    width: min(230px, calc(100% - 258px));
+    width: min(230px, calc(100% - 418px));
   }
 
   .mission-panel__body {
