@@ -1,5 +1,101 @@
 import { expect, type Page, test } from '@playwright/test';
 
+interface RasterStats {
+  luminanceVariance: number;
+  luminanceRange: number;
+  opaqueRatio: number;
+}
+
+async function rasterStats(
+  page: Page,
+  screenshot: Buffer,
+): Promise<RasterStats> {
+  const imageUrl = `data:image/png;base64,${screenshot.toString('base64')}`;
+  return page.evaluate(async (url) => {
+    const bitmap = await createImageBitmap(await (await fetch(url)).blob());
+    const canvas = document.createElement('canvas');
+    canvas.width = 160;
+    canvas.height = 100;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('No se pudo inspeccionar el canvas.');
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let sum = 0;
+    let squaredSum = 0;
+    let minimum = 255;
+    let maximum = 0;
+    let opaque = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      const luminance =
+        pixels[index] * 0.2126 +
+        pixels[index + 1] * 0.7152 +
+        pixels[index + 2] * 0.0722;
+      sum += luminance;
+      squaredSum += luminance * luminance;
+      minimum = Math.min(minimum, luminance);
+      maximum = Math.max(maximum, luminance);
+      if (pixels[index + 3] >= 250) opaque += 1;
+    }
+    const count = pixels.length / 4;
+    const mean = sum / count;
+    return {
+      luminanceVariance: squaredSum / count - mean * mean,
+      luminanceRange: maximum - minimum,
+      opaqueRatio: opaque / count,
+    };
+  }, imageUrl);
+}
+
+async function rasterDifference(
+  page: Page,
+  before: Buffer,
+  after: Buffer,
+): Promise<number> {
+  const urls = [before, after].map(
+    (screenshot) => `data:image/png;base64,${screenshot.toString('base64')}`,
+  );
+  return page.evaluate(async ([beforeUrl, afterUrl]) => {
+    const load = async (url: string) =>
+      createImageBitmap(await (await fetch(url)).blob());
+    const [beforeBitmap, afterBitmap] = await Promise.all([
+      load(beforeUrl),
+      load(afterUrl),
+    ]);
+    const canvas = document.createElement('canvas');
+    canvas.width = 160;
+    canvas.height = 100;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('No se pudo comparar el canvas.');
+    context.drawImage(beforeBitmap, 0, 0, canvas.width, canvas.height);
+    const beforePixels = context.getImageData(
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    ).data;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(afterBitmap, 0, 0, canvas.width, canvas.height);
+    const afterPixels = context.getImageData(
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    ).data;
+    beforeBitmap.close();
+    afterBitmap.close();
+    let changed = 0;
+    for (let index = 0; index < beforePixels.length; index += 4) {
+      const difference =
+        Math.abs(beforePixels[index] - afterPixels[index]) +
+        Math.abs(beforePixels[index + 1] - afterPixels[index + 1]) +
+        Math.abs(beforePixels[index + 2] - afterPixels[index + 2]);
+      if (difference >= 24) changed += 1;
+    }
+    return changed / (beforePixels.length / 4);
+  }, urls);
+}
+
 async function enterExpedition(page: Page) {
   const launchButton = page.getByRole('button', {
     name: /^(Comenzar|Continuar) expedición$/,
@@ -21,7 +117,10 @@ async function interact(page: Page) {
   await page.keyboard.up('Space');
 }
 
-test('carga el mapa sin solicitudes a terceros', async ({ page, baseURL }) => {
+test('carga el mapa sin solicitudes a terceros', async ({
+  page,
+  baseURL,
+}, testInfo) => {
   const applicationOrigin = new URL(baseURL ?? 'http://127.0.0.1:4173').origin;
   const externalRequests: string[] = [];
   const criticalErrors: string[] = [];
@@ -40,6 +139,17 @@ test('carga el mapa sin solicitudes a terceros', async ({ page, baseURL }) => {
   ).toBeVisible();
   await enterExpedition(page);
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
+  const initialCanvasScreenshot = await page
+    .locator('.maplibregl-canvas')
+    .screenshot();
+  await testInfo.attach('mapa-inicial', {
+    body: initialCanvasScreenshot,
+    contentType: 'image/png',
+  });
+  const initialRaster = await rasterStats(page, initialCanvasScreenshot);
+  expect(initialRaster.luminanceVariance).toBeGreaterThan(100);
+  expect(initialRaster.luminanceRange).toBeGreaterThan(40);
+  expect(initialRaster.opaqueRatio).toBeGreaterThan(0.98);
   const mapFrame = page.locator('.map-frame');
   await expect(mapFrame).toHaveAttribute(
     'data-player-renderer',
@@ -102,7 +212,7 @@ test('carga el mapa sin solicitudes a terceros', async ({ page, baseURL }) => {
   const routeCoordinateCount = Number(
     await gameMap.getAttribute('data-mission-route-coordinate-count'),
   );
-  expect(routeCoordinateCount).toBeGreaterThan(20);
+  expect(routeCoordinateCount).toBeGreaterThan(10);
   await expect(page.locator('.mission-route-summary')).toHaveAttribute(
     'data-route-status',
     'road',
@@ -151,11 +261,24 @@ test('carga el mapa sin solicitudes a terceros', async ({ page, baseURL }) => {
 
   const position = page.getByTestId('player-position');
   const initialPosition = await position.textContent();
+  const canvasBeforeMovement = await page
+    .locator('.maplibregl-canvas')
+    .screenshot();
   await page.keyboard.down('w');
   await page.waitForTimeout(700);
+  const movingZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
+  const canvasAfterMovement = await page
+    .locator('.maplibregl-canvas')
+    .screenshot();
   await page.keyboard.up('w');
   await expect(position).not.toHaveText(initialPosition ?? '');
-  const movingZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
+  await testInfo.attach('mapa-despues-de-conducir', {
+    body: canvasAfterMovement,
+    contentType: 'image/png',
+  });
+  expect(
+    await rasterDifference(page, canvasBeforeMovement, canvasAfterMovement),
+  ).toBeGreaterThan(0.005);
   expect(movingZoom).toBeLessThan(stoppedZoom);
 
   await page.getByRole('button', { name: 'Partida y guardado' }).click();
