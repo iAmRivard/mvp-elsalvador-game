@@ -11,7 +11,7 @@ import type { RoadAssistMode } from '../config/roadHandling.config';
 import type { SteeringSensitivity } from '../config/travel.config';
 
 export const SETTINGS_STORAGE_KEY = 'el-salvador-rutas-perdidas:settings';
-export const SETTINGS_VERSION = 6;
+export const SETTINGS_VERSION = 7;
 
 export interface VisualSettings extends MobileControlsSettings {
   graphicsQuality: GraphicsQuality;
@@ -27,6 +27,7 @@ export interface VisualSettings extends MobileControlsSettings {
   musicMuted: boolean;
   reduceAudioEffects: boolean;
   recommendedControlsPromptDismissed: boolean;
+  singleDriveJoystickPromptDismissed: boolean;
 }
 
 interface SettingsStore extends VisualSettings {
@@ -49,6 +50,7 @@ interface SettingsStore extends VisualSettings {
   setAutoThrottleDefault: (enabled: boolean) => void;
   setHapticsEnabled: (enabled: boolean) => void;
   setRecommendedControlsPromptDismissed: (dismissed: boolean) => void;
+  setSingleDriveJoystickPromptDismissed: (dismissed: boolean) => void;
 }
 
 interface SettingsEnvelope {
@@ -70,6 +72,7 @@ const defaultSettings: VisualSettings = {
   musicMuted: false,
   reduceAudioEffects: false,
   recommendedControlsPromptDismissed: true,
+  singleDriveJoystickPromptDismissed: true,
   ...defaultMobileControlsSettings,
 };
 
@@ -97,6 +100,7 @@ function isRoadAssistMode(value: unknown): value is RoadAssistMode {
 
 function isMobileControlMode(value: unknown): value is MobileControlMode {
   return (
+    value === 'single-drive-joystick' ||
     value === 'joystick-pedals' ||
     value === 'joystick-auto-throttle' ||
     value === 'classic-buttons'
@@ -111,10 +115,13 @@ function isJoystickSize(value: unknown): value is JoystickSize {
   return value === 'small' || value === 'medium' || value === 'large';
 }
 
-function joystickDeadZone(value: unknown): number {
+function joystickDeadZone(
+  value: unknown,
+  fallback = defaultMobileControlsSettings.joystickDeadZone,
+): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.max(0.05, Math.min(0.3, value))
-    : defaultMobileControlsSettings.joystickDeadZone;
+    : fallback;
 }
 
 export function parseVisualSettings(raw: string): VisualSettings | null {
@@ -131,6 +138,7 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
       parsed.version !== 3 &&
       parsed.version !== 4 &&
       parsed.version !== 5 &&
+      parsed.version !== 6 &&
       parsed.version !== SETTINGS_VERSION)
   ) {
     return null;
@@ -168,14 +176,19 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
     reduceAudioEffects: value.reduceAudioEffects === true,
     controlMode: isMobileControlMode(value.controlMode)
       ? value.controlMode
-      : 'joystick-pedals',
+      : parsed.version === SETTINGS_VERSION
+        ? defaultMobileControlsSettings.controlMode
+        : 'joystick-pedals',
     joystickPositionMode: isJoystickPositionMode(value.joystickPositionMode)
       ? value.joystickPositionMode
       : defaultMobileControlsSettings.joystickPositionMode,
     joystickSize: isJoystickSize(value.joystickSize)
       ? value.joystickSize
       : defaultMobileControlsSettings.joystickSize,
-    joystickDeadZone: joystickDeadZone(value.joystickDeadZone),
+    joystickDeadZone: joystickDeadZone(
+      value.joystickDeadZone,
+      parsed.version === SETTINGS_VERSION ? undefined : 0.14,
+    ),
     autoThrottleDefault: value.autoThrottleDefault === true,
     hapticsEnabled: value.hapticsEnabled !== false,
     recommendedControlsPromptDismissed:
@@ -183,6 +196,9 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
       (value.recommendedControlsPromptDismissed !== false &&
         isMobileControlMode(value.controlMode) &&
         value.controlMode !== 'joystick-pedals'),
+    singleDriveJoystickPromptDismissed:
+      parsed.version === SETTINGS_VERSION &&
+      value.singleDriveJoystickPromptDismissed === true,
   };
 }
 
@@ -231,6 +247,8 @@ function visualSettings(state: VisualSettings): VisualSettings {
     reduceAudioEffects: state.reduceAudioEffects,
     recommendedControlsPromptDismissed:
       state.recommendedControlsPromptDismissed,
+    singleDriveJoystickPromptDismissed:
+      state.singleDriveJoystickPromptDismissed,
     controlMode: state.controlMode,
     joystickPositionMode: state.joystickPositionMode,
     joystickSize: state.joystickSize,
@@ -334,6 +352,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
         ...visualSettings(state),
         controlMode,
         recommendedControlsPromptDismissed: true,
+        singleDriveJoystickPromptDismissed: true,
       };
       saveVisualSettings(next);
       return next;
@@ -376,6 +395,15 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       const next = {
         ...visualSettings(state),
         recommendedControlsPromptDismissed,
+      };
+      saveVisualSettings(next);
+      return next;
+    }),
+  setSingleDriveJoystickPromptDismissed: (singleDriveJoystickPromptDismissed) =>
+    set((state) => {
+      const next = {
+        ...visualSettings(state),
+        singleDriveJoystickPromptDismissed,
       };
       saveVisualSettings(next);
       return next;

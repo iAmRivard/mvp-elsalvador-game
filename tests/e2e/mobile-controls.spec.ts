@@ -42,7 +42,7 @@ async function openPauseSettings(page: Page) {
   return { pauseMenu, settings };
 }
 
-test('conduce con dos pulgares, Turbo por toque y freno de emergencia', async ({
+test('conduce con joystick único, Turbo por toque y frenado progresivo', async ({
   context,
   page,
 }, testInfo) => {
@@ -52,19 +52,17 @@ test('conduce con dos pulgares, Turbo por toque y freno de emergencia', async ({
   const gameMap = page.getByTestId('game-map');
   await expect(page.getByLabel('Controles táctiles')).toHaveAttribute(
     'data-control-mode',
-    'joystick-auto-throttle',
+    'single-drive-joystick',
   );
   await expect(page.getByRole('button', { name: 'Acelerar' })).toHaveCount(0);
-  await expect(gameMap).toHaveAttribute('data-input-auto-throttle', 'off');
-
-  await page.getByRole('button', { name: 'Activar crucero' }).click();
   await expect(
-    page.getByText('El vehículo mantendrá la marcha.'),
-  ).toBeVisible();
-  await expect(page.getByText('Toca FRENO para detenerlo.')).toBeVisible();
-  await expect(gameMap).toHaveAttribute('data-input-auto-throttle', 'active');
+    page.getByRole('button', { name: 'Frenar o retroceder' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Activar crucero' }),
+  ).toHaveCount(0);
 
-  const joystick = page.getByLabel('Joystick de dirección');
+  const joystick = page.getByLabel('Joystick de conducción');
   const joystickCenter = await centerOf(joystick);
   const session = await context.newCDPSession(page);
   await session.send('Input.dispatchTouchEvent', {
@@ -79,7 +77,7 @@ test('conduce con dos pulgares, Turbo por toque y freno de emergencia', async ({
       {
         id: 1,
         x: joystickCenter.x + joystickCenter.width * 0.28,
-        y: joystickCenter.y,
+        y: joystickCenter.y - joystickCenter.width * 0.34,
         force: 1,
       },
     ],
@@ -87,6 +85,9 @@ test('conduce con dos pulgares, Turbo por toque y freno de emergencia', async ({
   await expect
     .poll(async () => Number(await gameMap.getAttribute('data-input-turn')))
     .toBeGreaterThan(0.1);
+  await expect
+    .poll(async () => Number(await gameMap.getAttribute('data-input-throttle')))
+    .toBeGreaterThan(0.2);
 
   await page.getByRole('button', { name: 'Turbo' }).click();
   await expect(gameMap).toHaveAttribute('data-input-mobile-boost', 'active');
@@ -95,29 +96,49 @@ test('conduce con dos pulgares, Turbo por toque y freno de emergencia', async ({
     /[012]\.\d s/,
   );
   await session.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [
+      {
+        id: 1,
+        x: joystickCenter.x,
+        y: joystickCenter.y + joystickCenter.width * 0.44,
+        force: 1,
+      },
+    ],
+  });
+  await expect(gameMap).toHaveAttribute('data-input-throttle', '-0.550');
+  await expect(gameMap).toHaveAttribute('data-input-mobile-boost', 'off');
+  await expect(gameMap).toHaveAttribute('data-input-auto-throttle', 'off');
+  await session.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',
     touchPoints: [],
   });
-  await session.detach();
   await expect(gameMap).toHaveAttribute('data-input-turn', '0.000');
-  await expect(gameMap).toHaveAttribute('data-input-auto-throttle', 'active');
+  await expect(gameMap).toHaveAttribute('data-input-throttle', '0.000');
 
-  const brake = page.getByRole('button', { name: 'Frenar o retroceder' });
-  const brakeCenter = await centerOf(brake);
-  await page.mouse.move(brakeCenter.x, brakeCenter.y);
-  await page.mouse.down();
-  await expect(gameMap).toHaveAttribute('data-input-throttle', '-1.000');
-  await expect(gameMap).toHaveAttribute('data-input-mobile-boost', 'off');
-  await expect(gameMap).toHaveAttribute('data-input-auto-throttle', 'off');
-  await page.mouse.up();
-
-  await page.getByRole('button', { name: 'Activar crucero' }).click();
-  await page.getByRole('button', { name: 'Turbo' }).click();
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [
+      { id: 2, x: joystickCenter.x, y: joystickCenter.y, force: 1 },
+    ],
+  });
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [
+      {
+        id: 2,
+        x: joystickCenter.x + joystickCenter.width * 0.3,
+        y: joystickCenter.y - joystickCenter.width * 0.3,
+        force: 1,
+      },
+    ],
+  });
   await page.evaluate(() =>
     window.dispatchEvent(new Event('orientationchange')),
   );
-  await expect(gameMap).toHaveAttribute('data-input-mobile-boost', 'off');
-  await expect(gameMap).toHaveAttribute('data-input-auto-throttle', 'off');
+  await session.detach();
+  await expect(gameMap).toHaveAttribute('data-input-throttle', '0.000');
+  await expect(gameMap).toHaveAttribute('data-input-turn', '0.000');
   await expect(gameMap).toHaveAttribute('data-input-pointer-active', 'false');
 });
 
@@ -157,7 +178,7 @@ test('persiste modos alternativos y limpia entradas al pausar', async ({
     return parsed;
   }, settingsKey);
   expect(persistedSettings).toMatchObject({
-    version: 6,
+    version: 7,
     settings: {
       controlMode: 'classic-buttons',
       joystickSize: 'large',

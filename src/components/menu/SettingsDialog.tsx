@@ -62,9 +62,14 @@ const mobileControlOptions: readonly {
   description: string;
 }[] = [
   {
+    value: 'single-drive-joystick',
+    label: 'Joystick simple',
+    description: 'Acelera, frena y gira',
+  },
+  {
     value: 'joystick-auto-throttle',
     label: 'Joystick + crucero',
-    description: 'Recomendado para móvil',
+    description: 'Para recorridos largos',
   },
   {
     value: 'joystick-pedals',

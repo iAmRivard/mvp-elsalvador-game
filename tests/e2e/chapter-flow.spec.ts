@@ -121,7 +121,7 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
     {
       key: settingsKey,
       settings: {
-        version: 6,
+        version: 7,
         settings: {
           graphicsQuality: 'low',
           reduceMotion: true,
@@ -136,6 +136,7 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
           musicMuted: true,
           reduceAudioEffects: true,
           recommendedControlsPromptDismissed: true,
+          singleDriveJoystickPromptDismissed: true,
         },
       },
     },

@@ -12,13 +12,13 @@ export function RecommendedControlsPrompt() {
   );
   const controlMode = useSettingsStore((state) => state.controlMode);
   const dismissed = useSettingsStore(
-    (state) => state.recommendedControlsPromptDismissed,
+    (state) => state.singleDriveJoystickPromptDismissed,
   );
   const setMobileControlMode = useSettingsStore(
     (state) => state.setMobileControlMode,
   );
   const setDismissed = useSettingsStore(
-    (state) => state.setRecommendedControlsPromptDismissed,
+    (state) => state.setSingleDriveJoystickPromptDismissed,
   );
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;
@@ -29,7 +29,7 @@ export function RecommendedControlsPrompt() {
     return () => mediaQuery.removeEventListener('change', update);
   }, []);
 
-  if (!mobileContext || dismissed || controlMode !== 'joystick-pedals') {
+  if (!mobileContext || dismissed || controlMode === 'single-drive-joystick') {
     return null;
   }
 
@@ -41,18 +41,15 @@ export function RecommendedControlsPrompt() {
         aria-modal="true"
         aria-labelledby="controls-migration-title"
       >
-        <span>Nuevo control recomendado</span>
-        <h2 id="controls-migration-title">Conduce con dos pulgares</h2>
-        <p>
-          Ahora puedes dirigir con el joystick y mantener la marcha con crucero,
-          dejando el otro pulgar libre para frenar o usar Turbo.
-        </p>
+        <span>Nuevo modo de conducción</span>
+        <h2 id="controls-migration-title">Un joystick para conducir</h2>
+        <p>Controla aceleración, freno y dirección con un solo joystick.</p>
         <div>
           <button
             type="button"
-            onClick={() => setMobileControlMode('joystick-auto-throttle')}
+            onClick={() => setMobileControlMode('single-drive-joystick')}
           >
-            Activar
+            Probar modo simple
           </button>
           <button type="button" onClick={() => setDismissed(true)}>
             Mantener controles actuales

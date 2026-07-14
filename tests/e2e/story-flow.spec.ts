@@ -120,7 +120,7 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
         window.localStorage.setItem(
           storedSettingsKey,
           JSON.stringify({
-            version: 6,
+            version: 7,
             settings: {
               graphicsQuality: 'low',
               reduceMotion: true,
@@ -133,6 +133,7 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
               musicMuted: true,
               reduceAudioEffects: true,
               recommendedControlsPromptDismissed: true,
+              singleDriveJoystickPromptDismissed: true,
             },
           }),
         );

@@ -25,6 +25,7 @@ describe('configuración visual', () => {
       musicMuted: false,
       reduceAudioEffects: false,
       recommendedControlsPromptDismissed: false,
+      singleDriveJoystickPromptDismissed: false,
       controlMode: 'joystick-pedals',
       joystickPositionMode: 'fixed',
       joystickSize: 'medium',
@@ -65,6 +66,7 @@ describe('configuración visual', () => {
       musicMuted: false,
       reduceAudioEffects: false,
       recommendedControlsPromptDismissed: false,
+      singleDriveJoystickPromptDismissed: false,
       controlMode: 'joystick-pedals',
       joystickPositionMode: 'fixed',
       joystickSize: 'medium',
@@ -74,9 +76,9 @@ describe('configuración visual', () => {
     });
   });
 
-  it('recomienda crucero sólo para instalaciones nuevas', () => {
+  it('usa joystick único en instalaciones nuevas y conserva modos existentes', () => {
     expect(defaultMobileControlsSettings.controlMode).toBe(
-      'joystick-auto-throttle',
+      'single-drive-joystick',
     );
     expect(
       parseVisualSettings(
@@ -94,6 +96,20 @@ describe('configuración visual', () => {
         }),
       )?.recommendedControlsPromptDismissed,
     ).toBe(false);
+    expect(
+      parseVisualSettings(
+        JSON.stringify({
+          version: 6,
+          settings: {
+            graphicsQuality: 'medium',
+            controlMode: 'classic-buttons',
+          },
+        }),
+      ),
+    ).toMatchObject({
+      controlMode: 'classic-buttons',
+      singleDriveJoystickPromptDismissed: false,
+    });
   });
 
   it('migra preferencias version 1 con sensibilidad equilibrada', () => {

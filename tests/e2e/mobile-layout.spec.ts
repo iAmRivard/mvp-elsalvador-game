@@ -34,6 +34,7 @@ async function enterExpedition(page: Page) {
 }
 
 test('mantiene controles y paneles utilizables en viewport táctil', async ({
+  context,
   page,
 }, testInfo) => {
   test.skip(!testInfo.project.name.startsWith('chromium-mobile'));
@@ -43,13 +44,10 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
 
   const touchControls = page.getByLabel('Controles táctiles');
   await expect(touchControls).toBeVisible();
-  await expect(page.getByLabel('Joystick de dirección')).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Activar crucero' }),
-  ).toBeVisible();
+  await expect(page.getByLabel('Joystick de conducción')).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Frenar o retroceder' }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Turbo' })).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Centrar cámara en el jugador' }),
@@ -58,7 +56,7 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
     page.getByRole('button', { name: 'Pausar partida' }).last(),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Expandir panel de misiones' }),
+    page.getByRole('button', { name: 'Ver detalles' }),
   ).toBeVisible();
   await expect(page.getByText('Rutas Perdidas', { exact: true })).toBeVisible();
   await expect(
@@ -114,11 +112,42 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
   const initialPosition = await page
     .getByTestId('player-position')
     .textContent();
-  await page.getByRole('button', { name: 'Activar crucero' }).click();
+  const joystickCenter = await page
+    .getByLabel('Joystick de conducción')
+    .boundingBox();
+  expect(joystickCenter).not.toBeNull();
+  const session = await context.newCDPSession(page);
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [
+      {
+        id: 1,
+        x: joystickCenter!.x + joystickCenter!.width / 2,
+        y: joystickCenter!.y + joystickCenter!.height / 2,
+        force: 1,
+      },
+    ],
+  });
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [
+      {
+        id: 1,
+        x: joystickCenter!.x + joystickCenter!.width / 2,
+        y: joystickCenter!.y + joystickCenter!.height * 0.12,
+        force: 1,
+      },
+    ],
+  });
   await page.waitForTimeout(650);
   await expect
     .poll(() => page.getByTestId('player-position').textContent())
     .not.toBe(initialPosition);
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+  await session.detach();
 
   const hasDocumentScroll = await page.evaluate(
     () =>
