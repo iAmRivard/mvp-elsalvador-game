@@ -10,9 +10,16 @@ async function rasterStats(
   page: Page,
   screenshot: Buffer,
 ): Promise<RasterStats> {
-  const imageUrl = `data:image/png;base64,${screenshot.toString('base64')}`;
-  return page.evaluate(async (url) => {
-    const bitmap = await createImageBitmap(await (await fetch(url)).blob());
+  const imageBase64 = screenshot.toString('base64');
+  return page.evaluate(async (base64) => {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    const bitmap = await createImageBitmap(
+      new Blob([bytes.buffer], { type: 'image/png' }),
+    );
     const canvas = document.createElement('canvas');
     canvas.width = 160;
     canvas.height = 100;
@@ -44,7 +51,7 @@ async function rasterStats(
       luminanceRange: maximum - minimum,
       opaqueRatio: opaque / count,
     };
-  }, imageUrl);
+  }, imageBase64);
 }
 
 async function rasterDifference(
@@ -52,15 +59,21 @@ async function rasterDifference(
   before: Buffer,
   after: Buffer,
 ): Promise<number> {
-  const urls = [before, after].map(
-    (screenshot) => `data:image/png;base64,${screenshot.toString('base64')}`,
+  const imagesBase64 = [before, after].map((screenshot) =>
+    screenshot.toString('base64'),
   );
-  return page.evaluate(async ([beforeUrl, afterUrl]) => {
-    const load = async (url: string) =>
-      createImageBitmap(await (await fetch(url)).blob());
+  return page.evaluate(async ([beforeBase64, afterBase64]) => {
+    const load = async (base64: string) => {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      return createImageBitmap(new Blob([bytes.buffer], { type: 'image/png' }));
+    };
     const [beforeBitmap, afterBitmap] = await Promise.all([
-      load(beforeUrl),
-      load(afterUrl),
+      load(beforeBase64),
+      load(afterBase64),
     ]);
     const canvas = document.createElement('canvas');
     canvas.width = 160;
@@ -93,7 +106,7 @@ async function rasterDifference(
       if (difference >= 24) changed += 1;
     }
     return changed / (beforePixels.length / 4);
-  }, urls);
+  }, imagesBase64);
 }
 
 async function enterExpedition(page: Page) {
