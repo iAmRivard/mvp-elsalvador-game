@@ -7,10 +7,11 @@
 3. Usa la raíz del repositorio como contexto y `Dockerfile` como ruta.
 4. Configura el puerto interno `80`.
 5. Configura el health check HTTP con la ruta `/healthz`.
-6. Agrega el dominio del juego y habilita HTTPS administrado por Dokploy.
+6. Agrega el dominio del juego en la raíz `/` y habilita HTTPS administrado por Dokploy.
 7. No agregues volúmenes: progreso, inventario y capítulo se guardan en el navegador.
 8. Las variables `VITE_*` son de compilación. Define solo las de `.env.example` que quieras
-   sustituir y vuelve a construir la imagen.
+   sustituir y vuelve a construir la imagen. `VITE_ENABLE_DIAGNOSTICS` no muestra el panel en
+   producción porque también requiere modo de desarrollo.
 9. Despliega y espera que el health check quede verde.
 
 ## Verificación
@@ -21,11 +22,21 @@ curl --fail --header "Range: bytes=0-1023" --output map.part --write-out "%{http
   https://DOMINIO/maps/el-salvador.pmtiles
 curl --fail https://DOMINIO/data/roads/western-corridor.json --output /dev/null
 curl --fail https://DOMINIO/audio/engine-idle.wav --output /dev/null
+curl --fail https://DOMINIO/map-assets/sprites/basemap@2x.json --output /dev/null
+curl --fail https://DOMINIO/map-assets/sprites/basemap@2x.png --output /dev/null
 ```
 
 La segunda orden debe responder `206` y descargar exactamente 1024 bytes. Las dos últimas comprueban
-la red jugable y el audio del mismo origen. Abre el juego, revisa mapa, ruta, vehículo y una misión,
-y confirma en Network que no haya solicitudes a terceros.
+la red jugable, audio y sprites de alta densidad del mismo origen. Abre el juego, revisa mapa,
+joystick, ruta, vehículo y una misión, y confirma en Network que:
+
+- no haya solicitudes a terceros;
+- el JSON vial se solicite una sola vez;
+- exista un worker `road.worker-*.js` servido por el mismo origen;
+- no aparezcan errores de sprite, CSP, PMTiles o respuestas de ruta obsoletas.
+
+La configuración de Nginx ya permite `worker-src 'self' blob:` y Range Requests. No reemplaces los
+headers de la imagen con una política CSP más restrictiva en el proxy de Dokploy.
 
 ## Imagen de GHCR
 

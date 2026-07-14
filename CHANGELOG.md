@@ -1,5 +1,46 @@
 # Changelog
 
+## v0.2.1 - 2026-07-14
+
+### Agregado
+
+- Entrada analógica continua con clamp, zona muerta, curva de respuesta y fuentes separadas para
+  teclado, puntero, pedales, joystick y crucero.
+- Joystick fijo o flotante, acelerador, freno/reversa, turbo, interacción contextual y cruceta
+  clásica como tres modos móviles configurables.
+- Crucero `AUTO` con estado activo/suspendido, reducción offroad y cancelación por freno, pausa,
+  diálogo, recuperación, fallo o combustible agotado.
+- Preferencias móviles v5 con migración, tres tamaños, zona muerta, hápticos y sensibilidad común.
+- Subpasos geográficos de 10 m con límite de 12 para restricciones, bloqueos, objetivos y desgaste.
+- Puntuación vial por distancia, heading, continuidad, ruta activa, arista previa y clase, con
+  histéresis para intersecciones y calles paralelas.
+- Precarga compartida de red vial, métricas por etapa y panel de diagnóstico solo en desarrollo.
+- Web Worker vial con IDs, cancelación lógica, timeout, respuestas antiguas, fallback y caché LRU.
+- Instrucciones de giro, segmento inmediato, flecha, distancia, fuera de ruta y estado de cálculo.
+- Tutorial progresivo de nueve pasos adaptado a joystick, crucero, cruceta o teclado.
+
+### Corregido
+
+- Limpieza central de input ante pérdida de foco, pestaña oculta, cambio de orientación, pausa,
+  diálogo, cambio de control, desmontaje, recuperación y fallo.
+- Procesamiento de objetivos dentro de subpasos para no atravesarlos durante un frame lento.
+- Priorización de aristas de la ruta activa sin oscilación frecuente en cruces.
+- Solicitudes duplicadas de ruta que podían cancelar la vigente y activar un fallback incorrecto.
+- Sprites `@2x`, posición inicial del marcador y arranque de alta densidad de píxeles.
+- Scroll interno causado por foco de diálogos y cruces entre HUD, bitácora, tutorial, atribución y
+  controles en móvil vertical u horizontal.
+
+### Rendimiento y pruebas
+
+- Preparación vial medida entre 123.1 y 137.4 ms y A* largo entre 14.5 y 19.4 ms en Chromium
+  headless local; el JSON de 5.53 MiB se solicita una vez.
+- 37 archivos de pruebas unitarias y de integración, además de Playwright con `15 passed` y
+  `3 skipped` intencionales en escritorio, Pixel 7 vertical y horizontal.
+- Validación por píxeles del canvas antes y después de conducir, autonomía de runtime y layout
+  geométrico de controles.
+- Guía y plantilla de cinco sesiones físicas agregadas; las sesiones con personas y dispositivos
+  reales continúan explícitamente pendientes.
+
 ## Unreleased - v0.2 Fases 1-7
 
 ### Agregado

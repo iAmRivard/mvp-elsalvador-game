@@ -36,8 +36,11 @@ El giro requiere movimiento, se invierte en reversa y conserva 48 % de su autori
 velocidad maxima. La preferencia de direccion multiplica el giro por 0.78, 1 o 1.22. Teclado y
 controles tactiles producen el mismo `PlayerInput`, por lo que comparten las reglas.
 
-El delta de cada paso se limita a 50 ms. Pausar congela el runtime completo; alcanzar los limites
-geograficos cancela distancia y combustible de ese paso y deja la velocidad en cero.
+El delta de cada paso se limita a 50 ms. El desplazamiento geográfico se divide además en pasos de
+10 m, con un máximo de 12 por frame. Cada subpaso comprueba carretera, agua, límites, bloqueos,
+descubrimientos, objetivos, colisiones y desgaste; el progreso no puede saltar un objetivo durante
+un frame lento. Pausar congela el runtime completo; alcanzar los límites geográficos cancela el
+subpaso y deja la velocidad en cero.
 
 ## Condicion y recuperacion
 
@@ -69,8 +72,9 @@ reglas de superficie siguen activas. A 8 m o menos se aplica la fuerza completa 
 m. Después de 52 m el rastreador libera la arista. Mantener giro manual reduce la corrección al 28 %
 para permitir una salida voluntaria. En controles táctiles la fuerza aumenta 18 %.
 
-La posición se interpola como máximo 12 % por paso y nunca se teletransporta. El rastreador conserva
-la arista actual mientras otra no sea al menos 7 m mejor, lo que evita oscilaciones en intersecciones.
+La posición se interpola como máximo 12 % por paso y nunca se teletransporta. El rastreador pondera
+ruta activa, continuidad, heading, distancia, clase y arista previa; la histéresis evita oscilar
+entre vías paralelas o ramas de una intersección por mejoras pequeñas.
 
 ## Restricciones
 

@@ -1,47 +1,77 @@
-# Adaptación móvil y rendimiento
+# Adaptación móvil y controles
 
 La interfaz mantiene el mapa a pantalla completa y reorganiza sus capas según ancho, alto,
-orientación, puntero y zonas seguras del dispositivo.
+orientación, tipo de puntero y zonas seguras del dispositivo. La entrada móvil comparte el mismo
+`PlayerInput` continuo que teclado y game loop; no escribe en Zustand durante cada movimiento.
 
-## Controles
+## Entrada analógica
 
-- La cruceta ocupa la esquina inferior izquierda.
-- Turbo e interacción forman la fila principal derecha.
-- Centrar cámara y pausar permanecen disponibles en una segunda fila.
-- Todos los botones bloquean selección, menú contextual y scroll durante una pulsación.
-- Una pérdida de foco o pestaña oculta limpia acciones retenidas para evitar movimiento involuntario.
-- La acción de objetivo conserva un pulso de 250 ms al soltarla para que un toque rápido no caiga
-  entre dos entregas de telemetría; conducción y turbo mantienen semántica de pulsación sostenida.
+`InputController` conserva por separado teclado, botones de puntero, pedales táctiles, joystick y
+crucero. `snapshot()` suma y limita las fuentes manuales a `[-1, 1]`; una entrada manual sustituye
+temporalmente al crucero y el freno lo desactiva. Teclado mantiene valores digitales, mientras el
+joystick entrega giro parcial después de aplicar clamp, zona muerta y curva de respuesta.
 
-La bitácora comienza contraída en pantallas de hasta 600 píxeles o dispositivos táctiles de poca
-altura. Al cambiar de orientación vuelve a contraerse. En vertical, el HUD se convierte en una barra
-compacta; en horizontal, HUD y bitácora ocupan laterales opuestos por encima de los controles.
+`clearAllInput()` limpia teclas, punteros, timers, pedales, joystick, turbo, interacción y crucero.
+Se ejecuta al perder foco o visibilidad, pausar, abrir un diálogo, cambiar modo u orientación,
+recuperar la partida, fallar una misión y desmontar el mapa. Liberar o cancelar un puntero también
+restaura su control sin dejar valores retenidos.
+
+## Modos
+
+- **Joystick y pedales**, predeterminado: dirección izquierda; turbo, acelerador y freno/reversa a
+  la derecha; interacción contextual solo cuando existe una acción.
+- **Joystick y crucero**: el botón `AUTO` mantiene throttle `0.72`; el jugador conserva dirección,
+  freno, turbo e interacción. Fuera de carretera baja a 55 % y no se reactiva solo.
+- **Botones clásicos**: conserva la cruceta digital completa como alternativa accesible.
+
+El joystick fijo tiene radio de 72 px, knob de 30 px, zona muerta inicial `0.14` y curva `1.45`.
+También existe posición flotante dentro de una zona válida del lado izquierdo. Pointer Events,
+`setPointerCapture` y un ID activo único permiten touch, stylus y mouse; el centro no cambia durante
+el gesto y el valor vuelve a cero al liberar, cancelar o perder captura.
+
+## Preferencias y hápticos
+
+La sección **Controles móviles** permite modo, posición fija o flotante, tamaño pequeño/mediano/grande,
+zona muerta, crucero inicial y vibración. La sensibilidad de dirección existente se aplica también
+al joystick. `settingsStore` usa versión 5 y migra documentos 1 a 4 conservando calidad, audio,
+asistencia y accesibilidad.
+
+Los eventos hápticos son pulsos cortos para botón, turbo, offroad, colisión, objetivo y crucero. Se
+pueden desactivar y `navigator.vibrate` es opcional; nunca se mantiene una vibración por frame.
+
+## MapLibre y layout
+
+Cada superficie de control usa `touch-action: none`, evita selección y menú contextual y detiene el
+evento antes de llegar al mapa. Fuera de esas superficies permanecen pan, pinch zoom, rotación,
+inclinación y recentrado. La atribución de MapLibre inicia compacta y su botón queda en el hueco
+inferior central, fuera de joystick y pedales.
+
+La bitácora comienza contraída en pantallas de hasta 600 px o dispositivos táctiles de poca altura.
+Al cambiar orientación vuelve a contraerse. En vertical, HUD y misión se apilan por encima de los
+controles; en horizontal, el HUD compacto queda a la izquierda, la misión reserva el centro y los
+pedales ocupan la derecha. Todos los bordes usan `env(safe-area-inset-*)`.
 
 ## Perfil gráfico
 
-`src/game/deviceProfile.ts` combina la calidad elegida en la interfaz —inicializada con
-`VITE_DEFAULT_GRAPHICS_QUALITY`— con memoria, número de procesadores, densidad de píxeles, puntero
-y movimiento reducido.
+`src/game/deviceProfile.ts` combina la calidad elegida, memoria, procesadores, densidad de píxeles,
+puntero y movimiento reducido.
 
 - `medium` baja automáticamente a `low` en hardware con hasta 4 GB o 4 procesadores lógicos.
-- `low` desactiva antialias y animaciones decorativas, limita el pixel ratio y actualiza rutas con
-  menor frecuencia.
+- `low` desactiva antialias y animaciones decorativas, limita pixel ratio y reduce actualizaciones.
 - `high` respeta la elección explícita hasta un pixel ratio de 2.
-- La preferencia **Reducir movimiento** se combina con la preferencia del sistema y desactiva las
-  transiciones no esenciales.
-- En pantallas táctiles se usan gestos directos de MapLibre sin el requisito cooperativo.
-- En layout compacto se omiten controles redundantes de navegación y escala; pinch, giro e
-  inclinación continúan disponibles sobre el mapa.
-- La cámara se actualiza cada 50 ms en dispositivos táctiles y cada 66 ms en calidad baja. El
-  encuadre se adapta a orientación vertical u horizontal y mantiene el vehículo debajo del centro.
-- Teclado y cruceta comparten el mismo perfil de manejo y la sensibilidad elegida.
-- La asistencia vial usa el mismo modo elegido y multiplica su fuerza por 1.18 en dispositivos
-  táctiles; velocidad, combustible y colisiones permanecen idénticos.
+- Movimiento reducido combina preferencia local y `prefers-reduced-motion`.
+- En layout compacto se omiten navegación y escala redundantes de MapLibre.
+- La cámara se actualiza cada 50 ms en táctil y cada 66 ms en calidad baja.
+- La asistencia vial multiplica su fuerza por 1.18 en táctil sin cambiar colisiones ni consumo.
 
 ## Pruebas
 
-Playwright define proyectos para Chrome de escritorio, Pixel 7 vertical y Pixel 7 horizontal. Las
-pruebas móviles verifican el flujo de inicio y tutorial, presencia de todos los botones, ausencia de
-scroll, límites del viewport, separación entre HUD/bitácora y entre cruceta/acciones, además de
-movimiento por puntero. El flujo del capítulo también recoge combustible, consume inventario,
-repara el vehículo y completa misiones en vertical y horizontal.
+Playwright usa Chrome de escritorio, Pixel 7 vertical y Pixel 7 horizontal. Comprueba joystick
+analógico, dos punteros simultáneos, pedales, turbo, crucero, cancelaciones, persistencia, cruceta,
+interacción, MapLibre fuera del control, ausencia de scroll y separación geométrica de HUD, misión,
+joystick, acciones y atribución. La prueba de autonomía también inspecciona píxeles del canvas antes
+y después de conducir.
+
+La matriz automatizada final fue `15 passed` y `3 skipped`; las omisiones son casos táctiles no
+aplicables a escritorio. La validación física y sus límites están en
+`docs/gameplay/mobile-controls-playtest.md`.

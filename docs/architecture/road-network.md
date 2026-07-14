@@ -2,8 +2,8 @@
 
 La red vial de v0.2 es un artefacto estático servido desde el mismo origen. El navegador no
 consulta motores de rutas ni proveedores cartográficos externos. `loadRoadNetwork` solicita el
-JSON solo cuando una función jugable lo necesita, valida su esquema, construye el índice en memoria
-y reutiliza la misma promesa para solicitudes concurrentes.
+JSON durante la pantalla inicial, valida su esquema, construye el índice en memoria y reutiliza la
+misma promesa para solicitudes concurrentes. Un fallo permite reintentar sin bloquear el menú.
 
 ## Contrato
 
@@ -30,8 +30,13 @@ en `localStorage`. Los resultados medidos del build de producción están en `pe
 ## Rastreo y game loop
 
 `RoadTracker` consulta la cuadrícula durante la actualización de telemetría, no durante cada frame.
-Conserva la arista activa con una histéresis de 7 m. El paso de movimiento solo vuelve a proyectar
-contra esa geometría corta para calcular superficie y asistencia. Si el archivo aún carga o falla,
+Cada candidato recibe puntuaciones de distancia, heading, continuidad, ruta activa, arista anterior
+y clase de vía. Se penalizan tramos detrás del vehículo, giros incompatibles y calles paralelas que
+no pertenecen a la ruta. La histéresis exige una mejora clara antes de cambiar de arista.
+
+La ruta activa tiene prioridad en intersecciones, pero el giro manual reduce la asistencia para
+permitir abandonar voluntariamente el camino. El paso de movimiento vuelve a proyectar solo contra
+geometrías candidatas cortas para calcular superficie y corrección. Si el archivo aún carga o falla,
 el perfil base continúa funcionando sin penalizaciones y el HUD comunica el estado.
 
 Los polígonos de agua viven como datos TypeScript pequeños y se consultan sobre la posición

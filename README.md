@@ -1,9 +1,9 @@
 # El Salvador: Rutas Perdidas
 
 Videojuego web de conducción y exploración sobre una cartografía estilizada de El Salvador. La
-v0.2 incluye mapa MapLibre 2.5D autónomo, corredor vial local, rutas A*, vehículo y referencias 3D,
-seis misiones conectadas, inventario, recuperación, audio local, progreso persistente, adaptación
-móvil, Docker y documentación de despliegue.
+v0.2.1 incluye mapa MapLibre 2.5D autónomo, controles móviles analógicos, corredor vial local,
+rutas A* en Web Worker, navegación básica, vehículo y referencias 3D, seis misiones conectadas,
+inventario, recuperación, audio local, progreso persistente, Docker y despliegue en Dokploy.
 
 ## Requisitos
 
@@ -28,13 +28,16 @@ Abre la dirección que muestra Vite. El mapa permite zoom, rotación, inclinaci�
 - `S` o flecha abajo: retroceder.
 - `A`/`D` o flechas laterales: girar.
 - `Shift`: turbo.
+- `R`: recalcular la ruta activa.
 - `Escape`: pausar o reanudar.
 - `Espacio`: realizar la acción del objetivo cercano.
-- En pantallas táctiles aparecen una cruceta, turbo y accesos para investigar, centrar y pausar.
+- En pantallas táctiles aparece joystick de dirección, acelerador, freno/reversa, turbo y acción
+  contextual.
 
-En teléfonos, las acciones táctiles se organizan en dos filas para evitar cruces con la cruceta. La
-bitácora inicia contraída y puede expandirse; el layout también tiene una variante horizontal. El
-perfil gráfico adapta antialias, densidad de píxeles, cámara y frecuencia de rutas según el hardware.
+El modo predeterminado usa joystick fijo y pedales. Configuración también ofrece joystick flotante,
+tres tamaños, zona muerta, crucero `AUTO` y la cruceta clásica. Frenar, pausar, perder foco, cambiar
+orientación o abrir un diálogo limpia la entrada y desactiva el crucero. La bitácora inicia contraída
+en teléfonos y reserva espacio para controles tanto en vertical como en horizontal.
 
 El vehículo inicia en San Salvador. La cámara se acerca al detenerse, se abre de forma progresiva
 con la velocidad y coloca el vehículo debajo del centro para mostrar más camino por delante. Una
@@ -64,10 +67,10 @@ confirmación. La primera expedición muestra un tutorial breve; luego puede rep
 configuración. Al pausar con `Escape` o `Ⅱ` se puede continuar, guardar, ajustar la presentación o
 volver al inicio.
 
-La calidad gráfica, sensibilidad de dirección, asistencia vial, movimiento reducido, atmósfera,
-audio y estado del tutorial se guardan en este dispositivo, separados del progreso. Hay controles
-de volumen general y efectos, silencio y reducción de efectos intensos. Cambiar la calidad
-reconstruye el mapa con el perfil solicitado. Consulta `docs/architecture/interface.md` y
+La calidad gráfica, sensibilidad, asistencia vial, movimiento reducido, atmósfera, audio, tutorial
+y controles móviles se guardan en este dispositivo, separados del progreso. Preferencias v1 a v4
+migran al formato v5 sin perder ajustes. Cambiar la calidad reconstruye el mapa con el perfil
+solicitado. Consulta `docs/architecture/interface.md`, `docs/architecture/mobile.md` y
 `docs/architecture/audio.md`.
 
 ## Ubicaciones y descubrimiento
@@ -86,23 +89,23 @@ introduce combustible, inventario y reparación, llega a Santa Ana y termina inv
 alrededor de Coatepeque. Cada misión valida inicio y prerrequisitos, muestra progreso y calcula con
 A* una ruta sobre carreteras locales.
 
-El botón `↻` o la tecla `R` recalculan; una desviación de 250 m también lo hace con enfriamiento. Si
-un objetivo queda fuera del corredor, una línea discontinua actúa como fallback sin bloquear la
+El botón `↻` o la tecla `R` recalculan en un Web Worker; una desviación de 250 m también lo hace con
+enfriamiento. La ruta resalta el segmento inmediato y muestra próxima maniobra, flecha y distancia.
+Si un objetivo queda fuera del corredor, una línea discontinua actúa como fallback sin bloquear la
 misión. Hay objetivos de llegada, exploración, interacción, recolección, elección, reparación,
-combustible y tiempo. El final revela una nueva señal y desbloquea Cerro Verde. Consulta
-`docs/gameplay/chapter-1.md`.
+combustible y tiempo. Consulta `docs/gameplay/chapter-1.md` y `docs/architecture/routing.md`.
 
 ## Red vial local
 
 La v0.2 incluye un corredor transitable derivado de OpenStreetMap entre San Salvador, Santa Tecla,
-Santa Ana, Coatepeque y Cerro Verde. El grafo de 5.53 MiB se sirve desde el mismo origen, se carga
-bajo demanda y usa una cuadrícula para detectar tramos cercanos sin recorrer la red completa. No
-existe ninguna consulta a un servicio de rutas externo.
+Santa Ana, Coatepeque y Cerro Verde. El grafo de 5.53 MiB se sirve desde el mismo origen, se precarga
+una vez durante la pantalla inicial y usa una cuadrícula para detectar tramos cercanos sin recorrer
+la red completa. No existe ninguna consulta a un servicio de rutas externo.
 
-La conducción detecta la clase de vía a 10 Hz y aplica límites de velocidad y combustible. La
-asistencia predeterminada es suave, conserva libertad para salir del camino y aumenta ligeramente
-en táctil; puede cambiarse a **Libre** o **Firme** en configuración. El HUD identifica terreno
-difícil y los polígonos locales impiden atravesar Coatepeque, otros lagos grandes y el océano.
+La conducción puntúa distancia, heading, continuidad, ruta activa, arista previa y clase para no
+saltar entre calles paralelas. El movimiento geográfico usa subpasos de hasta 10 m para comprobar
+agua, bloqueos y objetivos aun con frames lentos. La asistencia predeterminada es suave, conserva
+libertad para salir del camino y puede cambiarse a **Libre** o **Firme**.
 
 Para reconstruirlo se requiere `osmium-tool`:
 
@@ -152,11 +155,20 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
+El panel local de métricas se activa solo en desarrollo:
+
+```sh
+VITE_ENABLE_DIAGNOSTICS=true npm run dev
+```
+
+La matriz y el protocolo pendiente para cinco personas están en
+`docs/gameplay/mobile-controls-playtest.md`.
+
 ## Docker
 
 ```sh
-docker build -t el-salvador-rutas-perdidas .
-docker run --rm -p 8080:80 el-salvador-rutas-perdidas
+docker build -t el-salvador-rutas-perdidas:v0.2.1 .
+docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.1
 curl http://localhost:8080/healthz
 ```
 
@@ -169,7 +181,16 @@ El navegador lee exclusivamente `/maps/el-salvador.pmtiles` y los recursos de `/
 Consulta `data/SOURCES.md`, `data/LICENSES.md` y `scripts/maps/README.md` para procedencia,
 licencias y reconstrucción.
 
-## Estado de la v0.2
+## Estado de la v0.2.1
+
+- Entrada analógica continua con teclado, joystick, pedales, crucero y limpieza central.
+- Joystick fijo o flotante, tres tamaños, cruceta clásica, safe areas y hápticos opcionales.
+- Subpasos geográficos, selección vial por puntuación, continuidad e histéresis.
+- Precarga única, métricas, A* en worker, cancelación, timeout, fallback y caché LRU.
+- Próxima maniobra, segmento inmediato, flecha de ruta y tutorial progresivo de nueve pasos.
+- Diagnóstico de desarrollo y E2E en escritorio, móvil vertical y móvil horizontal.
+
+### Base v0.2
 
 - v0.2 Fase 1: escala de viaje, perfil arcade, sensibilidad y cámara de conducción dinámica.
 - v0.2 Fase 2: corredor vial local, generación reproducible, cuadrícula y detección de carretera.
