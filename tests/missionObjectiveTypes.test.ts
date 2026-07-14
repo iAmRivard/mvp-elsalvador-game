@@ -15,6 +15,7 @@ function missionWith(objective: MissionObjective): Mission {
     objectives: [objective],
     rewards: [],
     prerequisites: [],
+    completionSummary: 'Objetivo de prueba completado.',
   };
 }
 
@@ -31,7 +32,7 @@ const vehicle = {
 };
 
 describe('tipos de objetivo v0.2', () => {
-  it('recoge un objeto solamente mediante interacción', () => {
+  it('recoge un objeto automáticamente a baja velocidad', () => {
     const mission = missionWith({
       id: 'recoger-rele',
       type: 'collect',
@@ -44,13 +45,21 @@ describe('tipos de objetivo v0.2', () => {
 
     expect(
       advanceMissionObjectives(mission, [], player, false).isCompleted,
-    ).toBe(false);
-    const result = advanceMissionObjectives(mission, [], player, true);
+    ).toBe(true);
+    const result = advanceMissionObjectives(mission, [], player, false);
 
     expect(result.isCompleted).toBe(true);
     expect(result.effects.addItems).toEqual([
       { itemId: 'rele-encendido', quantity: 1 },
     ]);
+    expect(
+      advanceMissionObjectives(
+        mission,
+        [],
+        { ...player, speedMetersPerSecond: 2 },
+        false,
+      ).isCompleted,
+    ).toBe(false);
   });
 
   it('repara consumiendo la pieza y la energía requeridas', () => {

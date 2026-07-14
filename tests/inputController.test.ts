@@ -8,6 +8,21 @@ afterEach(() => {
 });
 
 describe('keyboard route controls', () => {
+  it('usa E como interacción principal y conserva Espacio como alternativa', () => {
+    const input = new InputController();
+    const unbind = input.bindKeyboard(window, vi.fn());
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' }));
+    expect(input.snapshot().interact).toBe(true);
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' }));
+    expect(input.snapshot().interact).toBe(false);
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
+    expect(input.snapshot().interact).toBe(true);
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }));
+    expect(input.snapshot().interact).toBe(false);
+    unbind();
+  });
+
   it('requests one recalculation for a non-repeated R press', () => {
     const input = new InputController();
     const pause = vi.fn();
@@ -161,11 +176,16 @@ describe('keyboard route controls', () => {
     input.activateMobileBoost();
     input.clearAllInput();
     expect(input.getAutoThrottleStatus()).toBe('off');
-    expect(input.getMobileBoostState()).toEqual({
+    expect(input.getMobileBoostState()).toMatchObject({
       active: false,
       remainingMilliseconds: 0,
-      cooldownRemainingMilliseconds: 0,
     });
+    expect(
+      input.getMobileBoostState().cooldownRemainingMilliseconds,
+    ).toBeGreaterThan(0);
+    expect(input.activateMobileBoost()).toBe(false);
+    input.resetMobileBoostCompletely();
+    expect(input.getMobileBoostState().cooldownRemainingMilliseconds).toBe(0);
   });
 
   it('rechaza Turbo móvil sin combustible o con condición cero', () => {

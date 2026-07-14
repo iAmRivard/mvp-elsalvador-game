@@ -157,7 +157,7 @@ test('persiste modos alternativos y limpia entradas al pausar', async ({
     return parsed;
   }, settingsKey);
   expect(persistedSettings).toMatchObject({
-    version: 5,
+    version: 6,
     settings: {
       controlMode: 'classic-buttons',
       joystickSize: 'large',

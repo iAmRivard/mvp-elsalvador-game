@@ -41,7 +41,9 @@ test('recorre inicio, tutorial, pausa y configuración', async ({
   for (const [index, title] of tutorialTitles.entries()) {
     await expect(page.getByRole('heading', { name: title })).toBeVisible();
     if (index < tutorialTitles.length - 1) {
-      await page.getByRole('button', { name: 'Siguiente' }).click();
+      await page
+        .getByRole('button', { name: 'Siguiente', exact: true })
+        .click();
     }
   }
   await page.getByRole('button', { name: 'Finalizar' }).click();

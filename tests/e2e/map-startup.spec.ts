@@ -98,3 +98,35 @@ for (const deviceScaleFactor of [2, 3]) {
     await context.close();
   });
 }
+
+test('reinicia y vuelve a alinear con la red vial ya montada', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop');
+  await page.addInitScript(() => window.localStorage.clear());
+  await page.goto('/');
+  await launch(page);
+  const gameMap = page.getByTestId('game-map');
+  await expect(gameMap).toHaveAttribute('data-road-network-status', 'ready', {
+    timeout: 20_000,
+  });
+  const position = page.getByTestId('player-position');
+  const alignedStart = await position.textContent();
+
+  await page.keyboard.down('w');
+  await page.waitForTimeout(700);
+  await page.keyboard.up('w');
+  await expect(position).not.toHaveText(alignedStart ?? '');
+
+  await page.getByRole('button', { name: 'Partida y guardado' }).click();
+  await page.getByRole('menuitem', { name: 'Reiniciar partida' }).click();
+  const confirmation = page.getByRole('alertdialog', {
+    name: '¿Reiniciar la expedición?',
+  });
+  await confirmation.getByRole('button', { name: 'Reiniciar partida' }).click();
+
+  await expect(gameMap).toHaveAttribute('data-road-network-status', 'ready');
+  await expect.poll(() => position.textContent()).toBe(alignedStart);
+  await expect(gameMap).toHaveAttribute('data-input-mobile-boost', 'off');
+  await expect(gameMap).toHaveAttribute('data-input-throttle', '0.000');
+});

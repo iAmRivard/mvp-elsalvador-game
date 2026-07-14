@@ -4,6 +4,31 @@ import { missionById } from '../src/data/missions';
 import { initialMissionObjectiveProgress } from '../src/game/missions';
 import { useGameStore } from '../src/store/gameStore';
 
+const repeater = [-89.3175451, 13.6820687] as const;
+const blockage = [-89.3592277, 13.7305749] as const;
+
+function reachRouteChoice(): void {
+  useGameStore.setState({
+    completedMissionIds: ['la-transmision'],
+    telemetry: {
+      ...useGameStore.getState().telemetry,
+      longitude: repeater[0],
+      latitude: repeater[1],
+    },
+  });
+  useGameStore.getState().startMission('camino-hacia-santa-ana');
+  useGameStore.getState().dismissRadioEvent();
+  const player = {
+    ...useGameStore.getState().telemetry,
+    longitude: blockage[0],
+    latitude: blockage[1],
+    speedMetersPerSecond: 0,
+  };
+  useGameStore.getState().advanceActiveMission(player, false);
+  useGameStore.getState().advanceActiveMission(player, true);
+  useGameStore.getState().advanceActiveMission(player, true);
+}
+
 describe('estado de misiones y capítulo', () => {
   beforeEach(() => {
     useGameStore.setState(useGameStore.getInitialState(), true);
@@ -93,9 +118,122 @@ describe('estado de misiones y capítulo', () => {
     ]);
     expect(useGameStore.getState().missionRoute.recalculationRevision).toBe(1);
     expect(useGameStore.getState()).toMatchObject({
-      activeNarrativeEventId: 'radio-bloqueo-confirmado',
-      isPaused: true,
+      activeRadioEventId: 'radio-bloqueo-confirmado',
+      activeNarrativeEventId: null,
+      isPaused: false,
     });
+  });
+
+  it('la radio normal queda registrada y no pausa la conducción', () => {
+    useGameStore.setState({
+      completedMissionIds: ['la-transmision'],
+      telemetry: {
+        ...useGameStore.getState().telemetry,
+        longitude: repeater[0],
+        latitude: repeater[1],
+      },
+    });
+    expect(useGameStore.getState().startMission('camino-hacia-santa-ana')).toBe(
+      true,
+    );
+    const state = useGameStore.getState();
+    expect(state.activeRadioEventId).toBe('radio-camino-bloqueado');
+    expect(state.activeNarrativeEventId).toBeNull();
+    expect(state.isPaused).toBe(false);
+    expect(
+      state.storyLogEntries.some(
+        (entry) =>
+          entry.type === 'radio' &&
+          entry.title === 'Advertencia en la carretera',
+      ),
+    ).toBe(true);
+  });
+
+  it('abre una elección real, la guarda y comienza el tiempo tras 3-2-1', () => {
+    reachRouteChoice();
+    expect(useGameStore.getState()).toMatchObject({
+      activeMissionChoiceObjectiveId: 'elegir-ruta-secundaria',
+      isPaused: true,
+      missionTimerCountdownSeconds: 0,
+    });
+    expect(useGameStore.getState().selectMissionChoice('north')).toBe(true);
+    let state = useGameStore.getState();
+    expect(state.missionChoiceSelections).toEqual({
+      'camino-hacia-santa-ana': 'north',
+    });
+    expect(state.activeMissionCompletedObjectiveIds).toContain(
+      'elegir-ruta-secundaria',
+    );
+    expect(state.temporarilyClosedRoadEdgeIds).toContain(14_336);
+    expect(state.missionTimerCountdownSeconds).toBe(3);
+    expect(useGameStore.getState().selectMissionChoice('south')).toBe(false);
+
+    useGameStore.getState().advanceActiveMission(state.telemetry, false, 1);
+    state = useGameStore.getState();
+    expect(state.missionTimerCountdownSeconds).toBe(2);
+    expect(
+      state.activeMissionObjectiveProgress['alcanzar-estacion-a-tiempo']
+        .elapsedSeconds,
+    ).toBe(0);
+    useGameStore.getState().advanceActiveMission(state.telemetry, false, 2);
+    state = useGameStore.getState();
+    expect(state.missionTimerCountdownSeconds).toBe(0);
+    expect(
+      state.activeMissionObjectiveProgress['alcanzar-estacion-a-tiempo']
+        .elapsedSeconds,
+    ).toBe(0);
+    useGameStore.getState().advanceActiveMission(state.telemetry, false, 1);
+    expect(
+      useGameStore.getState().activeMissionObjectiveProgress[
+        'alcanzar-estacion-a-tiempo'
+      ].elapsedSeconds,
+    ).toBe(1);
+    useGameStore.getState().setPaused(true);
+    useGameStore
+      .getState()
+      .advanceActiveMission(useGameStore.getState().telemetry, false, 5);
+    expect(
+      useGameStore.getState().activeMissionObjectiveProgress[
+        'alcanzar-estacion-a-tiempo'
+      ].elapsedSeconds,
+    ).toBe(1);
+  });
+
+  it('al fallar el tiempo reintenta desde antes de elegir la ruta', () => {
+    reachRouteChoice();
+    useGameStore.getState().selectMissionChoice('south');
+    const state = useGameStore.getState();
+    useGameStore.setState({
+      missionTimerCountdownSeconds: 0,
+      activeMissionObjectiveProgress: {
+        ...state.activeMissionObjectiveProgress,
+        'alcanzar-estacion-a-tiempo': {
+          ...state.activeMissionObjectiveProgress['alcanzar-estacion-a-tiempo'],
+          elapsedSeconds: 269.9,
+          value: 269.9,
+        },
+      },
+    });
+    useGameStore
+      .getState()
+      .advanceActiveMission(useGameStore.getState().telemetry, false, 0.2);
+    expect(useGameStore.getState().recoveryReason).toBe('timed-objective');
+    expect(useGameStore.getState().retryFromCheckpoint()).toBe(true);
+    expect(useGameStore.getState()).toMatchObject({
+      recoveryReason: null,
+      activeMissionChoiceObjectiveId: null,
+      missionTimerCountdownSeconds: 0,
+      missionChoiceSelections: {},
+    });
+    expect(useGameStore.getState().activeMissionCompletedObjectiveIds).toEqual([
+      'llegar-al-bloqueo',
+      'inspeccionar-bloqueo',
+    ]);
+    expect(
+      useGameStore.getState().activeMissionObjectiveProgress[
+        'alcanzar-estacion-a-tiempo'
+      ].elapsedSeconds,
+    ).toBe(0);
   });
 
   it('daña el vehículo al comenzar y consume la pieza al repararlo', () => {
@@ -233,7 +371,7 @@ describe('estado de misiones y capítulo', () => {
       true,
     );
     expect(useGameStore.getState().activeMissionId).toBeNull();
-    expect(useGameStore.getState().telemetry.fuel).toBe(100);
+    expect(useGameStore.getState().telemetry.fuel).toBe(75);
     expect(useGameStore.getState().recoveryReason).toBeNull();
   });
 

@@ -178,7 +178,9 @@ test('carga el mapa sin solicitudes a terceros', async ({
   await expect(
     page.getByText('San Salvador', { exact: true }).first(),
   ).toBeAttached();
-  await expect(page.getByRole('heading', { name: 'Misiones' })).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'Panel de misiones' }),
+  ).toBeVisible();
   const gameMap = page.getByTestId('game-map');
   await expect(gameMap).toHaveAttribute('data-road-network-status', 'ready', {
     timeout: 20_000,
@@ -218,7 +220,7 @@ test('carga el mapa sin solicitudes a terceros', async ({
       }),
     )
     .toEqual([0, 0]);
-  await page.getByRole('button', { name: 'Sintonizar' }).click();
+  await page.getByRole('button', { name: 'Comenzar investigación' }).click();
   await expect(
     page.getByRole('heading', { name: 'La transmisión' }),
   ).toBeVisible();
@@ -296,7 +298,7 @@ test('carga el mapa sin solicitudes a terceros', async ({
   );
   await page.getByRole('button', { name: 'Abandonar misión' }).click();
   await firstMission.getByRole('button', { name: 'Iniciar' }).click();
-  await page.getByRole('button', { name: 'Sintonizar' }).click();
+  await page.getByRole('button', { name: 'Comenzar investigación' }).click();
   await interact(page);
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road');
 

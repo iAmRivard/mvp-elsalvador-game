@@ -98,6 +98,40 @@ describe('rutas del Capítulo 1', () => {
     );
   });
 
+  it('cada elección de Camino bloqueado produce una ruta A* distinta', async () => {
+    const router = await chapterRouter();
+    const objective = missionById
+      .get('camino-hacia-santa-ana')!
+      .objectives.find((candidate) => candidate.type === 'choice')!;
+    const north = objective.choice!.options.find(
+      (option) => option.id === 'north',
+    )!;
+    const south = objective.choice!.options.find(
+      (option) => option.id === 'south',
+    )!;
+    const request = {
+      origin: [-89.3592277, 13.7305749] as RoadCoordinates,
+      destination: [-89.447361, 13.8408999] as RoadCoordinates,
+    };
+    const northRoute = router.getRoute({
+      ...request,
+      temporarilyClosedEdgeIds: north.closedRoadEdgeIds,
+    });
+    const southRoute = router.getRoute({
+      ...request,
+      temporarilyClosedEdgeIds: south.closedRoadEdgeIds,
+    });
+
+    expect(northRoute).not.toBeNull();
+    expect(southRoute).not.toBeNull();
+    expect(northRoute!.edgeIds).not.toEqual(southRoute!.edgeIds);
+    expect(northRoute!.distanceMeters).toBeGreaterThan(
+      southRoute!.distanceMeters,
+    );
+    expect(north.fuelMultiplier).not.toBe(south.fuelMultiplier);
+    expect(north.conditionMultiplier).not.toBe(south.conditionMultiplier);
+  });
+
   it('mantiene los objetivos de Coatepeque fuera de la máscara de agua', () => {
     const mission = missionById.get('secreto-de-coatepeque')!;
     for (const objective of mission.objectives) {

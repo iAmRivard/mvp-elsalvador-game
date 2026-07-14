@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { chapterOneMissionIds, CHAPTER_ONE_TITLE } from '../src/data/chapter1';
+import {
+  chapterOneMissionIds,
+  CHAPTER_ONE_TITLE,
+  narrativeEvents,
+} from '../src/data/chapter1';
 import { missionById, missions } from '../src/data/missions';
 import {
   advanceMissionObjectives,
@@ -177,5 +181,13 @@ describe(CHAPTER_ONE_TITLE, () => {
         true,
       ).isCompleted,
     ).toBe(true);
+  });
+
+  it('cada evento narrativo explica el objetivo y su presentación', () => {
+    for (const event of narrativeEvents) {
+      expect(['radio', 'modal', 'chapter']).toContain(event.presentation);
+      expect(event.channelLabel.length).toBeGreaterThan(0);
+      expect(event.objectiveSummary?.length).toBeGreaterThan(0);
+    }
   });
 });

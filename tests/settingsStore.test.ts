@@ -20,8 +20,11 @@ describe('configuración visual', () => {
       roadAssistMode: 'soft',
       audioMasterVolume: 0.7,
       audioEffectsVolume: 0.8,
+      audioMusicVolume: 0.42,
       audioMuted: false,
+      musicMuted: false,
       reduceAudioEffects: false,
+      recommendedControlsPromptDismissed: false,
       controlMode: 'joystick-pedals',
       joystickPositionMode: 'fixed',
       joystickSize: 'medium',
@@ -57,8 +60,11 @@ describe('configuración visual', () => {
       roadAssistMode: 'strong',
       audioMasterVolume: 0.7,
       audioEffectsVolume: 0.8,
+      audioMusicVolume: 0.42,
       audioMuted: false,
+      musicMuted: false,
       reduceAudioEffects: false,
+      recommendedControlsPromptDismissed: false,
       controlMode: 'joystick-pedals',
       joystickPositionMode: 'fixed',
       joystickSize: 'medium',
@@ -77,6 +83,17 @@ describe('configuración visual', () => {
         JSON.stringify({ version: 5, settings: { graphicsQuality: 'medium' } }),
       )?.controlMode,
     ).toBe('joystick-pedals');
+    expect(
+      parseVisualSettings(
+        JSON.stringify({
+          version: 5,
+          settings: {
+            graphicsQuality: 'medium',
+            controlMode: 'joystick-pedals',
+          },
+        }),
+      )?.recommendedControlsPromptDismissed,
+    ).toBe(false);
   });
 
   it('migra preferencias version 1 con sensibilidad equilibrada', () => {
@@ -108,7 +125,9 @@ describe('configuración visual', () => {
     useSettingsStore.getState().setRoadAssistMode('off');
     useSettingsStore.getState().setAudioMasterVolume(0.45);
     useSettingsStore.getState().setAudioEffectsVolume(0.6);
+    useSettingsStore.getState().setAudioMusicVolume(0.35);
     useSettingsStore.getState().setAudioMuted(true);
+    useSettingsStore.getState().setMusicMuted(true);
     useSettingsStore.getState().setReduceAudioEffects(true);
 
     const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -121,7 +140,9 @@ describe('configuración visual', () => {
       roadAssistMode: 'off',
       audioMasterVolume: 0.45,
       audioEffectsVolume: 0.6,
+      audioMusicVolume: 0.35,
       audioMuted: true,
+      musicMuted: true,
       reduceAudioEffects: true,
     });
   });

@@ -49,6 +49,8 @@ const game: PersistedGameData = {
       durationSeconds: null,
     },
   },
+  missionChoiceSelections: {},
+  storyLogEntries: [],
   completedMissionIds: [
     'la-transmision',
     'camino-hacia-santa-ana',
@@ -95,6 +97,7 @@ const game: PersistedGameData = {
         durationSeconds: null,
       },
     },
+    missionChoiceSelections: {},
   },
   lastSafeCheckpoint: {
     id: 'checkpoint-safe-test',
@@ -118,6 +121,7 @@ const game: PersistedGameData = {
     activeMissionId: null,
     activeMissionCompletedObjectiveIds: [],
     activeMissionObjectiveProgress: {},
+    missionChoiceSelections: {},
   },
   currentChapterId: 'chapter-1',
   completedChapterIds: [],
@@ -177,6 +181,54 @@ describe('guardado versionado', () => {
       expect(loaded.save.game.activeMissionCompletedObjectiveIds).toEqual([
         'mirador-norte',
       ]);
+    }
+  });
+
+  it('persiste elecciones y entradas de bitácora', () => {
+    const result = parseGameSave(
+      JSON.stringify(
+        createGameSave({
+          ...game,
+          missionChoiceSelections: { 'camino-hacia-santa-ana': 'north' },
+          storyLogEntries: [
+            {
+              id: 'choice:camino-hacia-santa-ana',
+              type: 'mission',
+              title: 'Ruta elegida: Ruta norte',
+              summary: 'Trayecto estable.',
+              recordedAt: 'Registro 01',
+            },
+          ],
+        }),
+      ),
+    );
+
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.save.game.missionChoiceSelections).toEqual({
+        'camino-hacia-santa-ana': 'north',
+      });
+      expect(result.save.game.storyLogEntries).toHaveLength(1);
+    }
+  });
+
+  it('migra v2 sin modificar el combustible existente', () => {
+    const versionTwo = createGameSave({
+      ...game,
+      player: { ...game.player, fuel: 33 },
+      vehicle: { ...game.vehicle, fuel: 33 },
+    }) as unknown as { version: number; game: Record<string, unknown> };
+    versionTwo.version = 2;
+    delete versionTwo.game.missionChoiceSelections;
+    delete versionTwo.game.storyLogEntries;
+    const result = parseGameSave(JSON.stringify(versionTwo));
+
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.migrated).toBe(true);
+      expect(result.save.game.player.fuel).toBe(33);
+      expect(result.save.game.vehicle.fuel).toBe(33);
+      expect(result.save.game.missionChoiceSelections).toEqual({});
     }
   });
 

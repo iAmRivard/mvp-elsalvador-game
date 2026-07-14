@@ -55,15 +55,15 @@ describe('road handling', () => {
       0.05,
       { roadNetworkEnabled: true, roadContact: null },
     );
-    const vehicleDistance = result.player.speedMetersPerSecond * 0.05;
-
     expect(result.environment.surface).toBe('offroad');
     expect(result.environment.speedMultiplier).toBe(0.25);
     expect(result.environment.fuelMultiplier).toBe(1.75);
     expect(result.player.speedMetersPerSecond).toBeCloseTo(19.3, 8);
     expect(result.player.fuel).toBeCloseTo(
       100 -
-        vehicleDistance * fuelConsumptionConfig.percentPerVehicleMeter * 1.75,
+        result.player.totalDistanceMeters *
+          fuelConsumptionConfig.percentPerGeographicMeter *
+          1.75,
       10,
     );
   });

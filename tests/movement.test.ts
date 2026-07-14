@@ -64,7 +64,7 @@ describe('movimiento geografico del jugador', () => {
     expect(stepPlayer(player, idleInput, 0.016)).toEqual(player);
   });
 
-  it('no multiplica el consumo de combustible con la escala geografica', () => {
+  it('consume combustible según la distancia geográfica jugable', () => {
     const movingPlayer = { ...player, speedMetersPerSecond: 20 };
     const input = { ...idleInput, throttle: 1 as const };
     const scaleOne = stepPlayer(movingPlayer, input, 0.05, {
@@ -73,13 +73,13 @@ describe('movimiento geografico del jugador', () => {
     const scaleFive = stepPlayer(movingPlayer, input, 0.05, {
       travel: travelAtScale(5),
     });
-    const vehicleDistance = scaleOne.speedMetersPerSecond * 0.05;
-
     expect(scaleOne.fuel).toBeCloseTo(
-      100 - vehicleDistance * fuelConsumptionConfig.percentPerVehicleMeter,
+      100 -
+        scaleOne.totalDistanceMeters *
+          fuelConsumptionConfig.percentPerGeographicMeter,
       10,
     );
-    expect(scaleFive.fuel).toBeCloseTo(scaleOne.fuel, 12);
+    expect(100 - scaleFive.fuel).toBeCloseTo((100 - scaleOne.fuel) * 5, 8);
     expect(scaleFive.totalDistanceMeters).toBeCloseTo(
       scaleOne.totalDistanceMeters * 5,
       8,

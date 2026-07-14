@@ -121,7 +121,7 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
     {
       key: settingsKey,
       settings: {
-        version: 4,
+        version: 6,
         settings: {
           graphicsQuality: 'low',
           reduceMotion: true,
@@ -131,8 +131,11 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
           roadAssistMode: 'soft',
           audioMasterVolume: 0,
           audioEffectsVolume: 0,
+          audioMusicVolume: 0,
           audioMuted: true,
+          musicMuted: true,
           reduceAudioEffects: true,
+          recommendedControlsPromptDismissed: true,
         },
       },
     },
@@ -144,7 +147,10 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
     has: page.getByRole('heading', { name: 'Estación abandonada' }),
   });
   await stationMission.getByRole('button', { name: 'Iniciar' }).click();
-  await page.getByRole('button', { name: 'Registrar la estación' }).click();
+  await expect(page.locator('.radio-message')).toContainText(
+    'La estación sigue emitiendo',
+  );
+  await page.getByRole('button', { name: 'Cerrar transmisión' }).click();
   await interact(page);
   await expect(
     page.locator('.mission-objectives li.is-completed').filter({
@@ -193,13 +199,17 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
   await expect(page.locator('.mission-toast')).toContainText(
     'Estación abandonada',
   );
-
-  await expandMissions(page);
-  const repairMission = page.locator('.mission-list__item').filter({
-    has: page.getByRole('heading', { name: 'Reparación de emergencia' }),
-  });
-  await repairMission.getByRole('button', { name: 'Iniciar' }).click();
-  await page.getByRole('button', { name: 'Preparar reparación' }).click();
+  await expect(
+    page.getByRole('meter', { name: 'Combustible restante' }),
+  ).toHaveAttribute('aria-valuenow', '75');
+  await page
+    .locator('.mission-toast')
+    .getByRole('button', { name: 'Iniciar Reparación de emergencia' })
+    .click();
+  await expect(page.locator('.radio-message')).toContainText(
+    'Encendido inestable',
+  );
+  await page.getByRole('button', { name: 'Cerrar transmisión' }).click();
   await expect(
     page.getByRole('meter', { name: 'Condición del vehículo' }),
   ).toHaveAttribute('aria-valuenow', '55');
