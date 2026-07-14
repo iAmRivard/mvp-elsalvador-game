@@ -5,6 +5,7 @@ import {
   GAME_SAVE_VERSION,
   loadGameFromStorage,
   parseGameSave,
+  sanitizeCondition,
   type GameStorage,
   type PersistedGameData,
   writeGameSave,
@@ -126,6 +127,41 @@ const game: PersistedGameData = {
 };
 
 describe('guardado versionado', () => {
+  it('distingue condición ausente, inválida y cero válido', () => {
+    expect(sanitizeCondition(undefined, false)).toBe(100);
+    expect(sanitizeCondition(Number.NaN, true)).toBe(100);
+    expect(sanitizeCondition(Number.POSITIVE_INFINITY, true)).toBe(100);
+    expect(sanitizeCondition('0', true)).toBe(100);
+    expect(sanitizeCondition(0, true)).toBe(0);
+    expect(sanitizeCondition(-8, true)).toBe(0);
+    expect(sanitizeCondition(140, true)).toBe(100);
+  });
+
+  it('migra una condición ausente a 100 y conserva un cero válido', () => {
+    const withoutCondition = JSON.parse(
+      JSON.stringify(createGameSave(game)),
+    ) as { game: { vehicle: Record<string, unknown> } };
+    delete withoutCondition.game.vehicle.condition;
+    const missingResult = parseGameSave(JSON.stringify(withoutCondition));
+    const zeroResult = parseGameSave(
+      JSON.stringify(
+        createGameSave({
+          ...game,
+          vehicle: { ...game.vehicle, condition: 0 },
+        }),
+      ),
+    );
+
+    expect(missingResult.status).toBe('loaded');
+    expect(zeroResult.status).toBe('loaded');
+    if (missingResult.status === 'loaded') {
+      expect(missingResult.save.game.vehicle.condition).toBe(100);
+    }
+    if (zeroResult.status === 'loaded') {
+      expect(zeroResult.save.game.vehicle.condition).toBe(0);
+    }
+  });
+
   it('escribe y recupera una partida válida', () => {
     const storage = new MemoryStorage();
     const written = writeGameSave(game, storage);

@@ -75,6 +75,20 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+export function sanitizeCondition(
+  value: unknown,
+  fieldWasPresent: boolean,
+): number {
+  if (
+    !fieldWasPresent ||
+    typeof value !== 'number' ||
+    !Number.isFinite(value)
+  ) {
+    return vehicleStateConfig.initialCondition;
+  }
+  return clamp(value, 0, vehicleStateConfig.maximumCondition);
+}
+
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? [
@@ -115,10 +129,9 @@ function sanitizedVehicle(value: unknown, fallbackFuel: number): VehicleState {
     finiteNumber(record.maximumFuel, vehicleStateConfig.initialMaximumFuel),
   );
   return {
-    condition: clamp(
-      finiteNumber(record.condition, vehicleStateConfig.initialCondition),
-      0,
-      vehicleStateConfig.maximumCondition,
+    condition: sanitizeCondition(
+      record.condition,
+      Object.prototype.hasOwnProperty.call(record, 'condition'),
     ),
     fuel: clamp(finiteNumber(record.fuel, fallbackFuel), 0, maximumFuel),
     maximumFuel,
