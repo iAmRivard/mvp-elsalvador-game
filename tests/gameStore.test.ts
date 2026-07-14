@@ -177,6 +177,10 @@ describe('estado de misiones y capítulo', () => {
       estimatedGameDurationSeconds: 520,
       coordinateCount: 240,
       activeEdgeIds: [4, 9],
+      instructions: [],
+      nextInstruction: null,
+      distanceToNextInstructionMeters: null,
+      offRoute: false,
     });
     expect(useGameStore.getState().missionRoute).toMatchObject({
       status: 'road',

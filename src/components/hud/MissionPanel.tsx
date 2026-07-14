@@ -6,7 +6,9 @@ import {
   missionStartBlockReason,
   nearestPendingObjective,
 } from '../../game/missions';
+import { formatNavigationInstruction } from '../../map/navigationInstructions';
 import { useGameStore } from '../../store/gameStore';
+import type { NavigationInstructionType } from '../../types/navigation';
 
 function formatDistance(distanceMeters: number): string {
   return distanceMeters < 1_000
@@ -22,6 +24,25 @@ const actionableObjectiveTypes = new Set([
   'refuel',
   'choice',
 ]);
+
+function maneuverSymbol(type: NavigationInstructionType): string {
+  switch (type) {
+    case 'turn-left':
+      return '←';
+    case 'turn-right':
+      return '→';
+    case 'slight-left':
+      return '↖';
+    case 'slight-right':
+      return '↗';
+    case 'u-turn':
+      return '↶';
+    case 'arrive':
+      return '◎';
+    case 'continue':
+      return '↑';
+  }
+}
 
 function inactiveMissionStatus(
   mission: Mission,
@@ -144,12 +165,14 @@ export function MissionPanel() {
           >
             <div className="mission-route-summary__header">
               <span>
-                {next &&
-                next.distanceMeters <= next.objective.radiusMeters * 1.5
-                  ? 'Objetivo cercano'
-                  : missionRoute.status === 'fallback'
-                    ? 'Ruta provisional'
-                    : 'Ruta por carretera'}
+                {missionRoute.offRoute
+                  ? 'Has salido de la ruta'
+                  : next &&
+                      next.distanceMeters <= next.objective.radiusMeters * 1.5
+                    ? 'Objetivo cercano'
+                    : missionRoute.status === 'fallback'
+                      ? 'Ruta provisional'
+                      : 'Ruta por carretera'}
               </span>
               <button
                 type="button"
@@ -161,12 +184,35 @@ export function MissionPanel() {
                 <span aria-hidden="true">↻</span>
               </button>
             </div>
+            {missionRoute.nextInstruction &&
+              missionRoute.distanceToNextInstructionMeters !== null &&
+              missionRoute.status !== 'calculating' && (
+                <div
+                  className="mission-navigation-next"
+                  data-navigation-type={missionRoute.nextInstruction.type}
+                >
+                  <span aria-hidden="true">
+                    {maneuverSymbol(missionRoute.nextInstruction.type)}
+                  </span>
+                  <div>
+                    <small>Próxima maniobra</small>
+                    <strong>
+                      {formatNavigationInstruction(
+                        missionRoute.nextInstruction,
+                        missionRoute.distanceToNextInstructionMeters,
+                      )}
+                    </strong>
+                  </div>
+                </div>
+              )}
             <strong>
               {locationById.get(active.destinationLocationId)?.name}
             </strong>
             <small>
               {missionRoute.status === 'calculating'
-                ? 'Calculando…'
+                ? missionRoute.offRoute
+                  ? 'Calculando ruta…'
+                  : 'Calculando…'
                 : missionRoute.distanceMeters !== null
                   ? `${formatDistance(missionRoute.distanceMeters)} · ${Math.max(1, Math.round((missionRoute.estimatedGameDurationSeconds ?? 0) / 60))} min`
                   : next

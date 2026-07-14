@@ -30,6 +30,7 @@ import {
 } from '../game/progression';
 import type { PlayerStepEnvironment } from '../game/movement';
 import type { PlayerRuntime, PlayerTelemetry } from '../types/game';
+import type { RouteNavigationInstruction } from '../types/navigation';
 import type {
   CheckpointReason,
   CheckpointSnapshot,
@@ -82,6 +83,10 @@ export interface MissionRouteRuntimeState {
   estimatedGameDurationSeconds: number | null;
   coordinateCount: number;
   activeEdgeIds: number[];
+  instructions: RouteNavigationInstruction[];
+  nextInstruction: RouteNavigationInstruction | null;
+  distanceToNextInstructionMeters: number | null;
+  offRoute: boolean;
   recalculationRevision: number;
 }
 
@@ -140,6 +145,12 @@ interface GameStore extends GameData {
   setDrivingEnvironment: (environment: PlayerStepEnvironment) => void;
   setMissionRoute: (
     route: Omit<MissionRouteRuntimeState, 'recalculationRevision'>,
+  ) => void;
+  setMissionNavigation: (
+    navigation: Pick<
+      MissionRouteRuntimeState,
+      'nextInstruction' | 'distanceToNextInstructionMeters' | 'offRoute'
+    >,
   ) => void;
   requestMissionRouteRecalculation: () => void;
   setTemporarilyClosedRoadEdgeIds: (edgeIds: readonly number[]) => void;
@@ -382,6 +393,10 @@ const defaultMissionRouteState: MissionRouteRuntimeState = {
   estimatedGameDurationSeconds: null,
   coordinateCount: 0,
   activeEdgeIds: [],
+  instructions: [],
+  nextInstruction: null,
+  distanceToNextInstructionMeters: null,
+  offRoute: false,
   recalculationRevision: 0,
 };
 
@@ -554,6 +569,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
         recalculationRevision: state.missionRoute.recalculationRevision,
       },
     })),
+  setMissionNavigation: (navigation) =>
+    set((state) => {
+      if (
+        state.missionRoute.nextInstruction === navigation.nextInstruction &&
+        state.missionRoute.distanceToNextInstructionMeters ===
+          navigation.distanceToNextInstructionMeters &&
+        state.missionRoute.offRoute === navigation.offRoute
+      ) {
+        return state;
+      }
+      return {
+        missionRoute: { ...state.missionRoute, ...navigation },
+      };
+    }),
   requestMissionRouteRecalculation: () =>
     set((state) => ({
       missionRoute: {
