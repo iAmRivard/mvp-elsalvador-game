@@ -164,13 +164,13 @@ export function MissionPanel() {
           <p className="mission-panel__description">{active.description}</p>
 
           <div
-            className={`mission-route-summary ${next && next.distanceMeters <= next.objective.radiusMeters * 1.5 ? 'mission-route-summary--near' : ''}`}
+            className={`mission-route-summary ${next && next.distanceMeters <= next.objective.radiusMeters * 1.5 ? 'mission-route-summary--near' : ''} ${missionRoute.offRoute ? 'mission-route-summary--off-route' : ''}`}
             data-route-status={missionRoute.status}
           >
             <div className="mission-route-summary__header">
               <span>
                 {missionRoute.offRoute
-                  ? 'Has salido de la ruta'
+                  ? 'Te alejaste de la ruta'
                   : next &&
                       next.distanceMeters <= next.objective.radiusMeters * 1.5
                     ? 'Objetivo cercano'
@@ -215,7 +215,7 @@ export function MissionPanel() {
             <small>
               {missionRoute.status === 'calculating'
                 ? missionRoute.offRoute
-                  ? 'Calculando ruta…'
+                  ? 'Recalculando…'
                   : 'Calculando…'
                 : missionRoute.distanceMeters !== null
                   ? `${formatDistance(missionRoute.distanceMeters)} · ${Math.max(1, Math.round((missionRoute.estimatedGameDurationSeconds ?? 0) / 60))} min`

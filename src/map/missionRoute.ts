@@ -5,6 +5,10 @@ import {
   type Map as MapLibreMap,
 } from 'maplibre-gl';
 import { routingConfig } from '../config/routing.config';
+import {
+  missionRouteColors,
+  missionRouteStyle,
+} from '../config/missionRoute.config';
 import { travelConfig } from '../config/travel.config';
 import { missionById } from '../data/missions';
 import { distanceBetweenMeters } from '../game/discovery';
@@ -132,9 +136,9 @@ export function addMissionRoute(
     filter: ['==', ['get', 'mode'], 'road'],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#17312c',
-      'line-width': 8,
-      'line-opacity': 0.78,
+      'line-color': missionRouteColors.casing,
+      'line-width': missionRouteStyle.casingWidth,
+      'line-opacity': missionRouteStyle.casingOpacity,
     },
   });
   map.addLayer({
@@ -144,9 +148,9 @@ export function addMissionRoute(
     filter: ['==', ['get', 'mode'], 'road'],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#e6b75f',
-      'line-width': 4,
-      'line-opacity': 0.92,
+      'line-color': missionRouteColors.road,
+      'line-width': missionRouteStyle.roadWidth,
+      'line-opacity': missionRouteStyle.roadOpacity,
     },
   });
   map.addLayer({
@@ -156,10 +160,10 @@ export function addMissionRoute(
     filter: ['==', ['get', 'mode'], 'fallback'],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#d9aa56',
-      'line-width': 3,
-      'line-opacity': 0.66,
-      'line-dasharray': [1.2, 1.8],
+      'line-color': missionRouteColors.fallback,
+      'line-width': missionRouteStyle.fallbackWidth,
+      'line-opacity': missionRouteStyle.fallbackOpacity,
+      'line-dasharray': [1.4, 1.8],
     },
   });
 
@@ -170,9 +174,9 @@ export function addMissionRoute(
     source: IMMEDIATE_SOURCE_ID,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#fff0bd',
-      'line-width': 6,
-      'line-opacity': 0.96,
+      'line-color': missionRouteColors.immediate,
+      'line-width': missionRouteStyle.immediateWidth,
+      'line-opacity': missionRouteStyle.immediateOpacity,
     },
   });
 
@@ -196,11 +200,11 @@ export function addMissionRoute(
     source: TARGETS_SOURCE_ID,
     paint: {
       'circle-radius': ['case', ['get', 'isNext'], 10, 7],
-      'circle-color': '#e6b75f',
-      'circle-opacity': 0.78,
+      'circle-color': missionRouteColors.target,
+      'circle-opacity': 0.92,
       'circle-stroke-width': 3,
-      'circle-stroke-color': '#fff1c9',
-      'circle-stroke-opacity': 0.9,
+      'circle-stroke-color': missionRouteColors.immediate,
+      'circle-stroke-opacity': 0.96,
     },
   });
 
