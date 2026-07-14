@@ -28,6 +28,7 @@ import {
 } from '../../game/inputEvents';
 import { triggerHaptic } from '../../game/haptics';
 import { normalizeHeading } from '../../game/movement';
+import { addFuelStationMarkers } from '../../map/fuelStationMarkers';
 import { addLocationMarkers } from '../../map/locationMarkers';
 import { addMissionRoute } from '../../map/missionRoute';
 import {
@@ -217,6 +218,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let threeLayer: ThreeGameLayerController | null = null;
     let gameLoop: PlayerGameLoop | null = null;
     let removeLocationMarkers: (() => void) | null = null;
+    let removeFuelStationMarkers: (() => void) | null = null;
     let removeMissionRoute: (() => void) | null = null;
     let removeRoadDebugLayer: (() => void) | null = null;
     let removeRoadSurfaceLayer: (() => void) | null = null;
@@ -397,6 +399,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         .setRotation(initialPlayer.heading)
         .addTo(map);
       removeLocationMarkers = addLocationMarkers(map);
+      removeFuelStationMarkers = addFuelStationMarkers(map);
       removeMissionRoute = addMissionRoute(
         map,
         deviceProfile.mapDataUpdateIntervalMilliseconds,
@@ -848,6 +851,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       unsubscribeRuntime?.();
       unsubscribeSettings?.();
       removeLocationMarkers?.();
+      removeFuelStationMarkers?.();
       removeMissionRoute?.();
       removeRoadDebugLayer?.();
       removeRoadSurfaceLayer?.();
@@ -903,6 +907,13 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
 
       {status === 'ready' && (
         <span className="sr-only">El mapa local está listo.</span>
+      )}
+
+      {status === 'ready' && (
+        <div className="map-fuel-legend" aria-label="Leyenda de combustible">
+          <span aria-hidden="true">⛽</span>
+          Combustible
+        </div>
       )}
 
       {threeStatus === 'ready' && (

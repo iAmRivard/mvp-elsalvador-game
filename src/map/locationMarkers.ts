@@ -85,6 +85,18 @@ function popupContent(
       : `Bloqueada · ${distance}`;
 
   content.append(eyebrow, title, description, state);
+  if (unlocked) {
+    const routeButton = document.createElement('button');
+    routeButton.type = 'button';
+    routeButton.className = 'map-route-button';
+    routeButton.textContent = 'Marcar ruta';
+    routeButton.addEventListener('click', () => {
+      if (useGameStore.getState().markLocationRoute(location.id)) {
+        routeButton.textContent = 'Ruta marcada';
+      }
+    });
+    content.append(routeButton);
+  }
   return content;
 }
 

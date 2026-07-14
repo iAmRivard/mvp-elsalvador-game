@@ -5,12 +5,17 @@ import {
   type Map as MapLibreMap,
 } from 'maplibre-gl';
 import { routingConfig } from '../config/routing.config';
+import { fuelStationConfig } from '../config/fuelStations.config';
 import {
   missionRouteColors,
   missionRouteStyle,
 } from '../config/missionRoute.config';
 import { travelConfig } from '../config/travel.config';
-import { missionById } from '../data/missions';
+import {
+  missionById,
+  type Mission,
+  type MissionObjective,
+} from '../data/missions';
 import { distanceBetweenMeters } from '../game/discovery';
 import { getRecommendedMission } from '../game/missionRecommendations';
 import { locationById } from '../data/locations';
@@ -52,15 +57,38 @@ const emptyTargets: FeatureCollection<Point> = {
   features: [],
 };
 
-function currentMissionTarget() {
+interface RouteTarget {
+  state: ReturnType<typeof useGameStore.getState>;
+  mission: Mission | null;
+  objective: MissionObjective | null;
+  coordinates: RoadCoordinates;
+  targetId: string;
+  kind: 'mission-objective' | 'mission-start' | 'fuel-station' | 'location';
+  key: string;
+  playerCoordinates: RoadCoordinates;
+}
+
+function currentMissionTarget(): RouteTarget | null {
   const state = useGameStore.getState();
-  const mission = state.activeMissionId
-    ? missionById.get(state.activeMissionId)
-    : null;
   const playerCoordinates: RoadCoordinates = [
     state.telemetry.longitude,
     state.telemetry.latitude,
   ];
+  if (state.navigationTarget) {
+    return {
+      state,
+      mission: null,
+      objective: null,
+      coordinates: state.navigationTarget.coordinates,
+      targetId: state.navigationTarget.id,
+      kind: state.navigationTarget.kind,
+      key: `temporary:${state.navigationTarget.kind}:${state.navigationTarget.id}`,
+      playerCoordinates,
+    };
+  }
+  const mission = state.activeMissionId
+    ? missionById.get(state.activeMissionId)
+    : null;
   if (mission) {
     const next = nearestPendingObjective(
       mission,
@@ -74,7 +102,8 @@ function currentMissionTarget() {
           objective: next.objective,
           coordinates: next.coordinates,
           targetId: next.objective.id,
-          isMissionStart: false,
+          kind: 'mission-objective',
+          key: `${mission.id}:${next.objective.id}`,
           playerCoordinates,
         }
       : null;
@@ -97,7 +126,8 @@ function currentMissionTarget() {
         objective: null,
         coordinates: start.coordinates,
         targetId: `start:${start.id}`,
-        isMissionStart: true,
+        kind: 'mission-start',
+        key: `${recommendedMission.id}:start:${start.id}`,
         playerCoordinates,
       }
     : null;
@@ -108,20 +138,51 @@ function updateTargets(map: MapLibreMap): void {
   if (!source) return;
   const target = currentMissionTarget();
   if (!target) {
+    const container = map.getContainer();
+    container.dataset.navigationTargetKind = '';
+    container.dataset.navigationTargetId = '';
     source.setData(emptyTargets);
     return;
   }
-  if (target.isMissionStart) {
+  const container = map.getContainer();
+  container.dataset.navigationTargetKind = target.kind;
+  container.dataset.navigationTargetId = target.targetId;
+  if (target.kind === 'fuel-station' || target.kind === 'location') {
     source.setData({
       type: 'FeatureCollection',
       features: [
         {
           type: 'Feature',
-          properties: { objectiveId: target.targetId, isNext: true },
+          properties: {
+            objectiveId: target.targetId,
+            isNext: true,
+            isFuelStation: target.kind === 'fuel-station',
+          },
           geometry: { type: 'Point', coordinates: target.coordinates },
         },
       ],
     });
+    return;
+  }
+  if (target.kind === 'mission-start') {
+    source.setData({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {
+            objectiveId: target.targetId,
+            isNext: true,
+            isFuelStation: false,
+          },
+          geometry: { type: 'Point', coordinates: target.coordinates },
+        },
+      ],
+    });
+    return;
+  }
+  if (!target.mission) {
+    source.setData(emptyTargets);
     return;
   }
   const completed = new Set(target.state.activeMissionCompletedObjectiveIds);
@@ -142,6 +203,7 @@ function updateTargets(map: MapLibreMap): void {
               properties: {
                 objectiveId: objective.id,
                 isNext: objective.id === target.targetId,
+                isFuelStation: false,
               },
               geometry: { type: 'Point' as const, coordinates },
             },
@@ -153,7 +215,7 @@ function updateTargets(map: MapLibreMap): void {
 
 function targetKey(): string | null {
   const target = currentMissionTarget();
-  return target ? `${target.mission.id}:${target.targetId}` : null;
+  return target?.key ?? null;
 }
 
 export function distanceToRouteMeters(
@@ -186,6 +248,7 @@ export function addMissionRoute(
     missionRouteColors.immediate;
   mapContainer.dataset.missionRouteFallbackColor = missionRouteColors.fallback;
   mapContainer.dataset.missionRouteTargetColor = missionRouteColors.target;
+  mapContainer.dataset.missionRouteFuelColor = fuelStationConfig.markerColor;
   map.addSource(ROUTE_SOURCE_ID, { type: 'geojson', data: emptyRoute });
   map.addLayer({
     id: ROAD_CASING_LAYER_ID,
@@ -278,7 +341,12 @@ export function addMissionRoute(
     source: TARGETS_SOURCE_ID,
     paint: {
       'circle-radius': ['case', ['get', 'isNext'], 10, 7],
-      'circle-color': missionRouteColors.target,
+      'circle-color': [
+        'case',
+        ['get', 'isFuelStation'],
+        fuelStationConfig.markerColor,
+        missionRouteColors.target,
+      ],
       'circle-opacity': 0.92,
       'circle-stroke-width': 3,
       'circle-stroke-color': missionRouteColors.immediate,
@@ -498,7 +566,7 @@ export function addMissionRoute(
       );
     }
     if (disposed || token !== calculationToken) return;
-    if (targetKey() !== `${target.mission.id}:${target.targetId}`) {
+    if (targetKey() !== target.key) {
       void calculateRoute();
       return;
     }
@@ -514,7 +582,8 @@ export function addMissionRoute(
           {
             type: 'Feature',
             properties: {
-              missionId: target.mission.id,
+              missionId: target.mission?.id ?? null,
+              navigationTargetKind: target.kind,
               objectiveId: target.targetId,
               mode: 'road',
             },
@@ -561,7 +630,8 @@ export function addMissionRoute(
         {
           type: 'Feature',
           properties: {
-            missionId: target.mission.id,
+            missionId: target.mission?.id ?? null,
+            navigationTargetKind: target.kind,
             objectiveId: target.targetId,
             mode: 'fallback',
           },
@@ -669,5 +739,8 @@ export function addMissionRoute(
     delete mapContainer.dataset.missionRouteImmediateColor;
     delete mapContainer.dataset.missionRouteFallbackColor;
     delete mapContainer.dataset.missionRouteTargetColor;
+    delete mapContainer.dataset.missionRouteFuelColor;
+    delete mapContainer.dataset.navigationTargetKind;
+    delete mapContainer.dataset.navigationTargetId;
   };
 }

@@ -43,3 +43,10 @@ export interface ActiveNavigationState {
   distanceToRouteMeters: number;
   requiresRejoin: boolean;
 }
+
+export interface NavigationTarget {
+  kind: 'fuel-station' | 'location';
+  id: string;
+  label: string;
+  coordinates: RoadCoordinates;
+}

@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { fuelStationConfig } from '../config/fuelStations.config';
+import { fuelStationById } from '../data/fuelStations';
 import { initiallyUnlockedLocationIds, locationById } from '../data/locations';
 import { missionById } from '../data/missions';
 import {
@@ -34,6 +36,7 @@ import {
   selectedMissionChoiceOption,
 } from '../game/missionChoices';
 import { distanceBetweenMeters } from '../game/discovery';
+import { isFuelStationAvailable } from '../game/fuelStations';
 import {
   addInventoryItem as addItemToInventory,
   consumeInventoryItem as consumeItemFromInventory,
@@ -47,6 +50,7 @@ import type { PlayerStepEnvironment } from '../game/movement';
 import type { PlayerRuntime, PlayerTelemetry } from '../types/game';
 import type {
   ActiveNavigationState,
+  NavigationTarget,
   RouteNavigationInstruction,
   VehicleOrientation,
 } from '../types/navigation';
@@ -156,6 +160,7 @@ interface GameData {
 interface GameStore extends GameData {
   driving: DrivingRuntimeState;
   missionRoute: MissionRouteRuntimeState;
+  navigationTarget: NavigationTarget | null;
   temporarilyClosedRoadEdgeIds: number[];
   recoveryReason: RecoveryReason | null;
   conditionWarning: ConditionWarningLevel | null;
@@ -221,6 +226,11 @@ interface GameStore extends GameData {
   addExperience: (amount: number) => void;
   consumeEnergy: (amount: number) => void;
   restoreFuel: (amount: number) => void;
+  markFuelStationRoute: (stationId: string) => boolean;
+  markLocationRoute: (locationId: string) => boolean;
+  clearNavigationTarget: () => void;
+  refuelAtStation: (stationId: string) => boolean;
+  useFuelCanister: () => boolean;
   startMission: (missionId: string) => boolean;
   abandonMission: () => void;
   advanceActiveMission: (
@@ -545,6 +555,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   isPaused: initialRecoveryReason ? true : initialGameData.isPaused,
   driving: defaultDrivingState,
   missionRoute: defaultMissionRouteState,
+  navigationTarget: null,
   temporarilyClosedRoadEdgeIds: initialClosedRoadEdgeIds,
   recoveryReason: initialRecoveryReason,
   conditionWarning: null,
@@ -710,6 +721,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       isPaused: false,
       playerRuntimeRevision: state.playerRuntimeRevision + 1,
       missionRoute: defaultMissionRouteState,
+      navigationTarget: null,
       temporarilyClosedRoadEdgeIds: chapterRoadClosureEdgeIds(
         checkpoint.activeMissionId,
         checkpoint.activeMissionCompletedObjectiveIds,
@@ -763,6 +775,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         isPaused: false,
         playerRuntimeRevision: state.playerRuntimeRevision + 1,
         missionRoute: defaultMissionRouteState,
+        navigationTarget: null,
         temporarilyClosedRoadEdgeIds: chapterRoadClosureEdgeIds(
           abandonMission ? null : checkpoint.activeMissionId,
           abandonMission ? [] : checkpoint.activeMissionCompletedObjectiveIds,
@@ -956,6 +969,220 @@ export const useGameStore = create<GameStore>((set, get) => ({
         playerRuntimeRevision: state.playerRuntimeRevision + 1,
       };
     }),
+  markFuelStationRoute: (stationId) => {
+    let marked = false;
+    set((state) => {
+      const station = fuelStationById.get(stationId);
+      if (
+        !station ||
+        !isFuelStationAvailable(station, state.currentChapterId)
+      ) {
+        return {
+          gameplayFeedback: feedback(
+            state,
+            'Este punto de combustible no está disponible',
+            'warning',
+          ),
+        };
+      }
+      marked = true;
+      return {
+        navigationTarget: {
+          kind: 'fuel-station',
+          id: station.id,
+          label: station.name,
+          coordinates: station.coordinates,
+        },
+        missionRoute: {
+          ...state.missionRoute,
+          recalculationRevision: state.missionRoute.recalculationRevision + 1,
+        },
+        gameplayFeedback: feedback(
+          state,
+          `Ruta marcada: ${station.name}`,
+          'success',
+        ),
+      };
+    });
+    return marked;
+  },
+  markLocationRoute: (locationId) => {
+    let marked = false;
+    set((state) => {
+      const location = locationById.get(locationId);
+      if (!location || !state.unlockedLocationIds.includes(location.id)) {
+        return {
+          gameplayFeedback: feedback(
+            state,
+            'Esta ubicación todavía está bloqueada',
+            'warning',
+          ),
+        };
+      }
+      marked = true;
+      return {
+        navigationTarget: {
+          kind: 'location',
+          id: location.id,
+          label: location.name,
+          coordinates: location.coordinates,
+        },
+        missionRoute: {
+          ...state.missionRoute,
+          recalculationRevision: state.missionRoute.recalculationRevision + 1,
+        },
+        gameplayFeedback: feedback(
+          state,
+          `Ruta marcada: ${location.name}`,
+          'success',
+        ),
+      };
+    });
+    return marked;
+  },
+  clearNavigationTarget: () =>
+    set((state) => {
+      if (!state.navigationTarget) return state;
+      return {
+        navigationTarget: null,
+        missionRoute: {
+          ...state.missionRoute,
+          recalculationRevision: state.missionRoute.recalculationRevision + 1,
+        },
+        gameplayFeedback: feedback(
+          state,
+          state.activeMissionId
+            ? 'Ruta de misión restaurada'
+            : 'Destino temporal cancelado',
+        ),
+      };
+    }),
+  refuelAtStation: (stationId) => {
+    let refueled = false;
+    set((state) => {
+      const station = fuelStationById.get(stationId);
+      if (
+        !station ||
+        !isFuelStationAvailable(station, state.currentChapterId)
+      ) {
+        return {
+          gameplayFeedback: feedback(
+            state,
+            'Este punto de combustible no está disponible',
+            'warning',
+          ),
+        };
+      }
+      const distanceMeters = distanceBetweenMeters(
+        [state.telemetry.longitude, state.telemetry.latitude],
+        station.coordinates,
+      );
+      if (distanceMeters > fuelStationConfig.interactionRadiusMeters) {
+        return {
+          gameplayFeedback: feedback(
+            state,
+            'Acércate al punto de combustible para recargar',
+            'warning',
+          ),
+        };
+      }
+      if (
+        state.telemetry.speedKilometersPerHour >
+        fuelStationConfig.maximumRefuelSpeedKilometersPerHour
+      ) {
+        return {
+          gameplayFeedback: feedback(
+            state,
+            'Detén el vehículo para recargar',
+            'warning',
+          ),
+        };
+      }
+      const fuel = Math.min(
+        state.vehicle.maximumFuel,
+        state.telemetry.fuel + station.refuelAmount,
+      );
+      const restored = fuel - state.telemetry.fuel;
+      if (restored <= 0) {
+        return {
+          gameplayFeedback: feedback(state, 'El tanque ya está lleno'),
+        };
+      }
+      const telemetry = { ...state.telemetry, fuel };
+      const vehicle = { ...state.vehicle, fuel };
+      const checkpoint = checkpointFromState(
+        { ...state, telemetry, vehicle },
+        'fuel-station',
+      );
+      refueled = true;
+      return {
+        telemetry,
+        vehicle,
+        navigationTarget: null,
+        recoveryReason:
+          state.recoveryReason === 'fuel' ? null : state.recoveryReason,
+        isPaused: state.recoveryReason === 'fuel' ? false : state.isPaused,
+        lastCheckpoint: checkpoint,
+        lastSafeCheckpoint: checkpoint,
+        playerRuntimeRevision: state.playerRuntimeRevision + 1,
+        missionRoute: {
+          ...state.missionRoute,
+          recalculationRevision: state.missionRoute.recalculationRevision + 1,
+        },
+        gameplayFeedback: feedback(
+          state,
+          `Combustible +${restored.toFixed(0)}%`,
+          'success',
+        ),
+      };
+    });
+    return refueled;
+  },
+  useFuelCanister: () => {
+    let used = false;
+    set((state) => {
+      if (state.telemetry.fuel >= state.vehicle.maximumFuel) {
+        return {
+          gameplayFeedback: feedback(state, 'El tanque ya está lleno'),
+        };
+      }
+      const inventory = consumeItemFromInventory(
+        state.inventory,
+        'bidon-combustible',
+        1,
+      );
+      if (!inventory) {
+        return {
+          gameplayFeedback: feedback(
+            state,
+            'No tienes un bidón de combustible',
+            'warning',
+          ),
+        };
+      }
+      const fuel = Math.min(
+        state.vehicle.maximumFuel,
+        state.telemetry.fuel + fuelStationConfig.canisterRefuelAmount,
+      );
+      const restored = fuel - state.telemetry.fuel;
+      used = true;
+      return {
+        telemetry: { ...state.telemetry, fuel },
+        vehicle: { ...state.vehicle, fuel },
+        inventory,
+        recoveryReason:
+          state.recoveryReason === 'fuel' ? null : state.recoveryReason,
+        isPaused: state.recoveryReason === 'fuel' ? false : state.isPaused,
+        playerRuntimeRevision: state.playerRuntimeRevision + 1,
+        gameplayFeedback: feedback(
+          state,
+          `Bidón usado · Combustible +${restored.toFixed(0)}%`,
+          'success',
+        ),
+      };
+    });
+    return used;
+  },
   startMission: (missionId) => {
     let started = false;
     set((state) => {
@@ -1001,6 +1228,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeMissionId: mission.id,
         activeMissionCompletedObjectiveIds: [],
         activeMissionObjectiveProgress,
+        navigationTarget: null,
         vehicle,
         lastCompletedMissionId: null,
         lastDiscoveredLocationId: null,
@@ -1496,6 +1724,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           loaded.save.game.missionChoiceSelections,
         ),
         missionRoute: defaultMissionRouteState,
+        navigationTarget: null,
       };
     });
     if (loaded.migrated) writeGameSave(loaded.save.game);
@@ -1507,6 +1736,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ...defaultGameData(),
       driving: defaultDrivingState,
       missionRoute: defaultMissionRouteState,
+      navigationTarget: null,
       temporarilyClosedRoadEdgeIds: [],
       recoveryReason: null,
       conditionWarning: null,

@@ -2082,6 +2082,88 @@ html[data-tutorial-target='target'] .map-canvas {
   animation: fuel-critical-pulse 900ms ease-in-out infinite alternate;
 }
 
+.fuel-assist {
+  position: absolute;
+  z-index: 17;
+  bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px));
+  left: 50%;
+  display: grid;
+  gap: 6px;
+  width: min(340px, calc(100% - 36px));
+  padding: 12px 14px;
+  border: 1px solid rgb(78 191 139 / 45%);
+  border-radius: 8px;
+  color: #edf6ee;
+  background: rgb(12 31 27 / 94%);
+  box-shadow: 0 16px 38px rgb(0 0 0 / 38%);
+  backdrop-filter: blur(14px);
+  transform: translateX(-50%);
+}
+
+.fuel-assist--critical {
+  border-color: rgb(231 126 84 / 70%);
+}
+
+.fuel-assist__eyebrow {
+  color: #67d39d;
+  font-size: 0.56rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.fuel-assist--critical .fuel-assist__eyebrow {
+  color: #f1a078;
+}
+
+.fuel-assist > strong {
+  overflow: hidden;
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fuel-assist > small,
+.fuel-assist__stats {
+  color: #b9cbc0;
+  font-size: 0.65rem;
+}
+
+.fuel-assist__stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fuel-assist__actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.fuel-assist button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgb(238 244 230 / 18%);
+  border-radius: 6px;
+  color: #d9e4db;
+  background: rgb(255 255 255 / 7%);
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.fuel-assist button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.fuel-assist .fuel-assist__primary {
+  border-color: rgb(78 191 139 / 55%);
+  color: #09261c;
+  background: #6bd2a0;
+}
+
 .telemetry-grid {
   display: grid;
   gap: 8px;
@@ -2367,6 +2449,135 @@ html[data-tutorial-target='target'] .map-canvas {
   color: #d9c89c;
   font-size: 0.64rem;
   font-weight: 650;
+}
+
+.fuel-station-marker {
+  position: relative;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 2px solid #eaf8eb;
+  border-radius: 50%;
+  color: #09271d;
+  background: var(--fuel-station-color, #4ebf8b);
+  box-shadow:
+    0 0 0 4px rgb(78 191 139 / 16%),
+    0 6px 15px rgb(0 0 0 / 42%);
+  cursor: pointer;
+  transition:
+    filter 150ms ease,
+    transform 150ms ease;
+}
+
+.fuel-station-marker span {
+  font-size: 0.83rem;
+  line-height: 1;
+}
+
+.fuel-station-marker:hover,
+.fuel-station-marker:focus-visible {
+  outline: none;
+  filter: brightness(1.13);
+  transform: scale(1.12);
+}
+
+.fuel-station-marker--target {
+  box-shadow:
+    0 0 0 7px rgb(78 191 139 / 26%),
+    0 0 22px rgb(78 191 139 / 68%),
+    0 6px 15px rgb(0 0 0 / 42%);
+  animation: mission-marker-pulse 1.7s ease-in-out infinite;
+}
+
+.fuel-station-marker--unavailable {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.fuel-station-popup {
+  padding: 17px 18px 16px;
+}
+
+.fuel-station-popup__eyebrow {
+  color: #67d39d;
+  font-size: 0.56rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.fuel-station-popup h3 {
+  margin: 5px 24px 7px 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.fuel-station-popup p {
+  margin: 0;
+  color: #b8c7bd;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.fuel-station-popup__state {
+  display: block;
+  margin-top: 10px;
+  color: #9ed9b9;
+  font-size: 0.63rem;
+  font-weight: 700;
+}
+
+.map-route-button {
+  width: 100%;
+  min-height: 36px;
+  margin-top: 11px;
+  border: 1px solid rgb(78 191 139 / 55%);
+  border-radius: 6px;
+  color: #09261c;
+  background: #6bd2a0;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.map-route-button:disabled {
+  cursor: default;
+  filter: grayscale(0.8);
+  opacity: 0.55;
+}
+
+.map-fuel-legend {
+  position: absolute;
+  z-index: 10;
+  top: 104px;
+  left: 50%;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid rgb(78 191 139 / 32%);
+  border-radius: 6px;
+  color: #dce9df;
+  background: rgb(9 27 23 / 82%);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 24%);
+  font-size: 0.58rem;
+  font-weight: 750;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.map-fuel-legend span {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border-radius: 50%;
+  color: #09271d;
+  background: #4ebf8b;
+  font-size: 0.66rem;
 }
 
 .discovery-toast {
@@ -4993,6 +5204,16 @@ html[data-graphics-quality='low'] .map-atmosphere {
     bottom: max(180px, calc(env(safe-area-inset-bottom) + 170px));
   }
 
+  .fuel-assist {
+    bottom: max(174px, calc(env(safe-area-inset-bottom) + 164px));
+    width: min(340px, calc(100% - 24px));
+    padding: 10px 12px;
+  }
+
+  .map-fuel-legend {
+    top: max(216px, calc(env(safe-area-inset-top) + 206px));
+  }
+
   .level-toast {
     top: auto;
     bottom: max(180px, calc(env(safe-area-inset-bottom) + 170px));
@@ -5431,6 +5652,16 @@ html[data-graphics-quality='low'] .map-atmosphere {
   .mission-toast {
     bottom: 112px;
     width: min(420px, calc(100% - 24px));
+  }
+
+  .fuel-assist {
+    bottom: max(10px, calc(env(safe-area-inset-bottom) + 6px));
+    width: min(300px, 38vw);
+    padding: 9px 11px;
+  }
+
+  .map-fuel-legend {
+    top: max(54px, calc(env(safe-area-inset-top) + 48px));
   }
 
   .level-toast {
