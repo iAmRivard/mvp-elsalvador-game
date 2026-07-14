@@ -26,6 +26,12 @@ import { triggerHaptic } from '../../game/haptics';
 import { normalizeHeading } from '../../game/movement';
 import { addLocationMarkers } from '../../map/locationMarkers';
 import { addMissionRoute } from '../../map/missionRoute';
+import {
+  isFatalMapError,
+  mapErrorDetails,
+  mapLoadingLabels,
+  type MapLoadingStage,
+} from '../../map/mapStartup';
 import { createPlayerMarkerElement } from '../../map/playerMarker';
 import { registerPmtilesProtocol } from '../../map/pmtilesProtocol';
 import { addRoadDebugLayer } from '../../map/roadDebugLayer';
@@ -96,9 +102,10 @@ function syncInteractiveSignal(layer: ThreeGameLayerController): void {
 
 interface GameMapProps {
   inputController: InputController;
+  onExitToTitle: () => void;
 }
 
-export function GameMap({ inputController }: GameMapProps) {
+export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [webglSupported] = useState(supportsWebGl);
   const graphicsQuality = useSettingsStore((state) => state.graphicsQuality);
@@ -119,6 +126,8 @@ export function GameMap({ inputController }: GameMapProps) {
     'loading' | 'ready' | 'error' | 'unsupported'
   >(() => (webglSupported ? 'loading' : 'unsupported'));
   const [errorMessage, setErrorMessage] = useState('');
+  const [loadingStage, setLoadingStage] = useState<MapLoadingStage>('map');
+  const [retryRevision, setRetryRevision] = useState(0);
   const [threeResult, setThreeResult] = useState<{
     profileKey: string;
     status: 'ready' | 'fallback';
@@ -139,20 +148,36 @@ export function GameMap({ inputController }: GameMapProps) {
       deviceProfile.reducedMotion,
     );
     const unregisterProtocol = registerPmtilesProtocol();
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      center: mapViewConfig.center,
-      zoom: mapViewConfig.zoom,
-      minZoom: mapSourceConfig.minZoom,
-      maxZoom: mapSourceConfig.maxZoom,
-      pitch: Math.min(mapViewConfig.pitch, deviceProfile.maximumInitialPitch),
-      bearing: mapViewConfig.bearing,
-      maxBounds: mapViewConfig.bounds,
-      attributionControl: false,
-      canvasContextAttributes: { antialias: deviceProfile.antialias },
-      cooperativeGestures: !deviceProfile.isTouch,
-      pixelRatio: deviceProfile.pixelRatio,
-      fadeDuration: deviceProfile.fadeDurationMilliseconds,
+    let map: maplibregl.Map;
+    try {
+      map = new maplibregl.Map({
+        container: containerRef.current,
+        center: mapViewConfig.center,
+        zoom: mapViewConfig.zoom,
+        minZoom: mapSourceConfig.minZoom,
+        maxZoom: mapSourceConfig.maxZoom,
+        pitch: Math.min(mapViewConfig.pitch, deviceProfile.maximumInitialPitch),
+        bearing: mapViewConfig.bearing,
+        maxBounds: mapViewConfig.bounds,
+        attributionControl: false,
+        canvasContextAttributes: { antialias: deviceProfile.antialias },
+        cooperativeGestures: !deviceProfile.isTouch,
+        pixelRatio: deviceProfile.pixelRatio,
+        fadeDuration: deviceProfile.fadeDurationMilliseconds,
+      });
+    } catch (error) {
+      unregisterProtocol();
+      const details = mapErrorDetails(error);
+      const failureFrame = window.requestAnimationFrame(() => {
+        setErrorMessage(details);
+        setStatus('error');
+      });
+      return () => window.cancelAnimationFrame(failureFrame);
+    }
+    const loadingFrame = window.requestAnimationFrame(() => {
+      setStatus('loading');
+      setLoadingStage('map');
+      setErrorMessage('');
     });
 
     if (!deviceProfile.isCompact) {
@@ -208,6 +233,18 @@ export function GameMap({ inputController }: GameMapProps) {
     let visualFrameCount = 0;
     let lastFrameSampleTimestamp = performance.now();
     let previousHapticSurface = useGameStore.getState().driving.surface;
+    let startupReady = false;
+
+    const finishStartup = () => {
+      if (!effectActive) return;
+      setLoadingStage('routes');
+      window.requestAnimationFrame(() => {
+        if (!effectActive) return;
+        startupReady = true;
+        setLoadingStage('ready');
+        setStatus('ready');
+      });
+    };
 
     const roadContextFor = (player: PlayerRuntime) => ({
       heading: normalizeHeading(
@@ -260,6 +297,7 @@ export function GameMap({ inputController }: GameMapProps) {
     });
 
     const handleLoad = () => {
+      setLoadingStage('roads');
       const initialPlayer = runtimeFromTelemetry(
         useGameStore.getState().telemetry,
       );
@@ -299,6 +337,7 @@ export function GameMap({ inputController }: GameMapProps) {
               1024
             ).toFixed(1);
           }
+          finishStartup();
         })
         .catch(() => {
           if (!effectActive) return;
@@ -307,6 +346,7 @@ export function GameMap({ inputController }: GameMapProps) {
           if (containerRef.current) {
             containerRef.current.dataset.roadNetworkStatus = 'unavailable';
           }
+          finishStartup();
         });
       playerMarker = new maplibregl.Marker({
         element: createPlayerMarkerElement(),
@@ -387,7 +427,7 @@ export function GameMap({ inputController }: GameMapProps) {
       gameLoop = startPlayerGameLoop({
         initialPlayer,
         input: inputController,
-        isPaused: () => useGameStore.getState().isPaused,
+        isPaused: () => !startupReady || useGameStore.getState().isPaused,
         getMovementOptions: () => ({
           steeringSensitivity: useSettingsStore.getState().steeringSensitivity,
           roadAssistMode: useSettingsStore.getState().roadAssistMode,
@@ -676,8 +716,6 @@ export function GameMap({ inputController }: GameMapProps) {
         wasFollowing = state.isFollowingPlayer;
         recenterUntil = 0;
       });
-
-      setStatus('ready');
     };
     const handleManualCameraStart = (event: { originalEvent?: Event }) => {
       if (event.originalEvent) {
@@ -692,9 +730,10 @@ export function GameMap({ inputController }: GameMapProps) {
       exposeCameraTarget(camera);
     };
     const handleError = (event: ErrorEvent) => {
-      const message =
-        event.error?.message ?? 'No fue posible cargar un recurso del mapa.';
-      setErrorMessage(message);
+      if (!isFatalMapError(event.error)) return;
+      startupReady = false;
+      inputController.clearAllInput();
+      setErrorMessage(mapErrorDetails(event.error));
       setStatus('error');
     };
 
@@ -711,6 +750,7 @@ export function GameMap({ inputController }: GameMapProps) {
 
     return () => {
       effectActive = false;
+      window.cancelAnimationFrame(loadingFrame);
       map.off('load', handleLoad);
       map.off('dragstart', handleManualCameraStart);
       map.off('zoomstart', handleManualCameraStart);
@@ -743,7 +783,16 @@ export function GameMap({ inputController }: GameMapProps) {
     threeEnabled,
     threeProfileKey,
     webglSupported,
+    retryRevision,
   ]);
+
+  const retryMap = () => {
+    inputController.clearAllInput();
+    setStatus('loading');
+    setLoadingStage('map');
+    setErrorMessage('');
+    setRetryRevision((revision) => revision + 1);
+  };
 
   return (
     <div
@@ -759,7 +808,7 @@ export function GameMap({ inputController }: GameMapProps) {
       {status === 'loading' && (
         <div className="map-message" role="status">
           <span className="map-message__spinner" aria-hidden="true" />
-          Desplegando cartografía local…
+          {mapLoadingLabels[loadingStage]}
         </div>
       )}
 
@@ -784,13 +833,29 @@ export function GameMap({ inputController }: GameMapProps) {
           <strong>
             {status === 'unsupported'
               ? 'WebGL no está disponible'
-              : 'El mapa no pudo iniciar'}
+              : 'No pudimos cargar el mapa'}
           </strong>
-          <span>
+          <p>
             {status === 'unsupported'
               ? 'Activa la aceleración gráfica o utiliza un navegador compatible.'
-              : errorMessage}
-          </span>
+              : 'Vuelve a intentarlo. Tu progreso no se perdió.'}
+          </p>
+          {status === 'error' && (
+            <details className="map-message__details">
+              <summary>Ver detalles técnicos</summary>
+              <code>{errorMessage}</code>
+            </details>
+          )}
+          <div className="map-message__actions">
+            {status === 'error' && (
+              <button type="button" onClick={retryMap}>
+                Reintentar
+              </button>
+            )}
+            <button type="button" onClick={onExitToTitle}>
+              Volver al inicio
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -89,7 +89,14 @@ export function App() {
             </div>
           }
         >
-          <GameMap inputController={inputController} />
+          <GameMap
+            inputController={inputController}
+            onExitToTitle={() => {
+              inputController.clearAllInput();
+              setPaused(true);
+              setSessionStarted(false);
+            }}
+          />
         </Suspense>
 
         <PlayerHud />

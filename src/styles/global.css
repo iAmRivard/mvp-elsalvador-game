@@ -3176,9 +3176,53 @@ html[data-graphics-quality='low'] .map-atmosphere {
   text-align: center;
 }
 
-.map-message--error span {
+.map-message--error p {
+  margin: 0;
   color: #c6c9c0;
   line-height: 1.5;
+}
+
+.map-message__details {
+  width: 100%;
+  color: #aeb5ad;
+  font-size: 0.68rem;
+  text-align: left;
+}
+
+.map-message__details summary {
+  cursor: pointer;
+  text-align: center;
+}
+
+.map-message__details code {
+  display: block;
+  max-height: 90px;
+  margin-top: 8px;
+  padding: 8px;
+  overflow: auto;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 22%);
+  overflow-wrap: anywhere;
+}
+
+.map-message__actions {
+  display: flex;
+  gap: 9px;
+  justify-content: center;
+}
+
+.map-message__actions button {
+  padding: 9px 12px;
+  border: 1px solid rgb(242 231 194 / 22%);
+  border-radius: 7px;
+  color: #f0ede0;
+  background: rgb(255 255 255 / 7%);
+  cursor: pointer;
+}
+
+.map-message__actions button:first-child {
+  border-color: rgb(217 170 86 / 54%);
+  color: #ffe0a2;
 }
 
 .map-message__spinner {
