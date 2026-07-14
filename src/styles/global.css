@@ -2089,17 +2089,17 @@ html[data-tutorial-target='recalculate'] .mission-route-summary__header button {
 .location-marker {
   position: relative;
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   place-items: center;
   border: 2px solid rgb(241 231 201 / 82%);
-  border-radius: 50% 50% 50% 10px;
+  border-radius: 50%;
   color: #f5edda;
   background: #83643c;
   box-shadow: 0 5px 13px rgb(0 0 0 / 48%);
   cursor: pointer;
-  transform: rotate(-45deg);
+  transform: none;
   transition:
     filter 160ms ease,
     opacity 160ms ease,
@@ -2110,35 +2110,57 @@ html[data-tutorial-target='recalculate'] .mission-route-summary__header button {
 .location-marker:focus-visible {
   z-index: 3;
   outline: none;
-  transform: rotate(-45deg) scale(1.14);
+  transform: scale(1.12);
 }
 
 .location-marker__symbol {
   font-size: 0.72rem;
   font-weight: 800;
-  transform: rotate(45deg);
 }
 
 .location-marker__label {
+  --location-label-x: 20px;
+  --location-label-y: 20px;
+
   position: absolute;
-  top: 34px;
-  left: 16px;
-  max-width: 150px;
-  padding: 4px 7px;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: max-content;
+  max-width: 184px;
+  padding: 5px 8px;
   overflow: hidden;
-  border: 1px solid rgb(242 231 194 / 12%);
-  border-radius: 7px;
+  border: 1px solid rgb(242 231 194 / 16%);
+  border-radius: 6px;
   color: #e9e7da;
-  background: rgb(12 25 23 / 82%);
+  background: rgb(12 25 23 / 91%);
   box-shadow: 0 7px 16px rgb(0 0 0 / 24%);
-  transform: rotate(45deg) translateX(-8px);
-  transform-origin: left top;
+  transform: translate(var(--location-label-x), var(--location-label-y));
   font-size: 0.61rem;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
   backdrop-filter: blur(8px);
+}
+
+.location-marker__label[hidden] {
+  display: none;
+}
+
+.location-marker__label-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.location-marker__label-detail {
+  margin-top: 1px;
+  overflow: hidden;
+  color: #aebbb1;
+  font-size: 0.51rem;
+  font-weight: 550;
+  text-overflow: ellipsis;
 }
 
 .location-marker--city {
@@ -4508,10 +4530,6 @@ html[data-graphics-quality='low'] .map-atmosphere {
     bottom: max(8px, calc(env(safe-area-inset-bottom) + 4px));
     margin: 0;
     transform: translateX(50%);
-  }
-
-  .location-marker__label {
-    display: none;
   }
 }
 
