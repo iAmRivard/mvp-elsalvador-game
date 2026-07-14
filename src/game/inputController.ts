@@ -67,7 +67,7 @@ export class InputController {
     targetThrottle: 0.72,
   };
   private autoThrottleScale = 1;
-  private activePointerCount = 0;
+  private readonly activePointerIds = new Set<number>();
 
   bindKeyboard(
     target: Window,
@@ -209,12 +209,13 @@ export class InputController {
     this.notify();
   }
 
-  setPointerActive(active: boolean): void {
-    this.activePointerCount = Math.max(
-      0,
-      this.activePointerCount + (active ? 1 : -1),
-    );
-    this.notify();
+  setPointerActive(pointerId: number, active: boolean): void {
+    const changed = active
+      ? !this.activePointerIds.has(pointerId)
+      : this.activePointerIds.has(pointerId);
+    if (active) this.activePointerIds.add(pointerId);
+    else this.activePointerIds.delete(pointerId);
+    if (changed) this.notify();
   }
 
   clearPointerActions(): void {
@@ -222,13 +223,13 @@ export class InputController {
       this.pointerActions.size > 0 ||
       this.touchThrottle !== 0 ||
       this.joystickTurn !== 0 ||
-      this.activePointerCount !== 0;
+      this.activePointerIds.size > 0;
     for (const timer of this.pointerReleaseTimers.values()) clearTimeout(timer);
     this.pointerReleaseTimers.clear();
     this.pointerActions.clear();
     this.touchThrottle = 0;
     this.joystickTurn = 0;
-    this.activePointerCount = 0;
+    this.activePointerIds.clear();
     if (changed) this.notify();
   }
 
@@ -240,7 +241,7 @@ export class InputController {
       this.touchThrottle !== 0 ||
       this.joystickTurn !== 0 ||
       this.autoThrottle.enabled ||
-      this.activePointerCount !== 0;
+      this.activePointerIds.size > 0;
     for (const timer of this.pointerReleaseTimers.values()) clearTimeout(timer);
     this.pointerReleaseTimers.clear();
     this.keyboardActions.clear();
@@ -249,7 +250,7 @@ export class InputController {
     this.joystickTurn = 0;
     this.autoThrottle = { ...this.autoThrottle, enabled: false };
     this.autoThrottleScale = 1;
-    this.activePointerCount = 0;
+    this.activePointerIds.clear();
     if (changed) this.notify();
   }
 
@@ -287,7 +288,7 @@ export class InputController {
       ...this.getInputSources(),
       ...this.snapshot(),
       autoThrottleStatus: this.getAutoThrottleStatus(),
-      pointerActive: this.activePointerCount > 0,
+      pointerActive: this.activePointerIds.size > 0,
     };
   }
 

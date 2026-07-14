@@ -73,7 +73,7 @@ describe('keyboard route controls', () => {
     input.setTouchThrottle(1);
     input.setJoystickTurn(-0.4);
     input.setAutoThrottle(true);
-    input.setPointerActive(true);
+    input.setPointerActive(4, true);
 
     input.clearAllInput();
     expect(input.snapshot()).toEqual({

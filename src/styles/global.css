@@ -2411,6 +2411,112 @@ input {
   pointer-events: auto;
 }
 
+.virtual-joystick {
+  position: absolute;
+  bottom: max(18px, calc(env(safe-area-inset-bottom) + 10px));
+  left: max(18px, calc(env(safe-area-inset-left) + 8px));
+  width: calc(var(--joystick-radius) * 2);
+  height: calc(var(--joystick-radius) * 2);
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.virtual-joystick--floating {
+  inset: 0 auto 0 0;
+  width: 55%;
+  height: 100%;
+}
+
+.virtual-joystick__base {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--joystick-radius) * 2);
+  height: calc(var(--joystick-radius) * 2);
+  border: 1px solid rgb(242 231 194 / 24%);
+  border-radius: 50%;
+  background: rgb(14 29 26 / 66%);
+  box-shadow:
+    inset 0 0 0 10px rgb(255 255 255 / 2%),
+    0 14px 32px rgb(0 0 0 / 28%);
+  backdrop-filter: blur(10px);
+  transform: translate(-50%, -50%);
+}
+
+.virtual-joystick__base > span {
+  position: absolute;
+  inset: 50% 14px auto;
+  height: 1px;
+  background: rgb(242 231 194 / 18%);
+}
+
+.virtual-joystick__knob {
+  position: absolute;
+  top: calc(50% - var(--joystick-knob-radius));
+  left: calc(50% - var(--joystick-knob-radius));
+  width: calc(var(--joystick-knob-radius) * 2);
+  height: calc(var(--joystick-knob-radius) * 2);
+  border: 2px solid rgb(255 222 151 / 65%);
+  border-radius: 50%;
+  background: rgb(73 91 72 / 94%);
+  box-shadow:
+    inset 0 4px 10px rgb(255 255 255 / 9%),
+    0 8px 20px rgb(0 0 0 / 35%);
+  transition: transform var(--joystick-return-ms) ease-out;
+  will-change: transform;
+}
+
+.touch-actions--analog {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.mobile-actions,
+.mobile-pedals {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  align-items: flex-end;
+}
+
+.mobile-actions .touch-primary-actions {
+  flex-direction: column;
+}
+
+.mobile-pedal {
+  border-radius: 50%;
+  font-weight: 750;
+}
+
+.mobile-pedal span {
+  font-size: 1.25rem;
+  line-height: 0.8;
+}
+
+.mobile-pedal small {
+  font-size: 0.53rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mobile-pedal--accelerator {
+  width: 88px;
+  height: 88px;
+  border-color: rgb(143 174 131 / 55%);
+  color: #d7ebc9;
+}
+
+.mobile-pedal--brake {
+  width: 74px;
+  height: 74px;
+  border-color: rgb(211 132 108 / 54%);
+  color: #f0c5b5;
+}
+
 .touch-dpad {
   left: max(18px, calc(env(safe-area-inset-left) + 8px));
   display: grid;
@@ -2534,6 +2640,7 @@ html[data-graphics-quality='low'] .region-pill,
 html[data-graphics-quality='low'] .icon-button,
 html[data-graphics-quality='low'] .save-menu,
 html[data-graphics-quality='low'] .touch-button,
+html[data-graphics-quality='low'] .virtual-joystick__base,
 html[data-graphics-quality='low'] .discovery-toast,
 html[data-graphics-quality='low'] .mission-toast {
   backdrop-filter: none;
@@ -3137,6 +3244,17 @@ html[data-graphics-quality='low'] .map-atmosphere {
     grid-template-rows: repeat(3, 48px);
   }
 
+  .virtual-joystick {
+    bottom: max(12px, calc(env(safe-area-inset-bottom) + 6px));
+    left: max(12px, calc(env(safe-area-inset-left) + 6px));
+  }
+
+  .touch-actions--analog {
+    right: max(12px, calc(env(safe-area-inset-right) + 6px));
+    bottom: max(12px, calc(env(safe-area-inset-bottom) + 6px));
+    gap: 6px;
+  }
+
   .touch-button {
     width: 46px;
     height: 46px;
@@ -3145,6 +3263,16 @@ html[data-graphics-quality='low'] .map-atmosphere {
   .touch-button--boost {
     width: 62px;
     height: 62px;
+  }
+
+  .mobile-pedal--accelerator {
+    width: 82px;
+    height: 82px;
+  }
+
+  .mobile-pedal--brake {
+    width: 68px;
+    height: 68px;
   }
 
   .touch-utilities,
@@ -3379,9 +3507,17 @@ html[data-graphics-quality='low'] .map-atmosphere {
     grid-template-rows: repeat(3, 42px);
   }
 
+  .virtual-joystick {
+    bottom: max(8px, calc(env(safe-area-inset-bottom) + 4px));
+  }
+
   .touch-actions {
     right: max(12px, calc(env(safe-area-inset-right) + 6px));
     bottom: max(10px, calc(env(safe-area-inset-bottom) + 5px));
+    gap: 5px;
+  }
+
+  .touch-actions--analog {
     gap: 5px;
   }
 
@@ -3395,6 +3531,16 @@ html[data-graphics-quality='low'] .map-atmosphere {
   .touch-button--interact {
     width: 56px;
     height: 56px;
+  }
+
+  .mobile-pedal--accelerator {
+    width: 76px;
+    height: 76px;
+  }
+
+  .mobile-pedal--brake {
+    width: 62px;
+    height: 62px;
   }
 
   .touch-button--utility {

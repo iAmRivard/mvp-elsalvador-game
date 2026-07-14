@@ -1,11 +1,12 @@
-import type {
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-} from 'react';
-import type { InputAction, InputController } from '../../game/inputController';
-import { useGameStore } from '../../store/gameStore';
+import { virtualJoystickConfig } from '../../config/mobileControls.config';
 import { missionById } from '../../data/missions';
+import type { InputController } from '../../game/inputController';
 import { objectiveIsAvailable } from '../../game/missions';
+import { useGameStore } from '../../store/gameStore';
+import { ClassicTouchControls } from './ClassicTouchControls';
+import { MobileActionButtons } from './MobileActionButtons';
+import { MobilePedals } from './MobilePedals';
+import { VirtualJoystick } from './VirtualJoystick';
 
 interface TouchControlsProps {
   input: InputController;
@@ -42,114 +43,47 @@ export function TouchControls({ input }: TouchControlsProps) {
         interactionObjective.type as keyof typeof interactionLabels
       ]
     : null;
-
-  const press = (action: InputAction) => {
-    const releaseDelayMilliseconds = action === 'interact' ? 250 : 0;
-    return {
-      onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
-        event.preventDefault();
-        event.currentTarget.setPointerCapture(event.pointerId);
-        input.setPointerAction(action, true);
-      },
-      onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => {
-        event.preventDefault();
-        input.releasePointerAction(action, releaseDelayMilliseconds);
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-          event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-      },
-      onPointerCancel: () => input.setPointerAction(action, false),
-      onLostPointerCapture: () =>
-        input.releasePointerAction(action, releaseDelayMilliseconds),
-      onContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) =>
-        event.preventDefault(),
-    };
-  };
+  const useClassicControls = false;
 
   return (
     <div
-      className="touch-controls"
+      className="touch-controls touch-controls--joystick-pedals"
       aria-label="Controles táctiles"
       onContextMenu={(event) => event.preventDefault()}
     >
-      <div className="touch-dpad" aria-label="Dirección">
-        <button
-          type="button"
-          className="touch-button touch-button--up"
-          aria-label="Avanzar"
-          {...press('forward')}
-        >
-          <span aria-hidden="true">▲</span>
-        </button>
-        <button
-          type="button"
-          className="touch-button touch-button--left"
-          aria-label="Girar a la izquierda"
-          {...press('left')}
-        >
-          <span aria-hidden="true">◀</span>
-        </button>
-        <button
-          type="button"
-          className="touch-button touch-button--right"
-          aria-label="Girar a la derecha"
-          {...press('right')}
-        >
-          <span aria-hidden="true">▶</span>
-        </button>
-        <button
-          type="button"
-          className="touch-button touch-button--down"
-          aria-label="Retroceder"
-          {...press('backward')}
-        >
-          <span aria-hidden="true">▼</span>
-        </button>
-      </div>
-
-      <div className="touch-actions">
-        <div className="touch-utilities">
-          <button
-            type="button"
-            className="touch-button touch-button--utility"
-            aria-label="Centrar cámara en el jugador"
-            onClick={() => setFollowingPlayer(true)}
-          >
-            <span aria-hidden="true">⌖</span>
-          </button>
-          <button
-            type="button"
-            className={`touch-button touch-button--utility ${isPaused ? 'touch-button--active' : ''}`}
-            aria-label={isPaused ? 'Reanudar partida' : 'Pausar partida'}
-            onClick={togglePaused}
-          >
-            <span aria-hidden="true">{isPaused ? '▶' : 'Ⅱ'}</span>
-          </button>
-        </div>
-
-        <div className="touch-primary-actions">
-          {interactionLabel && (
-            <button
-              type="button"
-              className="touch-button touch-button--interact"
-              aria-label={interactionLabel}
-              {...press('interact')}
-            >
-              <span aria-hidden="true">✦</span>
-              <small>{interactionLabel}</small>
-            </button>
-          )}
-          <button
-            type="button"
-            className="touch-button touch-button--boost"
-            aria-label="Acelerar"
-            {...press('boost')}
-          >
-            <span aria-hidden="true">+</span>
-            <small>Turbo</small>
-          </button>
-        </div>
-      </div>
+      {useClassicControls ? (
+        <ClassicTouchControls
+          input={input}
+          interactionLabel={interactionLabel}
+          isPaused={isPaused}
+          onCenter={() => setFollowingPlayer(true)}
+          onTogglePause={togglePaused}
+        />
+      ) : (
+        <>
+          <VirtualJoystick
+            input={input}
+            radiusPixels={virtualJoystickConfig.radiusPixels}
+            knobRadiusPixels={virtualJoystickConfig.knobRadiusPixels}
+            deadZone={virtualJoystickConfig.deadZone}
+            responseExponent={virtualJoystickConfig.responseExponent}
+            returnDurationMilliseconds={
+              virtualJoystickConfig.returnDurationMilliseconds
+            }
+            positionMode={virtualJoystickConfig.positionMode}
+          />
+          <div className="touch-actions touch-actions--analog">
+            <MobileActionButtons
+              input={input}
+              interactionLabel={interactionLabel}
+              isPaused={isPaused}
+              onCenter={() => setFollowingPlayer(true)}
+              onTogglePause={togglePaused}
+            />
+            <MobilePedals input={input} showAccelerator />
+          </div>
+        </>
+      )}
     </div>
   );
 }
