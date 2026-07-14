@@ -94,10 +94,13 @@ function syncInteractiveSignal(layer: ThreeGameLayerController): void {
   });
 }
 
-export function GameMap() {
+interface GameMapProps {
+  inputController: InputController;
+}
+
+export function GameMap({ inputController }: GameMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [webglSupported] = useState(supportsWebGl);
-  const [inputController] = useState(() => new InputController());
   const graphicsQuality = useSettingsStore((state) => state.graphicsQuality);
   const reduceMotion = useSettingsStore((state) => state.reduceMotion);
   const ambientFog = useSettingsStore((state) => state.ambientFog);
@@ -491,6 +494,24 @@ export function GameMap() {
           ];
           const state = useGameStore.getState();
           state.setTelemetry(player);
+          if (containerRef.current) {
+            const inputDiagnostics = inputController.getDiagnostics();
+            containerRef.current.dataset.inputThrottle =
+              inputDiagnostics.throttle.toFixed(3);
+            containerRef.current.dataset.inputTurn =
+              inputDiagnostics.turn.toFixed(3);
+            containerRef.current.dataset.inputBoost = String(
+              inputDiagnostics.boost,
+            );
+            containerRef.current.dataset.inputInteract = String(
+              inputDiagnostics.interact,
+            );
+            containerRef.current.dataset.inputPointerActive = String(
+              inputDiagnostics.pointerActive,
+            );
+            containerRef.current.dataset.inputAutoThrottle =
+              inputDiagnostics.autoThrottleStatus;
+          }
           if (roadTracker) {
             const metrics = roadTracker.getMetrics();
             const roadDiagnostics = roadTracker.getDiagnostics();

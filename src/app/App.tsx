@@ -13,6 +13,7 @@ import { StartScreen } from '../components/menu/StartScreen';
 import { TutorialOverlay } from '../components/menu/TutorialOverlay';
 import { NarrativeDialog } from '../components/story/NarrativeDialog';
 import { gameConfig } from '../config/game.config';
+import { InputController } from '../game/inputController';
 import { startGameAutosave, useGameStore } from '../store/gameStore';
 import { useSettingsStore } from '../store/settingsStore';
 
@@ -23,6 +24,7 @@ const GameMap = lazy(async () => {
 
 export function App() {
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [inputController] = useState(() => new InputController());
   const hasSavedGame = useGameStore((state) => state.hasSavedGame);
   const isPaused = useGameStore((state) => state.isPaused);
   const recoveryReason = useGameStore((state) => state.recoveryReason);
@@ -38,12 +40,12 @@ export function App() {
 
   useEffect(() => startGameAutosave(), []);
   useEffect(() => {
-    if (showTutorial) setPaused(true);
+    if (showTutorial) setPaused(false);
   }, [setPaused, showTutorial]);
 
   const enterGame = (loadSavedGame: boolean) => {
     if (loadSavedGame && hasSavedGame) loadGame();
-    setPaused(!tutorialSeen);
+    setPaused(false);
     setSessionStarted(true);
   };
 
@@ -83,7 +85,7 @@ export function App() {
             </div>
           }
         >
-          <GameMap />
+          <GameMap inputController={inputController} />
         </Suspense>
 
         <PlayerHud />
@@ -101,6 +103,7 @@ export function App() {
 
       {showTutorial && (
         <TutorialOverlay
+          input={inputController}
           onComplete={() => {
             setTutorialSeen(true);
             setPaused(false);

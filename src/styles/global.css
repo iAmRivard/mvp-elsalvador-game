@@ -1350,6 +1350,109 @@ input {
   background: rgb(217 170 86 / 11%);
 }
 
+.tutorial-coach {
+  position: fixed;
+  z-index: 38;
+  top: max(82px, calc(env(safe-area-inset-top) + 68px));
+  left: 50%;
+  width: min(390px, calc(100vw - 28px));
+  padding: 12px 14px;
+  border: 1px solid rgb(230 183 95 / 42%);
+  border-radius: 8px;
+  color: #edf3ea;
+  background: rgb(15 30 27 / 94%);
+  box-shadow: 0 12px 30px rgb(4 12 10 / 38%);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.tutorial-coach header,
+.tutorial-coach__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tutorial-coach header > span {
+  color: #d9b96f;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tutorial-coach h2 {
+  margin: 5px 0 2px;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.tutorial-coach p {
+  margin: 0;
+  color: #b8c4ba;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.tutorial-coach button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 4px;
+  color: #d8dfd8;
+  background: transparent;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 750;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.tutorial-coach button:disabled {
+  opacity: 0.35;
+}
+
+.tutorial-coach .tutorial-progress {
+  margin: 9px 0 8px;
+}
+
+.tutorial-coach__actions {
+  justify-content: flex-end;
+}
+
+.tutorial-coach__actions .tutorial-next {
+  padding: 5px 10px;
+  color: #17201c;
+  background: #e6b75f;
+}
+
+html[data-tutorial-target='steer'] .virtual-joystick,
+html[data-tutorial-target='steer'] .touch-dpad,
+html[data-tutorial-target='throttle'] .mobile-pedal--accelerator,
+html[data-tutorial-target='throttle'] .touch-button--up,
+html[data-tutorial-target='throttle'] .touch-button--auto,
+html[data-tutorial-target='brake'] .mobile-pedal--brake,
+html[data-tutorial-target='brake'] .touch-button--down,
+html[data-tutorial-target='boost'] .touch-button--boost,
+html[data-tutorial-target='interact'] .touch-button--interact,
+html[data-tutorial-target='collect'] .touch-button--interact,
+html[data-tutorial-target='repair'] .touch-button--interact,
+html[data-tutorial-target='route'] .mission-route-summary,
+html[data-tutorial-target='recalculate'] .mission-route-summary__header button {
+  outline: 3px solid rgb(255 240 189 / 92%);
+  outline-offset: 4px;
+  animation: tutorial-target-pulse 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes tutorial-target-pulse {
+  from {
+    filter: drop-shadow(0 0 2px rgb(230 183 95 / 20%));
+  }
+
+  to {
+    filter: drop-shadow(0 0 9px rgb(230 183 95 / 70%));
+  }
+}
+
 .icon-button {
   display: grid;
   width: 42px;
