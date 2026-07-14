@@ -1,6 +1,9 @@
 import { useEffect } from 'react';
 import { gameAudio } from '../../audio/gameAudio';
+import { musicStateForGame } from '../../audio/musicState';
 import { travelConfig } from '../../config/travel.config';
+import { missionById } from '../../data/missions';
+import { activeMissionTimer } from '../../game/missionTimer';
 import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
 
@@ -9,9 +12,39 @@ function configureAudio(): void {
   gameAudio.configure({
     masterVolume: settings.audioMasterVolume,
     effectsVolume: settings.audioEffectsVolume,
+    musicVolume: settings.audioMusicVolume,
     muted: settings.audioMuted,
+    musicMuted: settings.musicMuted,
     reducedEffects: settings.reduceAudioEffects,
   });
+}
+
+function updateAdaptiveMusic(): number | null {
+  const state = useGameStore.getState();
+  const mission = state.activeMissionId
+    ? (missionById.get(state.activeMissionId) ?? null)
+    : null;
+  const timer = activeMissionTimer(
+    mission,
+    state.activeMissionCompletedObjectiveIds,
+    state.activeMissionObjectiveProgress,
+  );
+  const timerRunning = Boolean(
+    timer && state.missionTimerCountdownSeconds <= 0,
+  );
+  gameAudio.updateMusic({
+    state: musicStateForGame(
+      state.activeMissionId,
+      timerRunning,
+      Boolean(state.recoveryReason),
+    ),
+    radioActive: Boolean(state.activeRadioEventId),
+    paused: state.isPaused,
+    timedIntensity: timer
+      ? 1 - timer.remainingSeconds / timer.durationSeconds
+      : 0,
+  });
+  return timerRunning && timer ? Math.ceil(timer.remainingSeconds) : null;
 }
 
 function updateVehicleAudio(): void {
@@ -29,6 +62,7 @@ export function GameAudioBridge() {
   useEffect(() => {
     configureAudio();
     updateVehicleAudio();
+    let previousTimerSecond = updateAdaptiveMusic();
     const unlock = () => {
       void gameAudio.unlock();
     };
@@ -38,6 +72,7 @@ export function GameAudioBridge() {
     const unsubscribeSettings = useSettingsStore.subscribe(configureAudio);
     const unsubscribeGame = useGameStore.subscribe((state, previousState) => {
       updateVehicleAudio();
+      const timerSecond = updateAdaptiveMusic();
       if (
         state.activeMissionId &&
         state.activeMissionId !== previousState.activeMissionId
@@ -67,11 +102,23 @@ export function GameAudioBridge() {
         gameAudio.play('lowFuel');
       }
       if (
-        state.activeNarrativeEventId &&
-        state.activeNarrativeEventId !== previousState.activeNarrativeEventId
+        (state.activeRadioEventId &&
+          state.activeRadioEventId !== previousState.activeRadioEventId) ||
+        (state.activeNarrativeEventId &&
+          state.activeNarrativeEventId !== previousState.activeNarrativeEventId)
       ) {
         gameAudio.play('radioInterference');
       }
+      if (
+        timerSecond !== null &&
+        timerSecond !== previousTimerSecond &&
+        (timerSecond === 60 ||
+          timerSecond === 30 ||
+          (timerSecond <= 10 && timerSecond > 0))
+      ) {
+        gameAudio.play('timerWarning');
+      }
+      previousTimerSecond = timerSecond;
     });
 
     return () => {

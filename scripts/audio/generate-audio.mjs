@@ -154,6 +154,54 @@ const sounds = [
       );
     },
   },
+  {
+    name: 'timer-warning.wav',
+    duration: 0.35,
+    sample: (time, progress) =>
+      envelope(progress, 0.02, 0.25) *
+      0.2 *
+      (sine(660, time) + 0.45 * sine(990, time)),
+  },
+  {
+    name: 'music-exploration.wav',
+    duration: 12,
+    sample: (time) => {
+      const drift = 0.72 + 0.28 * sine(1 / 12, time);
+      return (
+        0.08 * sine(55, time) +
+        0.05 * sine(82.5, time, Math.PI / 3) +
+        0.035 * sine(110, time) * drift +
+        0.025 * sine(165, time, Math.PI / 2)
+      );
+    },
+  },
+  {
+    name: 'music-mission.wav',
+    duration: 12,
+    sample: (time) => {
+      const pulse = 0.45 + 0.55 * Math.max(0, sine(1.5, time));
+      return (
+        0.075 * sine(55, time) +
+        0.045 * sine(73.5, time, Math.PI / 4) +
+        0.045 * triangle(110, time) * pulse +
+        0.025 * sine(220, time) * (0.5 + 0.5 * sine(0.5, time))
+      );
+    },
+  },
+  {
+    name: 'music-timed.wav',
+    duration: 12,
+    sample: (time) => {
+      const pulse = Math.max(0, sine(2, time));
+      const counterPulse = Math.max(0, sine(3, time, Math.PI / 2));
+      return (
+        0.07 * sine(49, time) +
+        0.055 * triangle(98, time) * (0.35 + 0.65 * pulse) +
+        0.04 * sine(196, time) * counterPulse +
+        0.025 * sine(294, time, Math.PI / 3)
+      );
+    },
+  },
 ];
 
 await mkdir(outputDirectory, { recursive: true });
