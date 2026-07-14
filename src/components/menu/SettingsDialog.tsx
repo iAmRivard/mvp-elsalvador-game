@@ -60,19 +60,19 @@ const mobileControlOptions: readonly {
   description: string;
 }[] = [
   {
-    value: 'joystick-pedals',
-    label: 'Joystick y pedales',
-    description: 'Dirección precisa con acelerador y freno.',
+    value: 'joystick-auto-throttle',
+    label: 'Joystick + crucero',
+    description: 'Recomendado para móvil',
   },
   {
-    value: 'joystick-auto-throttle',
-    label: 'Joystick y AUTO',
-    description: 'Crucero opcional para trayectos largos.',
+    value: 'joystick-pedals',
+    label: 'Joystick + pedales',
+    description: 'Control manual',
   },
   {
     value: 'classic-buttons',
-    label: 'Cruceta clásica',
-    description: 'Cuatro botones digitales accesibles.',
+    label: 'Botones clásicos',
+    description: 'Alternativa accesible',
   },
 ];
 
@@ -118,9 +118,6 @@ export function SettingsDialog({
   );
   const joystickSize = useSettingsStore((state) => state.joystickSize);
   const joystickDeadZone = useSettingsStore((state) => state.joystickDeadZone);
-  const autoThrottleDefault = useSettingsStore(
-    (state) => state.autoThrottleDefault,
-  );
   const hapticsEnabled = useSettingsStore((state) => state.hapticsEnabled);
   const setGraphicsQuality = useSettingsStore(
     (state) => state.setGraphicsQuality,
@@ -152,9 +149,6 @@ export function SettingsDialog({
   const setJoystickSize = useSettingsStore((state) => state.setJoystickSize);
   const setJoystickDeadZone = useSettingsStore(
     (state) => state.setJoystickDeadZone,
-  );
-  const setAutoThrottleDefault = useSettingsStore(
-    (state) => state.setAutoThrottleDefault,
   );
   const setHapticsEnabled = useSettingsStore(
     (state) => state.setHapticsEnabled,
@@ -356,17 +350,6 @@ export function SettingsDialog({
         </fieldset>
 
         <div className="settings-toggles">
-          <label>
-            <span>
-              <strong>Crucero al entrar</strong>
-              <small>Sólo aplica al modo Joystick y AUTO.</small>
-            </span>
-            <input
-              type="checkbox"
-              checked={autoThrottleDefault}
-              onChange={(event) => setAutoThrottleDefault(event.target.checked)}
-            />
-          </label>
           <label>
             <span>
               <strong>Vibración háptica</strong>

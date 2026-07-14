@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import {
-  autoThrottleConfig,
   joystickSizeMultipliers,
   virtualJoystickConfig,
 } from '../../config/mobileControls.config';
@@ -65,12 +64,6 @@ export function TouchControls({ input }: TouchControlsProps) {
 
   useEffect(() => {
     input.clearAllInput();
-    if (
-      controlMode === 'joystick-auto-throttle' &&
-      useSettingsStore.getState().autoThrottleDefault
-    ) {
-      input.setAutoThrottle(true, autoThrottleConfig.targetThrottle);
-    }
     return () => input.clearAllInput();
   }, [controlMode, input]);
 

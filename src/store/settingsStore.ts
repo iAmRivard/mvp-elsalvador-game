@@ -153,7 +153,7 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
     reduceAudioEffects: value.reduceAudioEffects === true,
     controlMode: isMobileControlMode(value.controlMode)
       ? value.controlMode
-      : defaultMobileControlsSettings.controlMode,
+      : 'joystick-pedals',
     joystickPositionMode: isJoystickPositionMode(value.joystickPositionMode)
       ? value.joystickPositionMode
       : defaultMobileControlsSettings.joystickPositionMode,

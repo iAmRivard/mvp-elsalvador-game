@@ -6,6 +6,7 @@ import {
   SETTINGS_STORAGE_KEY,
   useSettingsStore,
 } from '../src/store/settingsStore';
+import { defaultMobileControlsSettings } from '../src/config/mobileControls.config';
 
 describe('configuración visual', () => {
   beforeEach(() => {
@@ -65,6 +66,17 @@ describe('configuración visual', () => {
       autoThrottleDefault: false,
       hapticsEnabled: true,
     });
+  });
+
+  it('recomienda crucero sólo para instalaciones nuevas', () => {
+    expect(defaultMobileControlsSettings.controlMode).toBe(
+      'joystick-auto-throttle',
+    );
+    expect(
+      parseVisualSettings(
+        JSON.stringify({ version: 5, settings: { graphicsQuality: 'medium' } }),
+      )?.controlMode,
+    ).toBe('joystick-pedals');
   });
 
   it('migra preferencias version 1 con sensibilidad equilibrada', () => {

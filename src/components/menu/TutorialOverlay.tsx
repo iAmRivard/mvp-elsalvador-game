@@ -106,7 +106,7 @@ export function TutorialOverlay({ input, onComplete }: TutorialOverlayProps) {
         title: 'Usa el turbo',
         description: !usesTouch
           ? 'Mantén Shift mientras aceleras.'
-          : 'Mantén Turbo mientras aceleras.',
+          : 'Toca Turbo para activar un impulso temporal.',
         completed: diagnostics.boost,
       },
       {

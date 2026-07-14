@@ -22,6 +22,12 @@ export interface MobileControlsSettings {
   hapticsEnabled: boolean;
 }
 
+export interface MobileBoostState {
+  active: boolean;
+  remainingMilliseconds: number;
+  cooldownRemainingMilliseconds: number;
+}
+
 export const virtualJoystickConfig: VirtualJoystickConfig = {
   radiusPixels: 72,
   knobRadiusPixels: 30,
@@ -32,13 +38,21 @@ export const virtualJoystickConfig: VirtualJoystickConfig = {
 };
 
 export const defaultMobileControlsSettings: MobileControlsSettings = {
-  controlMode: 'joystick-pedals',
+  controlMode: 'joystick-auto-throttle',
   joystickPositionMode: 'fixed',
   joystickSize: 'medium',
   joystickDeadZone: virtualJoystickConfig.deadZone,
   autoThrottleDefault: false,
   hapticsEnabled: true,
 };
+
+export const mobileBoostConfig = {
+  durationMilliseconds: 2_500,
+  cooldownMilliseconds: 1_800,
+  cancelOnBrake: true,
+  cancelOnPause: true,
+  cancelOnBlur: true,
+} as const;
 
 export const joystickSizeMultipliers: Readonly<Record<JoystickSize, number>> = {
   small: 0.84,
