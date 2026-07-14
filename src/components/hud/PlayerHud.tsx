@@ -6,6 +6,7 @@ import { triggerHaptic } from '../../game/haptics';
 import { useSettingsStore } from '../../store/settingsStore';
 import { roadSurfaceLabels } from '../../config/roadHandling.config';
 import { locations } from '../../data/locations';
+import { fuelStationConfig } from '../../config/fuelStations.config';
 
 const compassPoints = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'] as const;
 
@@ -45,7 +46,7 @@ export function PlayerHud() {
   return (
     <>
       <aside
-        className={`player-hud ${telemetry.fuel <= 20 ? 'player-hud--fuel-low' : ''} ${telemetry.fuel <= 10 ? 'player-hud--fuel-critical' : ''}`}
+        className={`player-hud ${telemetry.fuel <= fuelStationConfig.lowFuelThreshold ? 'player-hud--fuel-low' : ''} ${telemetry.fuel <= fuelStationConfig.criticalFuelThreshold ? 'player-hud--fuel-critical' : ''}`}
         aria-label="Estado del jugador"
       >
         <div className="progress-readout">
@@ -154,9 +155,9 @@ export function PlayerHud() {
                 }}
               />
             </div>
-            {telemetry.fuel <= 20 && (
+            {telemetry.fuel <= fuelStationConfig.lowFuelThreshold && (
               <small className="fuel-warning" role="status">
-                {telemetry.fuel <= 10
+                {telemetry.fuel <= fuelStationConfig.criticalFuelThreshold
                   ? 'Combustible crítico'
                   : 'Combustible bajo'}
               </small>

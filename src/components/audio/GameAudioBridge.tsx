@@ -6,6 +6,7 @@ import { missionById } from '../../data/missions';
 import { activeMissionTimer } from '../../game/missionTimer';
 import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { fuelStationConfig } from '../../config/fuelStations.config';
 
 function configureAudio(): void {
   const settings = useSettingsStore.getState();
@@ -98,7 +99,10 @@ export function GameAudioBridge() {
       ) {
         gameAudio.play('discovery');
       }
-      if (state.telemetry.fuel <= 20 && previousState.telemetry.fuel > 20) {
+      if (
+        state.telemetry.fuel <= fuelStationConfig.lowFuelThreshold &&
+        previousState.telemetry.fuel > fuelStationConfig.lowFuelThreshold
+      ) {
         gameAudio.play('lowFuel');
       }
       if (

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { DiagnosticsPanel } from '../components/dev/DiagnosticsPanel';
 import { GameActions } from '../components/hud/GameActions';
+import { FuelAssist } from '../components/hud/FuelAssist';
 import { GameplayToast } from '../components/hud/GameplayToast';
 import { GameAudioBridge } from '../components/audio/GameAudioBridge';
 import { CurrentRegion } from '../components/hud/CurrentRegion';
@@ -113,6 +114,7 @@ export function App() {
         </Suspense>
 
         <PlayerHud />
+        {!showTutorial && <FuelAssist />}
         <MissionTimer />
         <MissionPanel />
         {!showTutorial && <DiscoveryToast />}

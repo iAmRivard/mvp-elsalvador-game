@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { chapterOneMissionIds } from '../src/data/chapter1';
 import { missionById } from '../src/data/missions';
+import { fuelStationById } from '../src/data/fuelStations';
 import { initialMissionObjectiveProgress } from '../src/game/missions';
 import { useGameStore } from '../src/store/gameStore';
 
@@ -327,6 +328,98 @@ describe('estado de misiones y capítulo', () => {
       coordinateCount: 240,
       activeEdgeIds: [4, 9],
       recalculationRevision: 1,
+    });
+  });
+
+  it('prioriza una estación temporal sin borrar la misión activa', () => {
+    useGameStore.getState().startMission('la-transmision');
+    const revision = useGameStore.getState().missionRoute.recalculationRevision;
+
+    expect(
+      useGameStore
+        .getState()
+        .markFuelStationRoute('abastecimiento-las-delicias'),
+    ).toBe(true);
+    expect(useGameStore.getState()).toMatchObject({
+      activeMissionId: 'la-transmision',
+      navigationTarget: {
+        kind: 'fuel-station',
+        id: 'abastecimiento-las-delicias',
+      },
+    });
+    expect(useGameStore.getState().missionRoute.recalculationRevision).toBe(
+      revision + 1,
+    );
+
+    useGameStore.getState().clearNavigationTarget();
+    expect(useGameStore.getState().activeMissionId).toBe('la-transmision');
+    expect(useGameStore.getState().navigationTarget).toBeNull();
+  });
+
+  it('recarga 45% detenida, crea checkpoint seguro y restaura la misión', () => {
+    const station = fuelStationById.get('abastecimiento-las-delicias')!;
+    useGameStore.setState((state) => ({
+      activeMissionId: 'la-transmision',
+      telemetry: {
+        ...state.telemetry,
+        longitude: station.coordinates[0],
+        latitude: station.coordinates[1],
+        speedMetersPerSecond: 0,
+        speedKilometersPerHour: 0,
+        fuel: 20,
+      },
+      vehicle: { ...state.vehicle, fuel: 20 },
+    }));
+    useGameStore.getState().markFuelStationRoute(station.id);
+
+    expect(useGameStore.getState().refuelAtStation(station.id)).toBe(true);
+    expect(useGameStore.getState()).toMatchObject({
+      activeMissionId: 'la-transmision',
+      navigationTarget: null,
+      telemetry: { fuel: 65 },
+      vehicle: { fuel: 65 },
+      lastCheckpoint: { reason: 'fuel-station' },
+      lastSafeCheckpoint: { reason: 'fuel-station' },
+    });
+  });
+
+  it('exige detenerse para recargar', () => {
+    const station = fuelStationById.get('abastecimiento-las-delicias')!;
+    useGameStore.setState((state) => ({
+      telemetry: {
+        ...state.telemetry,
+        longitude: station.coordinates[0],
+        latitude: station.coordinates[1],
+        speedMetersPerSecond: 1,
+        speedKilometersPerHour: 3.6,
+        fuel: 20,
+      },
+      vehicle: { ...state.vehicle, fuel: 20 },
+    }));
+
+    expect(useGameStore.getState().refuelAtStation(station.id)).toBe(false);
+    expect(useGameStore.getState().telemetry.fuel).toBe(20);
+    expect(useGameStore.getState().gameplayFeedback?.message).toBe(
+      'Detén el vehículo para recargar',
+    );
+  });
+
+  it('usa un bidón desde el softlock de 0% y reanuda la partida', () => {
+    useGameStore.setState((state) => ({
+      telemetry: { ...state.telemetry, fuel: 0 },
+      vehicle: { ...state.vehicle, fuel: 0 },
+      inventory: [{ itemId: 'bidon-combustible', quantity: 1 }],
+      recoveryReason: 'fuel',
+      isPaused: true,
+    }));
+
+    expect(useGameStore.getState().useFuelCanister()).toBe(true);
+    expect(useGameStore.getState()).toMatchObject({
+      telemetry: { fuel: 30 },
+      vehicle: { fuel: 30 },
+      inventory: [],
+      recoveryReason: null,
+      isPaused: false,
     });
   });
 

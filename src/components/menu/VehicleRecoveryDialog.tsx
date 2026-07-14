@@ -1,4 +1,7 @@
 import { useGameStore } from '../../store/gameStore';
+import { fuelStationConfig } from '../../config/fuelStations.config';
+import { nearestAvailableFuelStation } from '../../game/fuelStations';
+import { inventoryQuantity } from '../../game/inventory';
 
 const recoveryCopy = {
   fuel: {
@@ -24,14 +27,29 @@ const recoveryCopy = {
 export function VehicleRecoveryDialog() {
   const reason = useGameStore((state) => state.recoveryReason);
   const activeMissionId = useGameStore((state) => state.activeMissionId);
+  const telemetry = useGameStore((state) => state.telemetry);
+  const currentChapterId = useGameStore((state) => state.currentChapterId);
+  const canisterCount = useGameStore((state) =>
+    inventoryQuantity(state.inventory, 'bidon-combustible'),
+  );
   const retryFromCheckpoint = useGameStore(
     (state) => state.retryFromCheckpoint,
   );
   const recoverAtSafe = useGameStore(
     (state) => state.recoverAtLastSafeCheckpoint,
   );
+  const refuelAtStation = useGameStore((state) => state.refuelAtStation);
+  const useFuelCanister = useGameStore((state) => state.useFuelCanister);
   if (!reason) return null;
   const copy = recoveryCopy[reason];
+  const nearestStation = nearestAvailableFuelStation(
+    [telemetry.longitude, telemetry.latitude],
+    currentChapterId,
+  );
+  const canRefuelHere =
+    reason === 'fuel' &&
+    nearestStation &&
+    nearestStation.distanceMeters <= fuelStationConfig.interactionRadiusMeters;
 
   return (
     <div className="confirm-dialog-backdrop recovery-dialog-backdrop">
@@ -47,6 +65,19 @@ export function VehicleRecoveryDialog() {
         <h2 id="recovery-title">{copy.title}</h2>
         <p id="recovery-description">{copy.description}</p>
         <div>
+          {canRefuelHere && (
+            <button
+              type="button"
+              onClick={() => refuelAtStation(nearestStation.station.id)}
+            >
+              Recargar aquí
+            </button>
+          )}
+          {reason === 'fuel' && canisterCount > 0 && (
+            <button type="button" onClick={useFuelCanister}>
+              Usar bidón ({canisterCount})
+            </button>
+          )}
           <button
             type="button"
             onClick={() =>
