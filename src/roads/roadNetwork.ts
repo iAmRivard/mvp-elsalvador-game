@@ -23,6 +23,25 @@ export interface LoadedRoadNetwork {
   index: RoadSpatialIndex;
   loadDurationMilliseconds: number;
   fileSizeBytes: number;
+  metrics: RoadNetworkLoadMetrics;
+}
+
+export interface RoadNetworkLoadMetrics {
+  downloadDurationMilliseconds: number;
+  decodeDurationMilliseconds: number;
+  parseDurationMilliseconds: number;
+  validationDurationMilliseconds: number;
+  indexDurationMilliseconds: number;
+  totalDurationMilliseconds: number;
+  fileSizeBytes: number;
+  approximateMemoryBytes: number;
+  nodeCount: number;
+  edgeCount: number;
+}
+
+interface DownloadedRoadNetwork {
+  buffer: ArrayBuffer;
+  durationMilliseconds: number;
 }
 
 function isCoordinate(value: unknown): value is [number, number] {
@@ -85,12 +104,10 @@ export function parseRoadNetwork(value: unknown): RoadNetwork {
 
 let loadedNetwork: LoadedRoadNetwork | null = null;
 let loadingNetwork: Promise<LoadedRoadNetwork> | null = null;
+let downloadingNetwork: Promise<DownloadedRoadNetwork> | null = null;
 
-export function loadRoadNetwork(): Promise<LoadedRoadNetwork> {
-  if (loadedNetwork) return Promise.resolve(loadedNetwork);
-  if (loadingNetwork) return loadingNetwork;
-
-  loadingNetwork = (async () => {
+function downloadRoadNetwork(): Promise<DownloadedRoadNetwork> {
+  downloadingNetwork ??= (async () => {
     const startedAt = performance.now();
     const response = await fetch(roadNetworkConfig.dataUrl, {
       credentials: 'same-origin',
@@ -100,15 +117,75 @@ export function loadRoadNetwork(): Promise<LoadedRoadNetwork> {
         `No se pudo cargar la red vial local (${String(response.status)}).`,
       );
     }
-    const serialized = await response.text();
-    const network = parseRoadNetwork(JSON.parse(serialized) as unknown);
+    return {
+      buffer: await response.arrayBuffer(),
+      durationMilliseconds: performance.now() - startedAt,
+    };
+  })().catch((error: unknown) => {
+    downloadingNetwork = null;
+    throw error;
+  });
+  return downloadingNetwork;
+}
+
+function approximateNetworkMemoryBytes(
+  network: RoadNetwork,
+  serializedBytes: number,
+): number {
+  const coordinateCount = network.edges.reduce(
+    (total, edge) => total + edge.coordinates.length,
+    0,
+  );
+  return (
+    serializedBytes +
+    network.nodes.length * 32 +
+    network.edges.length * 80 +
+    coordinateCount * 24
+  );
+}
+
+export function loadRoadNetwork(): Promise<LoadedRoadNetwork> {
+  if (loadedNetwork) return Promise.resolve(loadedNetwork);
+  if (loadingNetwork) return loadingNetwork;
+
+  loadingNetwork = (async () => {
+    const startedAt = performance.now();
+    const downloaded = await downloadRoadNetwork();
+    let stageStartedAt = performance.now();
+    const serialized = new TextDecoder().decode(downloaded.buffer);
+    const decodeDurationMilliseconds = performance.now() - stageStartedAt;
+    stageStartedAt = performance.now();
+    const parsed = JSON.parse(serialized) as unknown;
+    const parseDurationMilliseconds = performance.now() - stageStartedAt;
+    stageStartedAt = performance.now();
+    const network = parseRoadNetwork(parsed);
+    const validationDurationMilliseconds = performance.now() - stageStartedAt;
+    stageStartedAt = performance.now();
     const index = new RoadSpatialIndex(network);
+    const indexDurationMilliseconds = performance.now() - stageStartedAt;
     setDefaultRoadSpatialIndex(index);
+    const fileSizeBytes = downloaded.buffer.byteLength;
+    const totalDurationMilliseconds = performance.now() - startedAt;
     loadedNetwork = {
       network,
       index,
-      loadDurationMilliseconds: performance.now() - startedAt,
-      fileSizeBytes: new TextEncoder().encode(serialized).byteLength,
+      loadDurationMilliseconds: totalDurationMilliseconds,
+      fileSizeBytes,
+      metrics: {
+        downloadDurationMilliseconds: downloaded.durationMilliseconds,
+        decodeDurationMilliseconds,
+        parseDurationMilliseconds,
+        validationDurationMilliseconds,
+        indexDurationMilliseconds,
+        totalDurationMilliseconds,
+        fileSizeBytes,
+        approximateMemoryBytes: approximateNetworkMemoryBytes(
+          network,
+          fileSizeBytes,
+        ),
+        nodeCount: network.nodes.length,
+        edgeCount: network.edges.length,
+      },
     };
     return loadedNetwork;
   })().catch((error: unknown) => {
@@ -120,4 +197,16 @@ export function loadRoadNetwork(): Promise<LoadedRoadNetwork> {
 
 export function getLoadedRoadNetwork(): LoadedRoadNetwork | null {
   return loadedNetwork;
+}
+
+export async function copyRoadNetworkBuffer(): Promise<ArrayBuffer> {
+  return (await downloadRoadNetwork()).buffer.slice(0);
+}
+
+export function retryRoadNetworkLoad(): Promise<LoadedRoadNetwork> {
+  loadedNetwork = null;
+  loadingNetwork = null;
+  downloadingNetwork = null;
+  setDefaultRoadSpatialIndex(null);
+  return loadRoadNetwork();
 }
