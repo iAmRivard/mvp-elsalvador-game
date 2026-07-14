@@ -8,6 +8,7 @@ import {
   movePlayer,
   normalizeHeading,
   stepPlayer,
+  stepPlayerDetailed,
 } from '../src/game/movement';
 import type { PlayerInput, PlayerRuntime } from '../src/types/game';
 
@@ -174,12 +175,65 @@ describe('movimiento geografico del jugador', () => {
     expect(direct.heading).toBeGreaterThan(soft.heading);
   });
 
-  it('limita deltas grandes al mismo paso maximo del game loop', () => {
+  it('limita deltas grandes antes de procesar los subpasos', () => {
     const movingPlayer = { ...player, speedMetersPerSecond: 10 };
-    const normalDelta = stepPlayer(movingPlayer, idleInput, 0.05);
+    const maximumDelta = stepPlayer(movingPlayer, idleInput, 0.25);
     const largeDelta = stepPlayer(movingPlayer, idleInput, 5);
 
-    expect(largeDelta).toEqual(normalDelta);
+    expect(largeDelta).toEqual(maximumDelta);
+  });
+
+  it('divide el desplazamiento geografico en pasos de hasta diez metros', () => {
+    const result = stepPlayerDetailed(
+      { ...player, speedMetersPerSecond: 38 },
+      idleInput,
+      0.25,
+    );
+
+    expect(result.substeps).toBe(5);
+    expect(
+      result.samples.every((sample) => sample.geographicDistanceMeters <= 10),
+    ).toBe(true);
+  });
+
+  it('respeta el limite de subpasos aun con escalas extremas', () => {
+    const result = stepPlayerDetailed(
+      { ...player, speedMetersPerSecond: 20 },
+      idleInput,
+      0.25,
+      {
+        travel: travelAtScale(1_000),
+        movementSubsteps: {
+          maximumGeographicStepMeters: 1,
+          maximumSubstepsPerFrame: 12,
+          maximumDeltaTimeSeconds: 0.25,
+        },
+      },
+    );
+
+    expect(result.substeps).toBe(12);
+  });
+
+  it('detecta agua intermedia aunque el punto final quedaria al otro lado', () => {
+    const waterStartLatitude = player.latitude + 0.0015;
+    const waterEndLatitude = player.latitude + 0.0022;
+    const result = stepPlayerDetailed(
+      { ...player, speedMetersPerSecond: 20 },
+      idleInput,
+      0.25,
+      {
+        travel: travelAtScale(100),
+        restrictedAreaTypeAt: ([, latitude]) =>
+          latitude >= waterStartLatitude && latitude <= waterEndLatitude
+            ? 'water'
+            : null,
+      },
+    );
+
+    expect(result.environment.movementBlockedBy).toBe('water');
+    expect(result.player.latitude).toBeLessThan(waterStartLatitude);
+    expect(result.player.speedMetersPerSecond).toBe(0);
+    expect(result.substeps).toBeLessThan(12);
   });
 
   it('detiene el vehiculo al alcanzar los limites geograficos', () => {

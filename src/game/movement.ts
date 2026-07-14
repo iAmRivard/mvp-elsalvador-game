@@ -1,5 +1,10 @@
 import type { PlayerInput, PlayerRuntime } from '../types/game';
 import {
+  calculateMovementSubsteps,
+  movementSubstepConfig,
+  type MovementSubstepConfig,
+} from '../config/movementSubstep.config';
+import {
   roadAssistConfig,
   roadAssistModeMultipliers,
   roadFuelMultipliers,
@@ -25,7 +30,6 @@ import type { RestrictedAreaType } from '../types/restrictedAreas';
 import type { RoadContact, RoadCoordinates } from '../types/roads';
 
 const EARTH_RADIUS_METERS = 6_371_008.8;
-const MAXIMUM_DELTA_TIME_SECONDS = 0.05;
 
 export const EL_SALVADOR_MOVEMENT_BOUNDS = {
   west: -90.2,
@@ -60,6 +64,7 @@ export interface StepPlayerOptions {
   roadContact?: RoadContact | null;
   roadAssistMode?: RoadAssistMode;
   roadAssistStrengthMultiplier?: number;
+  movementSubsteps?: MovementSubstepConfig;
   restrictedAreaTypeAt?: (
     position: RoadCoordinates,
   ) => RestrictedAreaType | null;
@@ -77,6 +82,16 @@ export interface PlayerStepEnvironment {
 export interface PlayerStepResult {
   player: PlayerRuntime;
   environment: PlayerStepEnvironment;
+  samples: readonly PlayerStepSample[];
+  substeps: number;
+}
+
+export interface PlayerStepSample {
+  player: PlayerRuntime;
+  environment: PlayerStepEnvironment;
+  deltaTimeSeconds: number;
+  vehicleDistanceMeters: number;
+  geographicDistanceMeters: number;
 }
 
 function degreesToRadians(value: number): number {
@@ -210,21 +225,18 @@ function roadState(
   };
 }
 
-export function stepPlayerDetailed(
+function stepPlayerOnce(
   player: PlayerRuntime,
   input: PlayerInput,
   deltaTimeSeconds: number,
   options: StepPlayerOptions = {},
-): PlayerStepResult {
+): PlayerStepSample {
   const travel = options.travel ?? travelConfig;
   const handling = options.handling ?? vehicleHandlingConfig;
   const fuel = options.fuel ?? fuelConsumptionConfig;
   const steeringSensitivity = options.steeringSensitivity ?? 'medium';
   const roadAssistMode = options.roadAssistMode ?? 'soft';
-  const deltaTime = Math.min(
-    MAXIMUM_DELTA_TIME_SECONDS,
-    Math.max(0, deltaTimeSeconds),
-  );
+  const deltaTime = Math.max(0, deltaTimeSeconds);
   const { surface, contact } = roadState(player, options);
   const speedMultiplier = roadSpeedMultipliers[surface];
   const fuelMultiplier = roadFuelMultipliers[surface];
@@ -390,6 +402,75 @@ export function stepPlayerDetailed(
       roadDistanceMeters: contact?.nearest.distanceMeters ?? null,
       movementBlockedBy,
     },
+    deltaTimeSeconds: deltaTime,
+    vehicleDistanceMeters: appliedVehicleDistanceMeters,
+    geographicDistanceMeters: appliedGeographicDistanceMeters,
+  };
+}
+
+export function stepPlayerDetailed(
+  player: PlayerRuntime,
+  input: PlayerInput,
+  deltaTimeSeconds: number,
+  options: StepPlayerOptions = {},
+): PlayerStepResult {
+  const travel = options.travel ?? travelConfig;
+  const handling = options.handling ?? vehicleHandlingConfig;
+  const substepConfig = options.movementSubsteps ?? movementSubstepConfig;
+  const maximumDeltaTime =
+    Number.isFinite(substepConfig.maximumDeltaTimeSeconds) &&
+    substepConfig.maximumDeltaTimeSeconds > 0
+      ? substepConfig.maximumDeltaTimeSeconds
+      : movementSubstepConfig.maximumDeltaTimeSeconds;
+  const deltaTime = Math.min(
+    maximumDeltaTime,
+    Math.max(0, Number.isFinite(deltaTimeSeconds) ? deltaTimeSeconds : 0),
+  );
+  const maximumPotentialSpeed = Math.max(
+    handling.maximumBoostSpeed,
+    handling.maximumForwardSpeed,
+    handling.maximumReverseSpeed,
+  );
+  const estimatedAbsoluteSpeed = Math.max(
+    Math.abs(player.speedMetersPerSecond),
+    Math.min(
+      maximumPotentialSpeed,
+      Math.abs(player.speedMetersPerSecond) +
+        Math.max(handling.acceleration, handling.braking) * deltaTime,
+    ),
+  );
+  const estimatedGeographicDistance =
+    estimatedAbsoluteSpeed *
+    deltaTime *
+    Math.max(0, travel.geographicTravelScale);
+  const requestedSubsteps = calculateMovementSubsteps(
+    estimatedGeographicDistance,
+    substepConfig,
+  );
+  const substepDeltaTime = deltaTime / requestedSubsteps;
+  const samples: PlayerStepSample[] = [];
+  let nextPlayer = player;
+  let environment: PlayerStepEnvironment = {
+    surface: 'primary',
+    speedMultiplier: 1,
+    fuelMultiplier: 1,
+    roadDistanceMeters: null,
+    movementBlockedBy: null,
+  };
+
+  for (let index = 0; index < requestedSubsteps; index += 1) {
+    const sample = stepPlayerOnce(nextPlayer, input, substepDeltaTime, options);
+    samples.push(sample);
+    nextPlayer = sample.player;
+    environment = sample.environment;
+    if (sample.environment.movementBlockedBy) break;
+  }
+
+  return {
+    player: nextPlayer,
+    environment,
+    samples,
+    substeps: samples.length,
   };
 }
 
