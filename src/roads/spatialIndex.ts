@@ -22,6 +22,7 @@ interface SegmentProjection {
 export interface RoadSearchMetrics {
   searches: number;
   averageDurationMilliseconds: number;
+  lastDurationMilliseconds: number;
   lastCandidateCount: number;
   segmentCount: number;
   cellCount: number;
@@ -138,6 +139,7 @@ export class RoadSpatialIndex {
   private readonly cells = new Map<string, IndexedRoadSegment[]>();
   private searches = 0;
   private totalSearchDurationMilliseconds = 0;
+  private lastSearchDurationMilliseconds = 0;
   private lastCandidateCount = 0;
   private segmentCount = 0;
 
@@ -209,10 +211,10 @@ export class RoadSpatialIndex {
     }
   }
 
-  findNearestRoad(
+  findRoadCandidates(
     position: RoadCoordinates,
     maximumDistanceMeters: number,
-  ): NearestRoadResult | null {
+  ): NearestRoadResult[] {
     const startedAt = now();
     const latitudeRadius = maximumDistanceMeters / 111_132;
     const longitudeScale = Math.max(
@@ -252,21 +254,22 @@ export class RoadSpatialIndex {
       }
     }
 
-    let nearest: NearestRoadResult | null = null;
+    const nearestByEdge = new Map<number, NearestRoadResult>();
     for (const segment of candidates.values()) {
       const start = segment.edge.coordinates[segment.segmentIndex - 1];
       const end = segment.edge.coordinates[segment.segmentIndex];
       const projection = projectOntoSegment(position, start, end);
+      const current = nearestByEdge.get(segment.edge.id);
       if (
         projection.distanceMeters > maximumDistanceMeters ||
-        (nearest && projection.distanceMeters >= nearest.distanceMeters)
+        (current && projection.distanceMeters >= current.distanceMeters)
       ) {
         continue;
       }
       const traveled =
         segment.distanceBeforeSegmentMeters +
         projection.progress * segment.segmentDistanceMeters;
-      nearest = {
+      nearestByEdge.set(segment.edge.id, {
         edgeId: segment.edge.id,
         coordinates: projection.coordinates,
         distanceMeters: projection.distanceMeters,
@@ -277,13 +280,24 @@ export class RoadSpatialIndex {
         roadClass: segment.edge.roadClass,
         speedMultiplier: segment.edge.speedMultiplier,
         heading: segmentHeading(start, end),
-      };
+      });
     }
 
+    const durationMilliseconds = now() - startedAt;
     this.searches += 1;
     this.lastCandidateCount = candidates.size;
-    this.totalSearchDurationMilliseconds += now() - startedAt;
-    return nearest;
+    this.lastSearchDurationMilliseconds = durationMilliseconds;
+    this.totalSearchDurationMilliseconds += durationMilliseconds;
+    return [...nearestByEdge.values()].sort(
+      (left, right) => left.distanceMeters - right.distanceMeters,
+    );
+  }
+
+  findNearestRoad(
+    position: RoadCoordinates,
+    maximumDistanceMeters: number,
+  ): NearestRoadResult | null {
+    return this.findRoadCandidates(position, maximumDistanceMeters)[0] ?? null;
   }
 
   getMetrics(): RoadSearchMetrics {
@@ -293,6 +307,7 @@ export class RoadSpatialIndex {
         this.searches === 0
           ? 0
           : this.totalSearchDurationMilliseconds / this.searches,
+      lastDurationMilliseconds: this.lastSearchDurationMilliseconds,
       lastCandidateCount: this.lastCandidateCount,
       segmentCount: this.segmentCount,
       cellCount: this.cells.size,

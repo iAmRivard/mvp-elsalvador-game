@@ -35,6 +35,17 @@ describe('road spatial index', () => {
     expect(index.findNearestRoad([-89.31, 13.71], 25)).toBeNull();
   });
 
+  it('returns one nearest candidate per edge at an intersection', () => {
+    const index = new RoadSpatialIndex(createRoadTestNetwork(), 0.0005);
+    const candidates = index.findRoadCandidates([-89.299, 13.70002], 25);
+
+    expect(candidates.map((candidate) => candidate.edgeId)).toEqual([2, 0, 1]);
+    expect(new Set(candidates.map((candidate) => candidate.edgeId)).size).toBe(
+      candidates.length,
+    );
+    expect(index.getMetrics().searches).toBe(1);
+  });
+
   it('uses the installed index through the two-argument public function', () => {
     expect(findNearestRoad([-89.2995, 13.7], 10)).toBeNull();
     const index = new RoadSpatialIndex(createRoadTestNetwork());
