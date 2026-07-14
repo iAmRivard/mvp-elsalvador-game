@@ -460,6 +460,8 @@ export function addMissionRoute(
     const nextTargetKey = targetKey();
     if (nextTargetKey !== activeTargetKey) {
       activeTargetKey = nextTargetKey;
+      previousRecalculationRevision = state.missionRoute.recalculationRevision;
+      previousClosedEdges = state.temporarilyClosedRoadEdgeIds;
       updateTargets(map);
       void calculateRoute();
       return;
