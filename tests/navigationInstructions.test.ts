@@ -100,4 +100,26 @@ describe('turn-by-turn navigation instructions', () => {
     expect(onRoute.immediateCoordinates.length).toBeGreaterThan(1);
     expect(offRoute.offRoute).toBe(true);
   });
+
+  it('derives heading, maneuver and immediate segment from one route segment', () => {
+    const route: RoadCoordinates[] = [
+      [-89.3, 13.7],
+      [-89.3, 13.701],
+      [-89.301, 13.701],
+    ];
+    const instructions = generateNavigationInstructions(route);
+    const progress = navigationProgress(
+      [-89.2995, 13.7005],
+      route,
+      instructions,
+      0,
+      0,
+    );
+
+    expect(progress.activeNavigation?.routeSegmentIndex).toBe(0);
+    expect(progress.activeNavigation?.requiresRejoin).toBe(true);
+    expect(progress.activeNavigation?.maneuverType).toBe('turn-left');
+    expect(progress.rejoinCoordinates).toHaveLength(2);
+    expect(progress.immediateCoordinates[0][0]).toBeCloseTo(-89.3, 4);
+  });
 });

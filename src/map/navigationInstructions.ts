@@ -1,10 +1,17 @@
 import { routingConfig } from '../config/routing.config';
 import { distanceBetweenMeters } from '../game/discovery';
 import type {
+  ActiveNavigationState,
   NavigationInstructionType,
   RouteNavigationInstruction,
 } from '../types/navigation';
 import type { RoadCoordinates } from '../types/roads';
+import {
+  projectOntoRouteSegment,
+  recommendedRouteHeading,
+  routeBearing,
+  signedHeadingDifference,
+} from './routeHeading';
 
 const MANEUVER_LOOK_DISTANCE_METERS = 35;
 const MINIMUM_TURN_ANGLE_DEGREES = 22;
@@ -18,23 +25,18 @@ interface RouteProjection {
 }
 
 export interface NavigationProgress {
+  activeNavigation: ActiveNavigationState | null;
   nextInstruction: RouteNavigationInstruction | null;
   distanceToNextInstructionMeters: number | null;
   distanceFromRouteStartMeters: number;
   distanceToRouteMeters: number;
   offRoute: boolean;
   immediateCoordinates: RoadCoordinates[];
+  rejoinCoordinates: RoadCoordinates[];
 }
 
 function normalizeSignedAngle(value: number): number {
   return ((value + 540) % 360) - 180;
-}
-
-function bearing(start: RoadCoordinates, end: RoadCoordinates): number {
-  const latitude = ((start[1] + end[1]) / 2) * (Math.PI / 180);
-  const east = (end[0] - start[0]) * Math.cos(latitude);
-  const north = end[1] - start[1];
-  return (Math.atan2(east, north) * 180) / Math.PI;
 }
 
 function cumulativeDistances(route: readonly RoadCoordinates[]): number[] {
@@ -120,8 +122,8 @@ export function generateNavigationInstructions(
     const after = anchorAfter(index, distances);
     if (before === index || after === index) continue;
     const headingChange = normalizeSignedAngle(
-      bearing(route[index], route[after]) -
-        bearing(route[before], route[index]),
+      routeBearing(route[index], route[after]) -
+        routeBearing(route[before], route[index]),
     );
     const type = instructionTypeForTurn(headingChange);
     if (!type) continue;
@@ -179,40 +181,6 @@ export function generateNavigationInstructions(
   return instructions;
 }
 
-function projectOntoSegment(
-  point: RoadCoordinates,
-  start: RoadCoordinates,
-  end: RoadCoordinates,
-): { coordinates: RoadCoordinates; distanceMeters: number; progress: number } {
-  const longitudeScale = 111_320 * Math.cos((point[1] * Math.PI) / 180);
-  const latitudeScale = 111_132;
-  const startX = (start[0] - point[0]) * longitudeScale;
-  const startY = (start[1] - point[1]) * latitudeScale;
-  const endX = (end[0] - point[0]) * longitudeScale;
-  const endY = (end[1] - point[1]) * latitudeScale;
-  const deltaX = endX - startX;
-  const deltaY = endY - startY;
-  const lengthSquared = deltaX * deltaX + deltaY * deltaY;
-  const progress =
-    lengthSquared === 0
-      ? 0
-      : Math.max(
-          0,
-          Math.min(1, -(startX * deltaX + startY * deltaY) / lengthSquared),
-        );
-  return {
-    coordinates: [
-      start[0] + (end[0] - start[0]) * progress,
-      start[1] + (end[1] - start[1]) * progress,
-    ],
-    distanceMeters: Math.hypot(
-      startX + deltaX * progress,
-      startY + deltaY * progress,
-    ),
-    progress,
-  };
-}
-
 export function projectPositionOntoRoute(
   point: RoadCoordinates,
   route: readonly RoadCoordinates[],
@@ -225,7 +193,7 @@ export function projectPositionOntoRoute(
       route[index - 1],
       route[index],
     );
-    const projection = projectOntoSegment(
+    const projection = projectOntoRouteSegment(
       point,
       route[index - 1],
       route[index],
@@ -248,21 +216,42 @@ export function navigationProgress(
   point: RoadCoordinates,
   route: readonly RoadCoordinates[],
   instructions: readonly RouteNavigationInstruction[],
+  playerHeading = route.length >= 2 ? routeBearing(route[0], route[1]) : 0,
+  lastKnownSegmentIndex: number | null = null,
 ): NavigationProgress {
-  const projection = projectPositionOntoRoute(point, route);
-  if (!projection) {
+  const heading = recommendedRouteHeading(
+    point,
+    playerHeading,
+    route,
+    lastKnownSegmentIndex,
+  );
+  if (!heading) {
     return {
+      activeNavigation: null,
       nextInstruction: null,
       distanceToNextInstructionMeters: null,
       distanceFromRouteStartMeters: 0,
       distanceToRouteMeters: Number.POSITIVE_INFINITY,
       offRoute: true,
       immediateCoordinates: [],
+      rejoinCoordinates: [],
     };
   }
+  const distances = cumulativeDistances(route);
+  const segmentProjection = projectOntoRouteSegment(
+    point,
+    route[heading.segmentIndex],
+    route[heading.segmentIndex + 1],
+  );
+  const segmentDistance = distanceBetweenMeters(
+    route[heading.segmentIndex],
+    route[heading.segmentIndex + 1],
+  );
+  const distanceFromRouteStartMeters =
+    distances[heading.segmentIndex] +
+    segmentProjection.progress * segmentDistance;
   const initialContinue =
-    projection.distanceFromRouteStartMeters < 25 &&
-    instructions[0]?.type === 'continue'
+    distanceFromRouteStartMeters < 25 && instructions[0]?.type === 'continue'
       ? instructions[0]
       : null;
   const nextInstruction =
@@ -271,7 +260,7 @@ export function navigationProgress(
       (instruction) =>
         instruction.type !== 'continue' &&
         instruction.distanceFromRouteStartMeters >
-          projection.distanceFromRouteStartMeters + 15,
+          distanceFromRouteStartMeters + 15,
     ) ??
     instructions.at(-1) ??
     null;
@@ -281,24 +270,48 @@ export function navigationProgress(
       : Math.max(
           0,
           nextInstruction.distanceFromRouteStartMeters -
-            projection.distanceFromRouteStartMeters,
+            distanceFromRouteStartMeters,
         )
     : null;
   const immediateEndIndex = Math.max(
-    projection.segmentIndex + 1,
-    nextInstruction?.routeCoordinateIndex ?? projection.segmentIndex + 1,
+    heading.segmentIndex + 1,
+    nextInstruction?.routeCoordinateIndex ?? heading.segmentIndex + 1,
   );
+  const headingChange = signedHeadingDifference(playerHeading, heading.heading);
+  const rejoinManeuver = instructionTypeForTurn(headingChange) ?? 'continue';
+  const activeNavigation: ActiveNavigationState = {
+    routeSegmentIndex: heading.segmentIndex,
+    recommendedHeading: heading.heading,
+    maneuverType: heading.requiresRejoin
+      ? rejoinManeuver
+      : (nextInstruction?.type ?? 'continue'),
+    maneuverCoordinates: heading.requiresRejoin
+      ? segmentProjection.coordinates
+      : (nextInstruction?.coordinates ??
+        route[heading.segmentIndex + 1] ??
+        segmentProjection.coordinates),
+    distanceToManeuverMeters: heading.requiresRejoin
+      ? heading.distanceToSegmentMeters
+      : (distanceToNextInstructionMeters ?? 0),
+    distanceToRouteMeters: heading.distanceToSegmentMeters,
+    requiresRejoin: heading.requiresRejoin,
+  };
   return {
+    activeNavigation,
     nextInstruction,
     distanceToNextInstructionMeters,
-    distanceFromRouteStartMeters: projection.distanceFromRouteStartMeters,
-    distanceToRouteMeters: projection.distanceMeters,
+    distanceFromRouteStartMeters,
+    distanceToRouteMeters: heading.distanceToSegmentMeters,
     offRoute:
-      projection.distanceMeters > routingConfig.routeDeviationDistanceMeters,
+      heading.distanceToSegmentMeters >
+      routingConfig.routeDeviationDistanceMeters,
     immediateCoordinates: [
-      projection.coordinates,
-      ...route.slice(projection.segmentIndex + 1, immediateEndIndex + 1),
+      segmentProjection.coordinates,
+      ...route.slice(heading.segmentIndex + 1, immediateEndIndex + 1),
     ],
+    rejoinCoordinates: heading.requiresRejoin
+      ? [point, segmentProjection.coordinates]
+      : [],
   };
 }
 
