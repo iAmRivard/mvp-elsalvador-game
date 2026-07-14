@@ -18,6 +18,7 @@ import { addLocationMarkers } from '../../map/locationMarkers';
 import { addMissionRoute } from '../../map/missionRoute';
 import { createPlayerMarkerElement } from '../../map/playerMarker';
 import { registerPmtilesProtocol } from '../../map/pmtilesProtocol';
+import { createStyleResourceTransform } from '../../map/styleResources';
 import type { ThreeGameLayerController } from '../../map/threeLayer';
 import { shouldUseThreePlayer } from '../../map/threeTransforms';
 import { useGameStore } from '../../store/gameStore';
@@ -116,7 +117,6 @@ export function GameMap() {
     const unregisterProtocol = registerPmtilesProtocol();
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: mapSourceConfig.styleUrl,
       center: mapViewConfig.center,
       zoom: mapViewConfig.zoom,
       minZoom: mapSourceConfig.minZoom,
@@ -344,6 +344,9 @@ export function GameMap() {
     map.on('load', handleLoad);
     map.on('dragstart', handleDragStart);
     map.on('error', handleError);
+    map.setStyle(mapSourceConfig.styleUrl, {
+      transformStyle: createStyleResourceTransform(window.location.href),
+    });
 
     return () => {
       effectActive = false;
