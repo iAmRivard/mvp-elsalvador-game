@@ -79,7 +79,7 @@ describe('rutas del Capítulo 1', () => {
 
   it('encuentra una salida al cerrar el tramo principal', async () => {
     const router = await chapterRouter();
-    const closedEdgeIds = [14_072];
+    const closedEdgeIds = [14_088];
     const request = {
       origin: [-89.3592277, 13.7305749] as RoadCoordinates,
       destination: [-89.3981679, 13.7673945] as RoadCoordinates,

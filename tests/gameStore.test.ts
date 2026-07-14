@@ -164,7 +164,7 @@ describe('estado de misiones y capítulo', () => {
     expect(state.activeMissionCompletedObjectiveIds).toContain(
       'elegir-ruta-secundaria',
     );
-    expect(state.temporarilyClosedRoadEdgeIds).toContain(14_336);
+    expect(state.temporarilyClosedRoadEdgeIds).toContain(14_352);
     expect(state.missionTimerCountdownSeconds).toBe(3);
     expect(useGameStore.getState().selectMissionChoice('south')).toBe(false);
 

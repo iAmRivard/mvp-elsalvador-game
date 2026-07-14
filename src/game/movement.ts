@@ -8,6 +8,7 @@ import {
   roadAssistConfig,
   roadAssistModeMultipliers,
   roadFuelMultipliers,
+  roadSurfaceForEdge,
   roadSpeedMultipliers,
   type RoadAssistMode,
   type RoadSurface,
@@ -225,7 +226,7 @@ function roadState(
     return { surface: 'offroad', contact: null };
   }
   return {
-    surface: roadContact.edge.roadClass,
+    surface: roadSurfaceForEdge(roadContact.edge),
     contact: { edge: roadContact.edge, nearest },
   };
 }

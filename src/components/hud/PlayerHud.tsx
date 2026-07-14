@@ -4,22 +4,10 @@ import { experienceProgress } from '../../game/progression';
 import { conditionWarningCopy } from '../../game/conditionWarnings';
 import { triggerHaptic } from '../../game/haptics';
 import { useSettingsStore } from '../../store/settingsStore';
-import type { RoadSurface } from '../../config/roadHandling.config';
+import { roadSurfaceLabels } from '../../config/roadHandling.config';
 import { locations } from '../../data/locations';
 
 const compassPoints = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'] as const;
-
-const surfaceLabels: Readonly<Record<RoadSurface, string>> = {
-  motorway: 'Autopista',
-  trunk: 'Carretera troncal',
-  primary: 'Vía primaria',
-  secondary: 'Vía secundaria',
-  tertiary: 'Vía terciaria',
-  residential: 'Calle residencial',
-  service: 'Vía de servicio',
-  track: 'Camino de tierra',
-  offroad: 'Fuera de carretera',
-};
 
 function compassPoint(heading: number): string {
   return compassPoints[Math.round(heading / 45) % compassPoints.length];
@@ -121,7 +109,7 @@ export function PlayerHud() {
                 ? 'Analizando vías'
                 : driving.roadNetworkStatus === 'unavailable'
                   ? 'Conducción libre'
-                  : surfaceLabels[driving.surface]}
+                  : roadSurfaceLabels[driving.surface]}
             </strong>
           </div>
           {driving.movementBlockedBy ? (

@@ -10,7 +10,7 @@ describe('balance de desgaste del vehículo', () => {
 
   const applyReadyWear = (
     distanceMeters: number,
-    surface: 'offroad' | 'track' | 'primary',
+    surface: 'offroad' | 'track' | 'dirt-road' | 'primary',
     impact = false,
   ) => {
     useGameStore.getState().setRoadNetworkStatus('ready');
@@ -34,6 +34,10 @@ describe('balance de desgaste del vehículo', () => {
 
     applyReadyWear(10.4 * 120, 'track');
     expect(useGameStore.getState().vehicle.condition).toBeCloseTo(90.016, 3);
+
+    useGameStore.setState(useGameStore.getInitialState(), true);
+    applyReadyWear(10.4 * 120, 'dirt-road');
+    expect(useGameStore.getState().vehicle.condition).toBeCloseTo(87.52, 3);
   });
 
   it('aplica impactos controlados y no daño cuando la red carga o falla', () => {

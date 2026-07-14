@@ -4,6 +4,7 @@ import type {
   RoadEdge,
   RoadNetwork,
   RoadNode,
+  RoadSurface,
 } from '../types/roads';
 import { RoadSpatialIndex, setDefaultRoadSpatialIndex } from './spatialIndex';
 
@@ -17,6 +18,7 @@ const ROAD_CLASSES = new Set<RoadClass>([
   'service',
   'track',
 ]);
+const ROAD_SURFACES = new Set<RoadSurface>([...ROAD_CLASSES, 'dirt-road']);
 
 export interface LoadedRoadNetwork {
   network: RoadNetwork;
@@ -75,6 +77,8 @@ function isEdge(value: unknown): value is RoadEdge {
     edge.distanceMeters > 0 &&
     typeof edge.roadClass === 'string' &&
     ROAD_CLASSES.has(edge.roadClass) &&
+    (edge.surface === undefined ||
+      (typeof edge.surface === 'string' && ROAD_SURFACES.has(edge.surface))) &&
     typeof edge.oneWay === 'boolean' &&
     typeof edge.speedMultiplier === 'number' &&
     edge.speedMultiplier > 0
@@ -86,7 +90,7 @@ export function parseRoadNetwork(value: unknown): RoadNetwork {
     throw new Error('La red vial no es un objeto.');
   const network = value as Partial<RoadNetwork>;
   if (
-    network.version !== 1 ||
+    (network.version !== 1 && network.version !== 2) ||
     typeof network.generatedAt !== 'string' ||
     typeof network.sourceId !== 'string' ||
     !Array.isArray(network.bounds) ||

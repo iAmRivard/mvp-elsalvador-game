@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 
 const SOURCE_DATE = '260712';
-const GENERATED_AT = '2026-07-12T23:45:51.000Z';
+const GENERATED_AT = '2026-07-14T21:00:00.000Z';
 const SOURCE_ID = `geofabrik-el-salvador-${SOURCE_DATE}`;
 const BOUNDS = [-89.72, 13.58, -89.05, 14.08];
 const SIMPLIFICATION_TOLERANCE_METERS = 2.5;
@@ -39,8 +39,22 @@ const SPEED_MULTIPLIERS = {
   tertiary: 0.8,
   residential: 0.65,
   service: 0.55,
-  track: 0.4,
+  track: 0.5,
 };
+
+const UNPAVED_SURFACES = new Set([
+  'unpaved',
+  'compacted',
+  'fine_gravel',
+  'gravel',
+  'pebblestone',
+  'ground',
+  'dirt',
+  'earth',
+  'grass',
+  'sand',
+  'mud',
+]);
 
 const CORRIDOR_PATH = [
   [-89.1911, 13.6989],
@@ -70,6 +84,13 @@ function roadClassFor(value) {
   if (typeof value !== 'string') return null;
   const normalized = value.endsWith('_link') ? value.slice(0, -5) : value;
   return ROAD_CLASSES.includes(normalized) ? normalized : null;
+}
+
+function surfaceFor(properties, roadClass) {
+  const surface = String(properties.surface ?? '').toLowerCase();
+  return roadClass === 'track' || UNPAVED_SURFACES.has(surface)
+    ? 'dirt-road'
+    : roadClass;
 }
 
 function coordinateKey([longitude, latitude]) {
@@ -258,7 +279,11 @@ function mergeCompatibleEdges(edgeDrafts) {
     if (indexes.length !== 2) return false;
     const first = edgeDrafts[indexes[0]];
     const second = edgeDrafts[indexes[1]];
-    if (first.roadClass !== second.roadClass || first.oneWay !== second.oneWay)
+    if (
+      first.roadClass !== second.roadClass ||
+      first.surface !== second.surface ||
+      first.oneWay !== second.oneWay
+    )
       return false;
     if (!first.oneWay) return true;
     const incoming =
@@ -322,6 +347,7 @@ function mergeCompatibleEdges(edgeDrafts) {
           const candidate = edgeDrafts[candidateIndex];
           return (
             candidate.roadClass === initial.roadClass &&
+            candidate.surface === initial.surface &&
             candidate.oneWay === initial.oneWay &&
             (candidate.fromKey === currentNode ||
               (!candidate.oneWay && candidate.toKey === currentNode))
@@ -341,6 +367,7 @@ function mergeCompatibleEdges(edgeDrafts) {
           SIMPLIFICATION_TOLERANCE_METERS,
         ),
         roadClass: initial.roadClass,
+        surface: initial.surface,
         oneWay: initial.oneWay,
       });
     }
@@ -395,7 +422,12 @@ function buildNetwork(collection) {
       const oneWayValue = String(properties.oneway ?? '').toLowerCase();
       const oneWay = ['yes', '1', 'true', '-1'].includes(oneWayValue);
       if (oneWayValue === '-1') coordinates = [...coordinates].reverse();
-      lines.push({ coordinates, roadClass, oneWay });
+      lines.push({
+        coordinates,
+        roadClass,
+        surface: surfaceFor(properties, roadClass),
+        oneWay,
+      });
     }
   }
 
@@ -432,6 +464,7 @@ function buildNetwork(collection) {
           toKey: coordinateKey(coordinates.at(-1)),
           coordinates,
           roadClass: line.roadClass,
+          surface: line.surface,
           oneWay: line.oneWay,
         });
       }
@@ -452,8 +485,8 @@ function buildNetwork(collection) {
   }));
 
   mergedEdgeDrafts.sort((a, b) => {
-    const aKey = `${a.fromKey}|${a.toKey}|${a.roadClass}|${JSON.stringify(a.coordinates)}`;
-    const bKey = `${b.fromKey}|${b.toKey}|${b.roadClass}|${JSON.stringify(b.coordinates)}`;
+    const aKey = `${a.fromKey}|${a.toKey}|${a.roadClass}|${a.surface}|${JSON.stringify(a.coordinates)}`;
+    const bKey = `${b.fromKey}|${b.toKey}|${b.roadClass}|${b.surface}|${JSON.stringify(b.coordinates)}`;
     return aKey.localeCompare(bKey);
   });
   const edges = mergedEdgeDrafts.map((edge, id) => ({
@@ -463,12 +496,13 @@ function buildNetwork(collection) {
     coordinates: edge.coordinates,
     distanceMeters: Number(lineDistanceMeters(edge.coordinates).toFixed(2)),
     roadClass: edge.roadClass,
+    surface: edge.surface,
     oneWay: edge.oneWay,
     speedMultiplier: SPEED_MULTIPLIERS[edge.roadClass],
   }));
 
   return {
-    version: 1,
+    version: 2,
     generatedAt: GENERATED_AT,
     sourceId: SOURCE_ID,
     bounds: [

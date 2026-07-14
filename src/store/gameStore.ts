@@ -11,7 +11,10 @@ import {
   narrativeEventById,
   objectiveNarrativeEventId,
 } from '../data/chapter1';
-import type { RoadSurface } from '../config/roadHandling.config';
+import {
+  roadConditionMultipliers,
+  type RoadSurface,
+} from '../config/roadHandling.config';
 import { vehicleStateConfig } from '../config/vehicleState.config';
 import {
   conditionWarningForTransition,
@@ -615,7 +618,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
           ? vehicleStateConfig.offroadConditionPerVehicleMeter
           : surface === 'track'
             ? vehicleStateConfig.trackConditionPerVehicleMeter
-            : 0) *
+            : surface === 'dirt-road'
+              ? vehicleStateConfig.trackConditionPerVehicleMeter *
+                roadConditionMultipliers[surface]
+              : 0) *
         Math.max(0.1, conditionMultiplier);
       const damage =
         distanceDamage +

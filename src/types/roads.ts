@@ -10,6 +10,9 @@ export type RoadClass =
   | 'service'
   | 'track';
 
+export type RoadSurface = RoadClass | 'dirt-road' | 'offroad';
+export type PlayableRoadSurface = Exclude<RoadSurface, 'offroad'>;
+
 export interface RoadNode {
   id: number;
   coordinates: RoadCoordinates;
@@ -22,6 +25,7 @@ export interface RoadEdge {
   coordinates: RoadCoordinates[];
   distanceMeters: number;
   roadClass: RoadClass;
+  surface?: PlayableRoadSurface;
   oneWay: boolean;
   speedMultiplier: number;
 }

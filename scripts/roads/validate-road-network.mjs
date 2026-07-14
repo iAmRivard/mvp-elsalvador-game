@@ -13,6 +13,7 @@ const ROAD_CLASSES = new Set([
   'service',
   'track',
 ]);
+const ROAD_SURFACES = new Set([...ROAD_CLASSES, 'dirt-road']);
 
 function invariant(condition, message) {
   if (!condition) throw new Error(message);
@@ -20,7 +21,7 @@ function invariant(condition, message) {
 
 const serialized = await readFile(NETWORK_PATH, 'utf8');
 const network = JSON.parse(serialized);
-invariant(network.version === 1, 'Version vial no compatible.');
+invariant(network.version === 2, 'Version vial no compatible.');
 invariant(typeof network.generatedAt === 'string', 'Falta generatedAt.');
 invariant(
   network.sourceId === 'geofabrik-el-salvador-260712',
@@ -59,6 +60,10 @@ for (const [index, edge] of network.edges.entries()) {
   invariant(
     ROAD_CLASSES.has(edge.roadClass),
     `Clase vial invalida en ${index}.`,
+  );
+  invariant(
+    ROAD_SURFACES.has(edge.surface),
+    `Superficie vial invalida en ${index}.`,
   );
   invariant(
     Number.isFinite(edge.distanceMeters) && edge.distanceMeters > 0,

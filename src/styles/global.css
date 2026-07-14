@@ -1806,12 +1806,14 @@ html[data-tutorial-target='recalculate'] .mission-route-summary__header button {
 }
 
 .surface-readout--track,
+.surface-readout--dirt-road,
 .surface-readout--offroad {
   border-left-color: #d39a5e;
   background: rgb(211 154 94 / 9%);
 }
 
 .surface-readout--track strong,
+.surface-readout--dirt-road strong,
 .surface-readout--offroad strong,
 .surface-readout__warning {
   color: #e1aa72 !important;

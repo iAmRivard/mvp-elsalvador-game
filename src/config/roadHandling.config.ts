@@ -1,6 +1,6 @@
-import type { RoadClass } from '../types/roads';
+import type { RoadEdge, RoadSurface } from '../types/roads';
 
-export type RoadSurface = RoadClass | 'offroad';
+export type { RoadSurface } from '../types/roads';
 export type RoadAssistMode = 'off' | 'soft' | 'strong';
 
 export interface RoadAssistConfig {
@@ -39,7 +39,8 @@ export const roadSpeedMultipliers: Readonly<Record<RoadSurface, number>> = {
   tertiary: 0.8,
   residential: 0.65,
   service: 0.55,
-  track: 0.4,
+  track: 0.5,
+  'dirt-road': 0.5,
   offroad: 0.25,
 };
 
@@ -52,10 +53,44 @@ export const roadFuelMultipliers: Readonly<Record<RoadSurface, number>> = {
   residential: 1.1,
   service: 1.15,
   track: 1.35,
+  'dirt-road': 1.35,
   offroad: 1.75,
 };
 
+export const roadConditionMultipliers: Readonly<Record<RoadSurface, number>> = {
+  motorway: 1,
+  trunk: 1,
+  primary: 1,
+  secondary: 1,
+  tertiary: 1,
+  residential: 1,
+  service: 1,
+  track: 1.25,
+  'dirt-road': 1.25,
+  offroad: 1.75,
+};
+
+export const roadSurfaceLabels: Readonly<Record<RoadSurface, string>> = {
+  motorway: 'Autopista',
+  trunk: 'Carretera troncal',
+  primary: 'Vía primaria',
+  secondary: 'Vía secundaria',
+  tertiary: 'Vía terciaria',
+  residential: 'Calle residencial',
+  service: 'Vía de servicio',
+  track: 'Camino de tierra',
+  'dirt-road': 'Camino de tierra',
+  offroad: 'Fuera de carretera',
+};
+
+export function roadSurfaceForEdge(edge: RoadEdge): RoadSurface {
+  return (
+    edge.surface ?? (edge.roadClass === 'track' ? 'dirt-road' : edge.roadClass)
+  );
+}
+
 export const difficultTerrainSurfaces = new Set<RoadSurface>([
   'track',
+  'dirt-road',
   'offroad',
 ]);

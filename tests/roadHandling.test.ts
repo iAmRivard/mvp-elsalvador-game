@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  roadConditionMultipliers,
   roadFuelMultipliers,
   roadSpeedMultipliers,
+  roadSurfaceLabels,
 } from '../src/config/roadHandling.config';
 import { fuelConsumptionConfig } from '../src/config/travel.config';
 import { restrictedAreaTypeAt } from '../src/data/restrictedAreas';
@@ -30,14 +32,46 @@ describe('road handling', () => {
     expect(roadSpeedMultipliers).toMatchObject({
       motorway: 1.25,
       primary: 1,
-      track: 0.4,
+      track: 0.5,
+      'dirt-road': 0.5,
       offroad: 0.25,
     });
     expect(roadFuelMultipliers).toMatchObject({
       primary: 1,
       track: 1.35,
+      'dirt-road': 1.35,
       offroad: 1.75,
     });
+    expect(roadConditionMultipliers).toMatchObject({
+      primary: 1,
+      'dirt-road': 1.25,
+      offroad: 1.75,
+    });
+    expect(roadSurfaceLabels['dirt-road']).toBe('Camino de tierra');
+    expect(roadSurfaceLabels.offroad).toBe('Fuera de carretera');
+  });
+
+  it('treats a visible unpaved edge as dirt road instead of offroad', () => {
+    const player: PlayerRuntime = {
+      longitude: -89.2995,
+      latitude: 13.7,
+      heading: 90,
+      speedMetersPerSecond: 5,
+      fuel: 100,
+      totalDistanceMeters: 0,
+    };
+    const contact = roadContact(player);
+    contact.edge.surface = 'dirt-road';
+    const result = stepPlayerDetailed(
+      player,
+      { ...idleInput, throttle: 1 },
+      0.05,
+      { roadNetworkEnabled: true, roadContact: contact },
+    );
+
+    expect(result.environment.surface).toBe('dirt-road');
+    expect(result.environment.speedMultiplier).toBe(0.5);
+    expect(result.environment.fuelMultiplier).toBe(1.35);
   });
 
   it('brakes toward the offroad limit and consumes 75 percent more fuel', () => {
