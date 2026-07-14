@@ -913,6 +913,125 @@ input {
   outline-offset: 2px;
 }
 
+.mobile-control-options {
+  margin: 17px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.mobile-control-options > legend {
+  color: #aeb7ae;
+  font-size: 0.62rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mobile-control-options__modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.mobile-control-options__modes label,
+.mobile-control-options__segments label {
+  position: relative;
+  cursor: pointer;
+}
+
+.mobile-control-options__modes input,
+.mobile-control-options__segments input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mobile-control-options__modes label > span {
+  display: flex;
+  min-height: 66px;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid rgb(242 231 194 / 11%);
+  border-radius: 9px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.mobile-control-options__modes strong {
+  color: #d9ddcf;
+  font-size: 0.63rem;
+}
+
+.mobile-control-options__modes small {
+  color: #849087;
+  font-size: 0.53rem;
+  line-height: 1.35;
+}
+
+.mobile-control-options__modes input:checked + span,
+.mobile-control-options__segments input:checked + span {
+  border-color: rgb(143 174 131 / 54%);
+  color: #d9e5d3;
+  background: rgb(143 174 131 / 10%);
+}
+
+.mobile-control-options__modes input:focus-visible + span,
+.mobile-control-options__segments input:focus-visible + span {
+  outline: 2px solid #8fae83;
+  outline-offset: 2px;
+}
+
+.mobile-control-options__details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  margin-top: 10px;
+}
+
+.mobile-control-options__details > div > span,
+.mobile-control-options__dead-zone > span {
+  display: flex;
+  margin-bottom: 5px;
+  justify-content: space-between;
+  color: #929d95;
+  font-size: 0.56rem;
+  font-weight: 700;
+}
+
+.mobile-control-options__segments {
+  display: flex;
+  gap: 5px;
+}
+
+.mobile-control-options__segments label {
+  flex: 1;
+}
+
+.mobile-control-options__segments label > span {
+  display: grid;
+  min-height: 32px;
+  padding: 6px;
+  place-items: center;
+  border: 1px solid rgb(242 231 194 / 10%);
+  border-radius: 8px;
+  color: #9ca69e;
+  font-size: 0.56rem;
+}
+
+.mobile-control-options__dead-zone {
+  grid-column: 1 / -1;
+}
+
+.mobile-control-options__dead-zone output {
+  color: #d9aa56;
+}
+
+.mobile-control-options__dead-zone input {
+  width: 100%;
+  accent-color: #c69648;
+}
+
 .audio-options {
   display: grid;
   gap: 11px;
@@ -2603,6 +2722,40 @@ input {
   font-weight: 750;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.touch-button--auto {
+  width: 68px;
+  height: 54px;
+  border-color: rgb(130 166 151 / 42%);
+  color: #b9d5c8;
+}
+
+.touch-button--auto strong,
+.touch-button--auto small {
+  display: block;
+  letter-spacing: 0.06em;
+}
+
+.touch-button--auto strong {
+  font-size: 0.62rem;
+}
+
+.touch-button--auto small {
+  color: #8fa99d;
+  font-size: 0.43rem;
+  text-transform: uppercase;
+}
+
+.touch-button--auto-active,
+.touch-button--auto-suspended {
+  border-color: #d9aa56;
+  color: #ffe1a1;
+  background: rgb(88 65 29 / 86%);
+}
+
+.touch-button--auto-suspended {
+  border-style: dashed;
 }
 
 .touch-button--interact {

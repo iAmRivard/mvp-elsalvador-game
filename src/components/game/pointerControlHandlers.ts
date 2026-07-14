@@ -8,6 +8,7 @@ export function pointerActionHandlers(
   input: InputController,
   action: InputAction,
   releaseDelayMilliseconds = 0,
+  onPress?: () => void,
 ) {
   const release = (
     event: ReactPointerEvent<HTMLButtonElement>,
@@ -32,6 +33,7 @@ export function pointerActionHandlers(
       event.currentTarget.setPointerCapture(event.pointerId);
       input.setPointerActive(event.pointerId, true);
       input.setPointerAction(action, true);
+      onPress?.();
     },
     onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) =>
       release(event, true),

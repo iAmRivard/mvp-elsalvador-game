@@ -87,4 +87,24 @@ describe('keyboard route controls', () => {
     expect(input.snapshot().interact).toBe(false);
     vi.useRealTimers();
   });
+
+  it('limpia teclado, punteros y crucero cuando la ventana pierde foco', () => {
+    const input = new InputController();
+    const unbind = input.bindKeyboard(window, vi.fn());
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+    input.setJoystickTurn(0.6);
+    input.setAutoThrottle(true);
+    input.setPointerAction('boost', true);
+
+    window.dispatchEvent(new Event('blur'));
+
+    expect(input.snapshot()).toEqual({
+      throttle: 0,
+      turn: 0,
+      boost: false,
+      interact: false,
+    });
+    expect(input.getAutoThrottleStatus()).toBe('off');
+    unbind();
+  });
 });

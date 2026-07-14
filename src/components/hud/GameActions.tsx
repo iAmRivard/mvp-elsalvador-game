@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { requestInputClear } from '../../game/inputEvents';
 import { useGameStore } from '../../store/gameStore';
 import { SettingsDialog } from '../menu/SettingsDialog';
 import { InventoryDialog } from '../menu/InventoryDialog';
@@ -37,7 +38,10 @@ export function GameActions() {
           type="button"
           aria-label="Inventario"
           aria-expanded={inventoryOpen}
-          onClick={() => setInventoryOpen(true)}
+          onClick={() => {
+            requestInputClear();
+            setInventoryOpen(true);
+          }}
         >
           <span aria-hidden="true">▤</span>
         </button>
@@ -46,7 +50,10 @@ export function GameActions() {
           type="button"
           aria-label="Configuración visual"
           aria-expanded={settingsOpen}
-          onClick={() => setSettingsOpen(true)}
+          onClick={() => {
+            requestInputClear();
+            setSettingsOpen(true);
+          }}
         >
           <span aria-hidden="true">⚙</span>
         </button>
@@ -76,7 +83,10 @@ export function GameActions() {
           aria-label="Partida y guardado"
           aria-expanded={menuOpen}
           aria-haspopup="menu"
-          onClick={() => setMenuOpen((open) => !open)}
+          onClick={() => {
+            requestInputClear();
+            setMenuOpen((open) => !open);
+          }}
         >
           <span aria-hidden="true">▣</span>
         </button>
@@ -100,7 +110,10 @@ export function GameActions() {
               type="button"
               role="menuitem"
               disabled={!hasSavedGame}
-              onClick={() => loadGame()}
+              onClick={() => {
+                requestInputClear();
+                loadGame();
+              }}
             >
               <span aria-hidden="true">↻</span>
               Cargar último guardado
@@ -109,7 +122,10 @@ export function GameActions() {
               type="button"
               role="menuitem"
               className="save-menu__danger"
-              onClick={() => setConfirmingReset(true)}
+              onClick={() => {
+                requestInputClear();
+                setConfirmingReset(true);
+              }}
             >
               <span aria-hidden="true">×</span>
               Reiniciar partida
@@ -141,6 +157,7 @@ export function GameActions() {
                 type="button"
                 className="confirm-dialog__danger"
                 onClick={() => {
+                  requestInputClear();
                   resetGame();
                   setConfirmingReset(false);
                   setMenuOpen(false);

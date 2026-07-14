@@ -1,8 +1,14 @@
-import { virtualJoystickConfig } from '../../config/mobileControls.config';
+import { useEffect } from 'react';
+import {
+  autoThrottleConfig,
+  joystickSizeMultipliers,
+  virtualJoystickConfig,
+} from '../../config/mobileControls.config';
 import { missionById } from '../../data/missions';
 import type { InputController } from '../../game/inputController';
-import { objectiveIsAvailable } from '../../game/missions';
+import { nearestPendingObjective } from '../../game/missions';
 import { useGameStore } from '../../store/gameStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import { ClassicTouchControls } from './ClassicTouchControls';
 import { MobileActionButtons } from './MobileActionButtons';
 import { MobilePedals } from './MobilePedals';
@@ -29,48 +35,79 @@ export function TouchControls({ input }: TouchControlsProps) {
   const completedObjectiveIds = useGameStore(
     (state) => state.activeMissionCompletedObjectiveIds,
   );
+  const telemetry = useGameStore((state) => state.telemetry);
+  const controlMode = useSettingsStore((state) => state.controlMode);
+  const joystickPositionMode = useSettingsStore(
+    (state) => state.joystickPositionMode,
+  );
+  const joystickSize = useSettingsStore((state) => state.joystickSize);
+  const joystickDeadZone = useSettingsStore((state) => state.joystickDeadZone);
+  const hapticsEnabled = useSettingsStore((state) => state.hapticsEnabled);
   const activeMission = activeMissionId
     ? missionById.get(activeMissionId)
     : null;
-  const interactionObjective = activeMission?.objectives.find(
-    (objective) =>
-      objective.type in interactionLabels &&
-      !completedObjectiveIds.includes(objective.id) &&
-      objectiveIsAvailable(objective, completedObjectiveIds),
-  );
-  const interactionLabel = interactionObjective
-    ? interactionLabels[
-        interactionObjective.type as keyof typeof interactionLabels
-      ]
+  const nearestObjective = activeMission
+    ? nearestPendingObjective(activeMission, completedObjectiveIds, [
+        telemetry.longitude,
+        telemetry.latitude,
+      ])
     : null;
-  const useClassicControls = false;
+  const interactionObjective = nearestObjective?.objective;
+  const interactionLabel =
+    interactionObjective &&
+    interactionObjective.type in interactionLabels &&
+    nearestObjective.distanceMeters <= interactionObjective.radiusMeters
+      ? interactionLabels[
+          interactionObjective.type as keyof typeof interactionLabels
+        ]
+      : null;
+  const sizeMultiplier = joystickSizeMultipliers[joystickSize];
+
+  useEffect(() => {
+    input.clearAllInput();
+    if (
+      controlMode === 'joystick-auto-throttle' &&
+      useSettingsStore.getState().autoThrottleDefault
+    ) {
+      input.setAutoThrottle(true, autoThrottleConfig.targetThrottle);
+    }
+    return () => input.clearAllInput();
+  }, [controlMode, input]);
+
+  useEffect(() => {
+    input.clearPointerActions();
+  }, [input, joystickDeadZone, joystickPositionMode, joystickSize]);
 
   return (
     <div
-      className="touch-controls touch-controls--joystick-pedals"
+      className={`touch-controls touch-controls--${controlMode}`}
       aria-label="Controles táctiles"
+      data-control-mode={controlMode}
       onContextMenu={(event) => event.preventDefault()}
     >
-      {useClassicControls ? (
+      {controlMode === 'classic-buttons' ? (
         <ClassicTouchControls
           input={input}
           interactionLabel={interactionLabel}
           isPaused={isPaused}
           onCenter={() => setFollowingPlayer(true)}
           onTogglePause={togglePaused}
+          hapticsEnabled={hapticsEnabled}
         />
       ) : (
         <>
           <VirtualJoystick
             input={input}
-            radiusPixels={virtualJoystickConfig.radiusPixels}
-            knobRadiusPixels={virtualJoystickConfig.knobRadiusPixels}
-            deadZone={virtualJoystickConfig.deadZone}
+            radiusPixels={virtualJoystickConfig.radiusPixels * sizeMultiplier}
+            knobRadiusPixels={
+              virtualJoystickConfig.knobRadiusPixels * sizeMultiplier
+            }
+            deadZone={joystickDeadZone}
             responseExponent={virtualJoystickConfig.responseExponent}
             returnDurationMilliseconds={
               virtualJoystickConfig.returnDurationMilliseconds
             }
-            positionMode={virtualJoystickConfig.positionMode}
+            positionMode={joystickPositionMode}
           />
           <div className="touch-actions touch-actions--analog">
             <MobileActionButtons
@@ -79,8 +116,14 @@ export function TouchControls({ input }: TouchControlsProps) {
               isPaused={isPaused}
               onCenter={() => setFollowingPlayer(true)}
               onTogglePause={togglePaused}
+              autoThrottleAvailable={controlMode === 'joystick-auto-throttle'}
+              hapticsEnabled={hapticsEnabled}
             />
-            <MobilePedals input={input} showAccelerator />
+            <MobilePedals
+              input={input}
+              showAccelerator={controlMode === 'joystick-pedals'}
+              hapticsEnabled={hapticsEnabled}
+            />
           </div>
         </>
       )}

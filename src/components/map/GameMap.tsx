@@ -5,6 +5,7 @@ import { gameConfig } from '../../config/game.config';
 import { followCameraConfig } from '../../config/followCamera.config';
 import { mapSourceConfig, mapViewConfig } from '../../config/map.config';
 import { roadAssistConfig } from '../../config/roadHandling.config';
+import { autoThrottleConfig } from '../../config/mobileControls.config';
 import { travelConfig } from '../../config/travel.config';
 import { vehicleStateConfig } from '../../config/vehicleState.config';
 import { missionById } from '../../data/missions';
@@ -21,6 +22,8 @@ import {
 } from '../../game/discovery';
 import { nearestPendingObjective } from '../../game/missions';
 import { InputController } from '../../game/inputController';
+import { CLEAR_GAME_INPUT_EVENT } from '../../game/inputEvents';
+import { triggerHaptic } from '../../game/haptics';
 import { addLocationMarkers } from '../../map/locationMarkers';
 import { addMissionRoute } from '../../map/missionRoute';
 import { createPlayerMarkerElement } from '../../map/playerMarker';
@@ -177,6 +180,7 @@ export function GameMap() {
     let removeMissionRoute: (() => void) | null = null;
     let removeRoadDebugLayer: (() => void) | null = null;
     let unsubscribeRuntime: (() => void) | null = null;
+    let unsubscribeSettings: (() => void) | null = null;
     let lastCameraUpdate = 0;
     let lastFollowedLongitude = Number.NaN;
     let lastFollowedLatitude = Number.NaN;
@@ -194,6 +198,7 @@ export function GameMap() {
     let lastBlockedImpactTimestamp = Number.NEGATIVE_INFINITY;
     let visualFrameCount = 0;
     let lastFrameSampleTimestamp = performance.now();
+    let previousHapticSurface = useGameStore.getState().driving.surface;
 
     const cameraForPlayer = (player: PlayerRuntime) => {
       const camera = followCameraTarget(player.speedMetersPerSecond);
@@ -218,12 +223,25 @@ export function GameMap() {
       useGameStore.getState().togglePaused,
       useGameStore.getState().requestMissionRouteRecalculation,
     );
-    const clearInterruptedInput = () => inputController.clearPointerActions();
+    const clearInterruptedInput = () => inputController.clearAllInput();
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') clearInterruptedInput();
     };
     window.addEventListener('blur', clearInterruptedInput);
+    window.addEventListener('orientationchange', clearInterruptedInput);
+    window.addEventListener(CLEAR_GAME_INPUT_EVENT, clearInterruptedInput);
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    unsubscribeSettings = useSettingsStore.subscribe((state, previousState) => {
+      if (state.controlMode !== previousState.controlMode) {
+        clearInterruptedInput();
+      } else if (
+        state.joystickPositionMode !== previousState.joystickPositionMode ||
+        state.joystickSize !== previousState.joystickSize ||
+        state.joystickDeadZone !== previousState.joystickDeadZone
+      ) {
+        inputController.clearPointerActions();
+      }
+    });
 
     const handleLoad = () => {
       const initialPlayer = runtimeFromTelemetry(
@@ -464,6 +482,11 @@ export function GameMap() {
           }
           const environment = gameLoop?.getEnvironment();
           if (environment) {
+            inputController.setAutoThrottleScale(
+              environment.surface === 'offroad'
+                ? autoThrottleConfig.offroadScale
+                : 1,
+            );
             state.setDrivingEnvironment(environment);
             const vehicleDistanceMeters =
               Math.max(
@@ -475,6 +498,15 @@ export function GameMap() {
               telemetryTimestamp - lastBlockedImpactTimestamp >=
                 vehicleStateConfig.blockedImpactCooldownMilliseconds;
             if (blockedImpact) lastBlockedImpactTimestamp = telemetryTimestamp;
+            const hapticsEnabled = useSettingsStore.getState().hapticsEnabled;
+            if (
+              environment.surface === 'offroad' &&
+              previousHapticSurface !== 'offroad'
+            ) {
+              triggerHaptic('offroad', hapticsEnabled);
+            }
+            if (blockedImpact) triggerHaptic('collision', hapticsEnabled);
+            previousHapticSurface = environment.surface;
             state.applyDrivingWear(
               vehicleDistanceMeters,
               environment.surface,
@@ -513,6 +545,14 @@ export function GameMap() {
 
       unsubscribeRuntime = useGameStore.subscribe((state, previousState) => {
         if (threeLayer) syncInteractiveSignal(threeLayer);
+        if (
+          (!previousState.isPaused && state.isPaused) ||
+          (!previousState.recoveryReason && state.recoveryReason) ||
+          (!previousState.activeNarrativeEventId &&
+            state.activeNarrativeEventId)
+        ) {
+          clearInterruptedInput();
+        }
         if (
           state.playerRuntimeRevision === previousState.playerRuntimeRevision
         ) {
@@ -584,6 +624,7 @@ export function GameMap() {
       map.off('error', handleError);
       gameLoop?.stop();
       unsubscribeRuntime?.();
+      unsubscribeSettings?.();
       removeLocationMarkers?.();
       removeMissionRoute?.();
       removeRoadDebugLayer?.();
@@ -591,9 +632,11 @@ export function GameMap() {
       playerMarker?.remove();
       unbindKeyboard();
       window.removeEventListener('blur', clearInterruptedInput);
+      window.removeEventListener('orientationchange', clearInterruptedInput);
+      window.removeEventListener(CLEAR_GAME_INPUT_EVENT, clearInterruptedInput);
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      inputController.clearPointerActions();
+      inputController.clearAllInput();
       map.remove();
       unregisterProtocol();
       delete document.documentElement.dataset.graphicsQuality;
