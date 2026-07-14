@@ -21,6 +21,12 @@ describe('configuración visual', () => {
       audioEffectsVolume: 0.8,
       audioMuted: false,
       reduceAudioEffects: false,
+      controlMode: 'joystick-pedals',
+      joystickPositionMode: 'fixed',
+      joystickSize: 'medium',
+      joystickDeadZone: 0.14,
+      autoThrottleDefault: false,
+      hapticsEnabled: true,
     });
   });
 
@@ -52,6 +58,12 @@ describe('configuración visual', () => {
       audioEffectsVolume: 0.8,
       audioMuted: false,
       reduceAudioEffects: false,
+      controlMode: 'joystick-pedals',
+      joystickPositionMode: 'fixed',
+      joystickSize: 'medium',
+      joystickDeadZone: 0.14,
+      autoThrottleDefault: false,
+      hapticsEnabled: true,
     });
   });
 
@@ -121,6 +133,45 @@ describe('configuración visual', () => {
       audioEffectsVolume: 0,
       audioMuted: true,
       reduceAudioEffects: true,
+    });
+  });
+
+  it('migra preferencias móviles y sanea la versión 5', () => {
+    expect(
+      parseVisualSettings(
+        JSON.stringify({
+          version: 5,
+          settings: {
+            graphicsQuality: 'medium',
+            controlMode: 'joystick-auto-throttle',
+            joystickPositionMode: 'floating',
+            joystickSize: 'large',
+            joystickDeadZone: 4,
+            autoThrottleDefault: true,
+            hapticsEnabled: false,
+          },
+        }),
+      ),
+    ).toMatchObject({
+      controlMode: 'joystick-auto-throttle',
+      joystickPositionMode: 'floating',
+      joystickSize: 'large',
+      joystickDeadZone: 0.3,
+      autoThrottleDefault: true,
+      hapticsEnabled: false,
+    });
+
+    useSettingsStore.getState().setMobileControlMode('classic-buttons');
+    useSettingsStore.getState().setJoystickSize('small');
+    useSettingsStore.getState().setJoystickDeadZone(0.2);
+    expect(
+      parseVisualSettings(
+        window.localStorage.getItem(SETTINGS_STORAGE_KEY) ?? '',
+      ),
+    ).toMatchObject({
+      controlMode: 'classic-buttons',
+      joystickSize: 'small',
+      joystickDeadZone: 0.2,
     });
   });
 });

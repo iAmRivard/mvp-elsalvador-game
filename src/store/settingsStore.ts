@@ -1,12 +1,19 @@
 import { create } from 'zustand';
 import { gameConfig, type GraphicsQuality } from '../config/game.config';
+import {
+  defaultMobileControlsSettings,
+  type JoystickPositionMode,
+  type JoystickSize,
+  type MobileControlMode,
+  type MobileControlsSettings,
+} from '../config/mobileControls.config';
 import type { RoadAssistMode } from '../config/roadHandling.config';
 import type { SteeringSensitivity } from '../config/travel.config';
 
 export const SETTINGS_STORAGE_KEY = 'el-salvador-rutas-perdidas:settings';
-export const SETTINGS_VERSION = 4;
+export const SETTINGS_VERSION = 5;
 
-export interface VisualSettings {
+export interface VisualSettings extends MobileControlsSettings {
   graphicsQuality: GraphicsQuality;
   reduceMotion: boolean;
   ambientFog: boolean;
@@ -30,6 +37,12 @@ interface SettingsStore extends VisualSettings {
   setAudioEffectsVolume: (volume: number) => void;
   setAudioMuted: (muted: boolean) => void;
   setReduceAudioEffects: (reduced: boolean) => void;
+  setMobileControlMode: (mode: MobileControlMode) => void;
+  setJoystickPositionMode: (mode: JoystickPositionMode) => void;
+  setJoystickSize: (size: JoystickSize) => void;
+  setJoystickDeadZone: (deadZone: number) => void;
+  setAutoThrottleDefault: (enabled: boolean) => void;
+  setHapticsEnabled: (enabled: boolean) => void;
 }
 
 interface SettingsEnvelope {
@@ -48,6 +61,7 @@ const defaultSettings: VisualSettings = {
   audioEffectsVolume: 0.8,
   audioMuted: false,
   reduceAudioEffects: false,
+  ...defaultMobileControlsSettings,
 };
 
 function volume(value: unknown, fallback: number): number {
@@ -72,6 +86,28 @@ function isRoadAssistMode(value: unknown): value is RoadAssistMode {
   return value === 'off' || value === 'soft' || value === 'strong';
 }
 
+function isMobileControlMode(value: unknown): value is MobileControlMode {
+  return (
+    value === 'joystick-pedals' ||
+    value === 'joystick-auto-throttle' ||
+    value === 'classic-buttons'
+  );
+}
+
+function isJoystickPositionMode(value: unknown): value is JoystickPositionMode {
+  return value === 'fixed' || value === 'floating';
+}
+
+function isJoystickSize(value: unknown): value is JoystickSize {
+  return value === 'small' || value === 'medium' || value === 'large';
+}
+
+function joystickDeadZone(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0.05, Math.min(0.3, value))
+    : defaultMobileControlsSettings.joystickDeadZone;
+}
+
 export function parseVisualSettings(raw: string): VisualSettings | null {
   let parsed: unknown;
   try {
@@ -84,6 +120,7 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
     (parsed.version !== 1 &&
       parsed.version !== 2 &&
       parsed.version !== 3 &&
+      parsed.version !== 4 &&
       parsed.version !== SETTINGS_VERSION)
   ) {
     return null;
@@ -114,6 +151,18 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
     ),
     audioMuted: value.audioMuted === true,
     reduceAudioEffects: value.reduceAudioEffects === true,
+    controlMode: isMobileControlMode(value.controlMode)
+      ? value.controlMode
+      : defaultMobileControlsSettings.controlMode,
+    joystickPositionMode: isJoystickPositionMode(value.joystickPositionMode)
+      ? value.joystickPositionMode
+      : defaultMobileControlsSettings.joystickPositionMode,
+    joystickSize: isJoystickSize(value.joystickSize)
+      ? value.joystickSize
+      : defaultMobileControlsSettings.joystickSize,
+    joystickDeadZone: joystickDeadZone(value.joystickDeadZone),
+    autoThrottleDefault: value.autoThrottleDefault === true,
+    hapticsEnabled: value.hapticsEnabled !== false,
   };
 }
 
@@ -158,6 +207,12 @@ function visualSettings(state: VisualSettings): VisualSettings {
     audioEffectsVolume: state.audioEffectsVolume,
     audioMuted: state.audioMuted,
     reduceAudioEffects: state.reduceAudioEffects,
+    controlMode: state.controlMode,
+    joystickPositionMode: state.joystickPositionMode,
+    joystickSize: state.joystickSize,
+    joystickDeadZone: state.joystickDeadZone,
+    autoThrottleDefault: state.autoThrottleDefault,
+    hapticsEnabled: state.hapticsEnabled,
   };
 }
 
@@ -231,6 +286,45 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   setReduceAudioEffects: (reduceAudioEffects) =>
     set((state) => {
       const next = { ...visualSettings(state), reduceAudioEffects };
+      saveVisualSettings(next);
+      return next;
+    }),
+  setMobileControlMode: (controlMode) =>
+    set((state) => {
+      const next = { ...visualSettings(state), controlMode };
+      saveVisualSettings(next);
+      return next;
+    }),
+  setJoystickPositionMode: (joystickPositionMode) =>
+    set((state) => {
+      const next = { ...visualSettings(state), joystickPositionMode };
+      saveVisualSettings(next);
+      return next;
+    }),
+  setJoystickSize: (joystickSize) =>
+    set((state) => {
+      const next = { ...visualSettings(state), joystickSize };
+      saveVisualSettings(next);
+      return next;
+    }),
+  setJoystickDeadZone: (value) =>
+    set((state) => {
+      const next = {
+        ...visualSettings(state),
+        joystickDeadZone: joystickDeadZone(value),
+      };
+      saveVisualSettings(next);
+      return next;
+    }),
+  setAutoThrottleDefault: (autoThrottleDefault) =>
+    set((state) => {
+      const next = { ...visualSettings(state), autoThrottleDefault };
+      saveVisualSettings(next);
+      return next;
+    }),
+  setHapticsEnabled: (hapticsEnabled) =>
+    set((state) => {
+      const next = { ...visualSettings(state), hapticsEnabled };
       saveVisualSettings(next);
       return next;
     }),
