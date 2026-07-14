@@ -1,9 +1,9 @@
 # El Salvador: Rutas Perdidas
 
 Videojuego web de conducción y exploración sobre una cartografía estilizada de El Salvador. La
-v0.2.2 incluye mapa MapLibre 2.5D autónomo, controles móviles de dos pulgares, corredor vial local,
-rutas A* en Web Worker, navegación básica, vehículo y referencias 3D, seis misiones conectadas,
-inventario, recuperación, audio local, progreso persistente, Docker y despliegue en Dokploy.
+v0.2.3 incluye mapa MapLibre 2.5D autónomo, controles móviles de dos pulgares, corredor vial local,
+rutas A* en Web Worker, historia guiada, elección persistente, combustible balanceado, música local,
+vehículo y referencias 3D, progreso, Docker y despliegue en Dokploy.
 
 ## Requisitos
 
@@ -30,7 +30,8 @@ Abre la dirección que muestra Vite. El mapa permite zoom, rotación, inclinaci�
 - `Shift`: turbo.
 - `R`: recalcular la ruta activa.
 - `Escape`: pausar o reanudar.
-- `Espacio`: realizar la acción del objetivo cercano.
+- `E`: realizar la acción contextual del objetivo cercano.
+- `Espacio`: alternativa temporal para la misma interacción.
 - En pantallas táctiles aparece joystick de dirección, crucero explícito, freno/reversa, Turbo por
   toque y acción contextual.
 
@@ -70,7 +71,7 @@ volver al inicio.
 
 La calidad gráfica, sensibilidad, asistencia vial, movimiento reducido, atmósfera, audio, tutorial
 y controles móviles se guardan en este dispositivo, separados del progreso. Preferencias v1 a v4
-migran al formato v5 sin perder ajustes. Cambiar la calidad reconstruye el mapa con el perfil
+migran al formato v6 sin perder ajustes. Cambiar la calidad reconstruye el mapa con el perfil
 solicitado. Consulta `docs/architecture/interface.md`, `docs/architecture/mobile.md` y
 `docs/architecture/audio.md`.
 
@@ -87,8 +88,16 @@ notificación y aumenta el contador del HUD. Las coordenadas y fuentes están do
 La bitácora contiene las seis misiones conectadas del capítulo **La señal de Occidente** y la misión
 opcional **Señales en Suchitoto**. El recorrido parte de San Salvador, atraviesa un cierre vial,
 introduce combustible, inventario y reparación, llega a Santa Ana y termina investigando tres ecos
-alrededor de Coatepeque. Cada misión valida inicio y prerrequisitos, muestra progreso y calcula con
-A* una ruta sobre carreteras locales.
+alrededor de Coatepeque. La siguiente misión principal siempre aparece primero con una acción para
+iniciarla o navegar a su comienzo; las opcionales no reemplazan la historia y cada bloqueo explica
+su causa. Cada misión valida inicio y prerrequisitos, muestra progreso y calcula una ruta A* local.
+
+Los mensajes normales de radio permanecen en una esquina sin pausar ni bloquear el mapa. La
+introducción y final de capítulo, las decisiones, la recuperación y el tutorial obligatorio sí
+pausan y lo indican. Historia, misiones, transmisiones y descubrimientos pueden releerse. En
+**Camino bloqueado**, las rutas norte y sur cambian A*, consumo y desgaste; tras confirmar aparece
+una cuenta `3-2-1` y un temporizador de 4:30. Consulta `docs/gameplay/story-flow.md`,
+`docs/gameplay/mission-progression.md` y `docs/gameplay/interactions.md`.
 
 El botón `↻` o la tecla `R` recalculan en un Web Worker; una desviación de 250 m también lo hace con
 enfriamiento. La ruta resalta el segmento inmediato y muestra próxima maniobra, flecha y distancia.
@@ -131,15 +140,17 @@ condición, inventario, checkpoints, progreso de objetivos, descubrimientos, mis
 El botón `▤` abre el inventario y `▣` permite guardar, cargar o reiniciar con confirmación. Si se
 agota el combustible, la condición llega a cero o falla un objetivo con tiempo, se puede reintentar,
 volver a un lugar seguro o abandonar la misión. Una condición `0` válida se conserva y abre
-recuperación; sólo un campo ausente o inválido migra a `100`. El formato v2 migra partidas anteriores; consulta
+recuperación; sólo un campo ausente o inválido migra a `100`. El formato v3 conserva elección y
+bitácora, y migra partidas v1/v2 sin reemplazar su combustible. Consulta
 `docs/architecture/save-format.md` y `docs/gameplay/progression-systems.md`.
 
 ## Audio local
 
-Diez WAV originales cubren motor, turbo, frenado, terreno, misiones, descubrimientos, combustible e
-interferencia. Web Audio se desbloquea únicamente después de una interacción; los bucles de motor
-se mezclan de forma continua y no se reinician por frame. `npm run generate:audio` reconstruye los
-archivos de forma determinista. No hay streaming ni solicitudes a terceros.
+Catorce WAV originales cubren motor, turbo, frenado, terreno, señales y tres estados musicales:
+exploración, misión y objetivo cronometrado. Web Audio se desbloquea después de una interacción;
+la música cruza pistas en 1.5 s, baja durante la radio y no se reinicia por actualización.
+`npm run generate:audio` reconstruye todo de forma determinista. No hay streaming ni solicitudes a
+terceros. Consulta `docs/audio/music-system.md`.
 
 ## Verificaciones
 
@@ -164,14 +175,14 @@ El panel local de métricas se activa solo en desarrollo:
 VITE_ENABLE_DIAGNOSTICS=true npm run dev
 ```
 
-La matriz y el protocolo pendiente para cinco personas están en
-`docs/gameplay/mobile-controls-playtest.md`.
+La validación automática y el protocolo físico pendiente para cinco personas están en
+`docs/gameplay/playtest-v0.2.3.md`.
 
 ## Docker
 
 ```sh
-docker build -t el-salvador-rutas-perdidas:v0.2.2 .
-docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.2
+docker build -t el-salvador-rutas-perdidas:v0.2.3 .
+docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.3
 curl http://localhost:8080/healthz
 ```
 
@@ -184,7 +195,17 @@ El navegador lee exclusivamente `/maps/el-salvador.pmtiles` y los recursos de `/
 Consulta `data/SOURCES.md`, `data/LICENSES.md` y `scripts/maps/README.md` para procedencia,
 licencias y reconstrucción.
 
-## Estado de la v0.2.2
+## Estado de la v0.2.3
+
+- Continuación de historia, recomendación pura, CTA compacto y misiones bloqueadas agrupadas.
+- Premisa directa, radio no bloqueante, bitácora por categorías e interacción contextual con `E`.
+- Elección norte/sur persistente, rutas A* distintas, consecuencias y timer prominente de 4:30.
+- Consumo por distancia geográfica, inicio al 75%, autonomía aproximada y recuperación limitada.
+- Tres pistas musicales locales con crossfade, ducking de radio y volumen independiente.
+- Migración opcional de controles, cooldown de Turbo preservado y reset vial dentro del juego.
+- E2E del flujo narrativo en escritorio, Pixel 7 vertical y horizontal; playtest físico pendiente.
+
+### Base v0.2.2
 
 - Modo móvil recomendado de dos pulgares con AUTO explícito, Turbo temporal y freno cancelable.
 - Sprite vacío eliminado, reintento recuperable de MapLibre y caché segura para recursos sin hash.

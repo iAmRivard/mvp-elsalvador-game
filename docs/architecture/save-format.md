@@ -5,11 +5,11 @@ La partida se almacena en `localStorage` bajo la clave
 
 ## Versión actual
 
-La versión actual es `2` y utiliza este sobre:
+La versión actual es `3` y utiliza este sobre:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "savedAt": "2026-07-13T16:00:00.000Z",
   "game": {
     "player": {},
@@ -19,9 +19,11 @@ La versión actual es `2` y utiliza este sobre:
     "inventory": [],
     "vehicle": {
       "condition": 100,
-      "fuel": 100,
+      "fuel": 75,
       "maximumFuel": 100
     },
+    "missionChoiceSelections": {},
+    "storyLogEntries": [],
     "lastCheckpoint": {},
     "lastSafeCheckpoint": {},
     "currentChapterId": "chapter-1",
@@ -32,14 +34,13 @@ La versión actual es `2` y utiliza este sobre:
 ```
 
 `game` contiene el runtime mínimo del jugador, misión activa, progreso de cada objetivo, ubicaciones,
-inventario, vehículo, checkpoints, capítulo, historia, pausa y seguimiento de cámara. La velocidad
+inventario, vehículo, elecciones, bitácora, checkpoints, capítulo, pausa y seguimiento de cámara. La velocidad
 se restaura en cero para evitar que el vehículo continúe moviéndose al cargar. El grafo vial no se
 guarda: sólo se registra su versión y se vuelve a cargar desde el archivo estático.
 
-Los cierres narrativos tampoco duplican IDs de aristas en el documento. Se reconstruyen de forma
-determinista a partir de la misión y sus objetivos completados, por lo que una partida guardada
-durante **Camino bloqueado** conserva el desvío al cargar. Los paneles de radio activos no se
-persisten; sus historias desbloqueadas sí.
+Los cierres narrativos no duplican IDs de aristas en el documento. Se reconstruyen a partir de la
+misión, objetivos completados y `missionChoiceSelections`, por lo que **Camino bloqueado** conserva
+desvío y tiempo al cargar. Los overlays activos no se persisten; sus entradas de Bitácora sí.
 
 Cada checkpoint conserva posición, combustible, condición, inventario, energía, misión, objetivos
 completados y progreso parcial. `lastCheckpoint` permite reintentar una misión y
@@ -60,8 +61,8 @@ Al cargar se normalizan rumbo, combustible, energía, distancia y límites geogr
 descartan identificadores de misiones, objetivos y ubicaciones que no existan en los datos actuales.
 Las ubicaciones inicialmente disponibles siempre se restituyen.
 
-Los estados planos sin versión y los marcados como versión `0` se migran al contrato actual. La
-migración explícita de versión `1` conserva posición, experiencia, misiones, ubicaciones, historias
-y preferencias independientes; agrega inventario vacío, condición completa, checkpoints derivados,
-capítulo 1 y versión vial 1. Los objetos especiales conocidos se trasladan también al inventario.
+Los estados planos sin versión y los marcados como versión `0` se migran al contrato actual. Las
+migraciones explícitas de versión `1` y `2` conservan posición, combustible, experiencia, misiones,
+ubicaciones e inventario; agregan elecciones y Bitácora vacías cuando no existían. Los objetos
+especiales conocidos se trasladan también al inventario.
 Una versión futura desconocida o un JSON inválido se rechaza sin reemplazar la partida en memoria.

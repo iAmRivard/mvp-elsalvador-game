@@ -41,7 +41,7 @@ Cada misión inicia con un mensaje breve de radio. Hay un evento adicional al co
 otro al cerrar el capítulo. Los paneles pausan el movimiento, se descartan con una acción explícita
 y se registran como historia desbloqueada cuando corresponde.
 
-El progreso usa el guardado v2: misión activa, objetivos completados, progreso temporal, inventario,
+El progreso usa el guardado v3: misión activa, objetivos, elección, progreso temporal, inventario,
 condición, cierres reconstruibles, capítulo y checkpoints. La migración de partidas anteriores
 conserva los IDs históricos de las misiones y expande los prerrequisitos para que una partida que ya
 había llegado a Coatepeque no quede bloqueada.

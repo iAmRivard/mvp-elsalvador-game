@@ -41,7 +41,7 @@ el gesto y el valor vuelve a cero al liberar, cancelar o perder captura.
 
 La sección **Controles móviles** permite modo, posición fija o flotante, tamaño pequeño/mediano/grande,
 zona muerta y vibración. La sensibilidad de dirección existente se aplica también
-al joystick. `settingsStore` usa versión 5 y migra documentos 1 a 4 conservando calidad, audio,
+al joystick. `settingsStore` usa versión 6 y migra documentos previos conservando calidad, audio,
 asistencia y accesibilidad.
 
 Los eventos hápticos son pulsos cortos para botón, turbo, offroad, colisión, condición, objetivo y crucero. Se

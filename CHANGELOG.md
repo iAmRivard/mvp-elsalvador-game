@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.2.3 - 2026-07-14
+
+### Historia y misiones
+
+- Premisa inicial reescrita, siguiente misión recomendada, tarjeta **Continuar historia** y CTA
+  compacto cuando la bitácora móvil está contraída.
+- Radio normal no bloqueante, modales obligatorios marcados como juego en pausa y bitácora con
+  historia, misiones, transmisiones y descubrimientos.
+- Interacción principal con `E`, fallback con Espacio, acciones contextuales y objetivos pasivos o
+  de recolección lenta automatizados.
+- Elección norte/sur persistente en **Camino bloqueado**, cierres A* distintos, consumo, desgaste,
+  consecuencia visible, cuenta regresiva y temporizador de 4:30 con reintento preelección.
+
+### Balance, audio y móvil
+
+- Combustible inicial de partidas nuevas en 75%, consumo por distancia geográfica, autonomía,
+  estimación al destino, advertencia y recuperación de emergencia limitada.
+- Tres pistas musicales WAV originales para exploración, misión y tiempo, crossfade de 1.5 s,
+  ducking de radio, atenuación en pausa y volumen independiente.
+- Migración opcional a Joystick + crucero, sección Controles enlazada directamente, contadores
+  derivados, cooldown de Turbo preservado y reset completo sólo en recuperación o partida nueva.
+- Reiniciar dentro del juego vuelve a alinear el vehículo aunque la red vial ya esté montada.
+
+### Pruebas y documentación
+
+- Simulaciones A* para ambos desvíos, Turbo, offroad, combustible bajo y protección contra softlock.
+- Playwright cubre historia, radio, elección, timer, persistencia, combustible, reinicio y geometría
+  en escritorio, móvil vertical y horizontal sin solicitudes externas.
+- El playtest físico de cinco personas permanece explícitamente pendiente; no se atribuyen
+  resultados humanos a la validación automatizada.
+
 ## v0.2.2 - 2026-07-14
 
 ### Agregado

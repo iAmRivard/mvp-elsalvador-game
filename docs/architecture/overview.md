@@ -28,7 +28,7 @@ Las responsabilidades se separan así:
 - `src/game`: movimiento y reglas puras de proximidad, objetivos y recompensas.
 - `public/map-assets`: estilo y glyphs locales; los sprites técnicos heredados no forman parte del runtime.
 - `public/models`: modelos GLB propios y autocontenidos.
-- `public/audio`: diez señales WAV locales generadas dentro del proyecto.
+- `public/audio`: catorce efectos y pistas WAV locales generados dentro del proyecto.
 - `scripts/maps`: adquisición, construcción, validación y checksums reproducibles.
 - `scripts/models`: generación reproducible de los modelos 3D.
 - `scripts/roads`: descarga fijada, construcción y validación del grafo local.
@@ -78,4 +78,4 @@ el fallback 2D. Las mediciones de runtime y tamaños gzip están en `performance
 5. La SPA es responsive, accesible y explica la falta de WebGL.
 6. La imagen Docker sirve `/healthz` y responde 206 a una petición Range del mapa.
 7. Rutas, red vial, modelos y audio se solicitan exclusivamente al mismo origen.
-8. La partida v1 migra al formato v2 sin perder progreso histórico.
+8. Las partidas v1/v2 migran al formato v3 sin perder progreso ni combustible.
