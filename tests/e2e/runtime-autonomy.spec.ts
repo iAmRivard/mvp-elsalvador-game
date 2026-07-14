@@ -203,7 +203,9 @@ test('carga el mapa sin solicitudes a terceros', async ({
   const expandMissions = page.getByRole('button', {
     name: 'Expandir panel de misiones',
   });
-  if (await expandMissions.isVisible()) await expandMissions.click();
+  const missionDetails = page.getByRole('button', { name: 'Ver detalles' });
+  if (await missionDetails.isVisible()) await missionDetails.click();
+  else if (await expandMissions.isVisible()) await expandMissions.click();
 
   const firstMission = page.locator('.mission-list__item').filter({
     has: page.getByRole('heading', {
@@ -222,8 +224,8 @@ test('carga el mapa sin solicitudes a terceros', async ({
     .toEqual([0, 0]);
   await page.getByRole('button', { name: 'Comenzar investigación' }).click();
   await expect(
-    page.getByRole('heading', { name: 'La transmisión' }),
-  ).toBeVisible();
+    page.getByRole('complementary', { name: 'Panel de misiones' }),
+  ).toContainText('La transmisión');
   await expect(
     page.getByRole('button', { name: 'Abandonar misión' }),
   ).toBeVisible();
@@ -256,9 +258,8 @@ test('carga el mapa sin solicitudes a terceros', async ({
     await gameMap.getAttribute('data-mission-route-coordinate-count'),
   );
   expect(routeCoordinateCount).toBeGreaterThan(10);
-  await expect(page.locator('.mission-route-summary')).toHaveAttribute(
-    'data-route-status',
-    'road',
+  await expect(page.locator('.mission-route-summary')).toContainText(
+    'Ruta por carretera',
   );
   await expect(gameMap).toHaveAttribute(
     'data-route-calculation-ms',
@@ -330,8 +331,8 @@ test('carga el mapa sin solicitudes a terceros', async ({
   await page.reload();
   await enterExpedition(page);
   await expect(
-    page.getByRole('heading', { name: 'La transmisión' }),
-  ).toBeVisible();
+    page.getByRole('complementary', { name: 'Panel de misiones' }),
+  ).toContainText('La transmisión');
 
   const canvas = page.locator('.maplibregl-canvas');
   const box = await canvas.boundingBox();

@@ -28,15 +28,15 @@ test('recorre inicio, tutorial, pausa y configuración', async ({
 
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
   const tutorialTitles = [
-    'Prueba la dirección',
-    'Inicia el recorrido',
-    'Sigue la ruta',
-    'Encuentra el freno',
+    'Tu vehículo',
+    'Tu ruta',
+    'Tu objetivo',
+    'Conduce',
+    'Frena y retrocede',
     'Usa el turbo',
-    'Investiga una señal',
-    'Recoge combustible',
-    'Repara el vehículo',
-    'Recalcula la ruta',
+    'Interactúa',
+    'Puntos de combustible',
+    'Vuelve a la ruta',
   ];
   for (const [index, title] of tutorialTitles.entries()) {
     await expect(page.getByRole('heading', { name: title })).toBeVisible();
@@ -81,7 +81,7 @@ test('recorre inicio, tutorial, pausa y configuración', async ({
   await page.keyboard.press('Escape');
   await pauseMenu.getByRole('button', { name: 'Ver tutorial' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Prueba la dirección' }),
+    page.getByRole('heading', { name: 'Tu vehículo' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Omitir' }).click();
 });

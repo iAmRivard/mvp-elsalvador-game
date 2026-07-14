@@ -84,6 +84,15 @@ async function pressInteraction(page: Page, holdMilliseconds = 35) {
   await page.keyboard.up('e');
 }
 
+async function startFirstMission(page: Page) {
+  const compactStart = page.getByRole('button', { name: 'Iniciar misión' });
+  if (await compactStart.isVisible()) {
+    await compactStart.click();
+    return;
+  }
+  await page.getByRole('button', { name: /Iniciar La transmisión$/ }).click();
+}
+
 function rectanglesOverlap(
   first: { x: number; y: number; width: number; height: number },
   second: { x: number; y: number; width: number; height: number },
@@ -151,7 +160,7 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,
   });
-  await page.getByRole('button', { name: /Iniciar La transmisión$/ }).click();
+  await startFirstMission(page);
 
   const introduction = page.getByRole('dialog', {
     name: 'Una señal de auxilio',
@@ -199,8 +208,8 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
     'Advertencia en la carretera',
   );
   await expect(
-    page.getByRole('heading', { name: 'Camino bloqueado', exact: true }),
-  ).toBeAttached();
+    page.getByRole('complementary', { name: 'Panel de misiones' }),
+  ).toContainText('Camino bloqueado');
 
   await installSave(page, {
     activeMissionId: 'camino-hacia-santa-ana',
@@ -257,7 +266,7 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
     (await fuelReadout.textContent()) ?? '0',
   );
   await page.keyboard.down('w');
-  await page.waitForTimeout(1_200);
+  await page.waitForTimeout(3_000);
   await page.keyboard.up('w');
   await expect
     .poll(async () =>

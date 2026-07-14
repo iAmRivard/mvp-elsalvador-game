@@ -89,7 +89,9 @@ async function expandMissions(page: Page) {
   const expand = page.getByRole('button', {
     name: 'Expandir panel de misiones',
   });
-  if (await expand.isVisible()) await expand.click();
+  const details = page.getByRole('button', { name: 'Ver detalles' });
+  if (await details.isVisible()) await details.click();
+  else if (await expand.isVisible()) await expand.click();
 }
 
 async function openInventory(page: Page) {
