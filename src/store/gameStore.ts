@@ -81,6 +81,7 @@ export interface MissionRouteRuntimeState {
   distanceMeters: number | null;
   estimatedGameDurationSeconds: number | null;
   coordinateCount: number;
+  activeEdgeIds: number[];
   recalculationRevision: number;
 }
 
@@ -380,6 +381,7 @@ const defaultMissionRouteState: MissionRouteRuntimeState = {
   distanceMeters: null,
   estimatedGameDurationSeconds: null,
   coordinateCount: 0,
+  activeEdgeIds: [],
   recalculationRevision: 0,
 };
 

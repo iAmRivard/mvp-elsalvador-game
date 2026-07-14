@@ -23,6 +23,7 @@ import { nearestPendingObjective } from '../../game/missions';
 import { InputController } from '../../game/inputController';
 import { CLEAR_GAME_INPUT_EVENT } from '../../game/inputEvents';
 import { triggerHaptic } from '../../game/haptics';
+import { normalizeHeading } from '../../game/movement';
 import { addLocationMarkers } from '../../map/locationMarkers';
 import { addMissionRoute } from '../../map/missionRoute';
 import { createPlayerMarkerElement } from '../../map/playerMarker';
@@ -190,11 +191,21 @@ export function GameMap() {
     let effectActive = true;
     let roadTracker: RoadTracker | null = null;
     let roadContact: RoadContact | null = null;
+    let activeRouteEdgeIds = new Set(
+      useGameStore.getState().missionRoute.activeEdgeIds,
+    );
     let roadNetworkEnabled = false;
     let lastBlockedImpactTimestamp = Number.NEGATIVE_INFINITY;
     let visualFrameCount = 0;
     let lastFrameSampleTimestamp = performance.now();
     let previousHapticSurface = useGameStore.getState().driving.surface;
+
+    const roadContextFor = (player: PlayerRuntime) => ({
+      heading: normalizeHeading(
+        player.heading + (player.speedMetersPerSecond < -0.5 ? 180 : 0),
+      ),
+      activeRouteEdgeIds,
+    });
 
     const cameraForPlayer = (player: PlayerRuntime) => {
       const camera = followCameraTarget(player.speedMetersPerSecond);
@@ -254,10 +265,10 @@ export function GameMap() {
           const currentPlayer =
             gameLoop?.getPlayer() ??
             runtimeFromTelemetry(useGameStore.getState().telemetry);
-          roadContact = roadTracker.update([
-            currentPlayer.longitude,
-            currentPlayer.latitude,
-          ]);
+          roadContact = roadTracker.update(
+            [currentPlayer.longitude, currentPlayer.latitude],
+            roadContextFor(currentPlayer),
+          );
           roadNetworkEnabled = true;
           useGameStore.getState().setRoadNetworkStatus('ready');
           if (containerRef.current) {
@@ -366,8 +377,10 @@ export function GameMap() {
           roadContactAt: roadTracker
             ? (runtime) => {
                 roadContact =
-                  roadTracker?.update([runtime.longitude, runtime.latitude]) ??
-                  null;
+                  roadTracker?.update(
+                    [runtime.longitude, runtime.latitude],
+                    roadContextFor(runtime),
+                  ) ?? null;
                 return roadContact ?? null;
               }
             : undefined,
@@ -467,12 +480,25 @@ export function GameMap() {
           state.setTelemetry(player);
           if (roadTracker) {
             const metrics = roadTracker.getMetrics();
+            const roadDiagnostics = roadTracker.getDiagnostics();
             if (containerRef.current) {
               containerRef.current.dataset.roadSearchMs =
                 metrics.averageDurationMilliseconds.toFixed(3);
               containerRef.current.dataset.roadSearchCandidates = String(
                 metrics.lastCandidateCount,
               );
+              containerRef.current.dataset.roadSelectedEdge = String(
+                roadDiagnostics.selectedEdgeId ?? '',
+              );
+              containerRef.current.dataset.roadSelectedScore =
+                roadDiagnostics.selectedScore?.toFixed(2) ?? '';
+              containerRef.current.dataset.roadCandidateScores =
+                roadDiagnostics.candidates
+                  .map(
+                    (candidate) =>
+                      `${String(candidate.edgeId)}:${candidate.score.totalScore.toFixed(1)}`,
+                  )
+                  .join(',');
             }
           }
           const environment =
@@ -563,6 +589,12 @@ export function GameMap() {
       });
 
       unsubscribeRuntime = useGameStore.subscribe((state, previousState) => {
+        if (
+          state.missionRoute.activeEdgeIds !==
+          previousState.missionRoute.activeEdgeIds
+        ) {
+          activeRouteEdgeIds = new Set(state.missionRoute.activeEdgeIds);
+        }
         if (threeLayer) syncInteractiveSignal(threeLayer);
         if (
           (!previousState.isPaused && state.isPaused) ||
@@ -580,10 +612,10 @@ export function GameMap() {
         const restoredPlayer = runtimeFromTelemetry(state.telemetry);
         roadTracker?.reset();
         roadContact =
-          roadTracker?.update([
-            restoredPlayer.longitude,
-            restoredPlayer.latitude,
-          ]) ?? null;
+          roadTracker?.update(
+            [restoredPlayer.longitude, restoredPlayer.latitude],
+            roadContextFor(restoredPlayer),
+          ) ?? null;
         gameLoop?.replacePlayer(restoredPlayer);
         playerMarker
           ?.setLngLat([restoredPlayer.longitude, restoredPlayer.latitude])

@@ -219,6 +219,7 @@ export function addMissionRoute(
       distanceMeters: null,
       estimatedGameDurationSeconds: null,
       coordinateCount: 0,
+      activeEdgeIds: [],
     });
   };
 
@@ -236,6 +237,7 @@ export function addMissionRoute(
       distanceMeters: null,
       estimatedGameDurationSeconds: null,
       coordinateCount: 0,
+      activeEdgeIds: [],
     });
     exposeRoute(null, 0);
 
@@ -278,6 +280,7 @@ export function addMissionRoute(
         distanceMeters: route.distanceMeters,
         estimatedGameDurationSeconds: route.estimatedGameDurationSeconds,
         coordinateCount: route.coordinates.length,
+        activeEdgeIds: route.edgeIds,
       });
       exposeRoute('road', route.coordinates.length);
       return;
@@ -312,6 +315,7 @@ export function addMissionRoute(
       distanceMeters,
       estimatedGameDurationSeconds: fallbackDurationSeconds(distanceMeters),
       coordinateCount: coordinates.length,
+      activeEdgeIds: [],
     });
     exposeRoute('fallback', coordinates.length);
   };

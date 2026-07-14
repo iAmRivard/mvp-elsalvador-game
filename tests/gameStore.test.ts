@@ -176,10 +176,12 @@ describe('estado de misiones y capítulo', () => {
       distanceMeters: 52_000,
       estimatedGameDurationSeconds: 520,
       coordinateCount: 240,
+      activeEdgeIds: [4, 9],
     });
     expect(useGameStore.getState().missionRoute).toMatchObject({
       status: 'road',
       coordinateCount: 240,
+      activeEdgeIds: [4, 9],
       recalculationRevision: 1,
     });
   });
