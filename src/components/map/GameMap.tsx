@@ -259,7 +259,7 @@ export function GameMap() {
         containerRef.current.dataset.roadNetworkStatus = 'loading';
       }
       void loadRoadNetwork()
-        .then(({ index, loadDurationMilliseconds, fileSizeBytes }) => {
+        .then(({ index, loadDurationMilliseconds, fileSizeBytes, metrics }) => {
           if (!effectActive) return;
           roadTracker = new RoadTracker(index);
           const currentPlayer =
@@ -276,6 +276,19 @@ export function GameMap() {
             containerRef.current.dataset.roadLoadMs =
               loadDurationMilliseconds.toFixed(1);
             containerRef.current.dataset.roadFileBytes = String(fileSizeBytes);
+            containerRef.current.dataset.roadDownloadMs =
+              metrics.downloadDurationMilliseconds.toFixed(1);
+            containerRef.current.dataset.roadParseMs =
+              metrics.parseDurationMilliseconds.toFixed(1);
+            containerRef.current.dataset.roadValidationMs =
+              metrics.validationDurationMilliseconds.toFixed(1);
+            containerRef.current.dataset.roadIndexMs =
+              metrics.indexDurationMilliseconds.toFixed(1);
+            containerRef.current.dataset.roadMemoryMb = (
+              metrics.approximateMemoryBytes /
+              1024 /
+              1024
+            ).toFixed(1);
           }
         })
         .catch(() => {

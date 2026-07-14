@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { gameConfig } from '../../config/game.config';
+import { loadRoadNetwork, retryRoadNetworkLoad } from '../../roads/roadNetwork';
+import { preloadRoadWorker } from '../../roads/roadWorkerClient';
 import { useGameStore } from '../../store/gameStore';
 import { SettingsDialog } from './SettingsDialog';
 
@@ -7,6 +9,18 @@ interface StartScreenProps {
   onContinue: () => void;
   onNewGame: () => void;
 }
+
+type PreparationStage =
+  'map' | 'roads' | 'routes' | 'ready' | 'fallback' | 'error';
+
+const preparationLabels: Readonly<Record<PreparationStage, string>> = {
+  map: 'Preparando mapa…',
+  roads: 'Preparando carreteras…',
+  routes: 'Preparando rutas…',
+  ready: 'Listo para conducir',
+  fallback: 'Rutas listas en modo compatible',
+  error: 'No se pudo preparar la red vial',
+};
 
 function savedAtLabel(savedAt: string | null): string {
   if (!savedAt) return 'Progreso local disponible';
@@ -21,6 +35,9 @@ function savedAtLabel(savedAt: string | null): string {
 export function StartScreen({ onContinue, onNewGame }: StartScreenProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmingNewGame, setConfirmingNewGame] = useState(false);
+  const [preparationStage, setPreparationStage] =
+    useState<PreparationStage>('map');
+  const [preparationAttempt, setPreparationAttempt] = useState(0);
   const hasSavedGame = useGameStore((state) => state.hasSavedGame);
   const lastSavedAt = useGameStore((state) => state.lastSavedAt);
   const level = useGameStore((state) => state.level);
@@ -29,6 +46,37 @@ export function StartScreen({ onContinue, onNewGame }: StartScreenProps) {
   );
   const completed = useGameStore((state) => state.completedMissionIds.length);
   const distance = useGameStore((state) => state.telemetry.totalDistanceMeters);
+
+  useEffect(() => {
+    let active = true;
+    const prepare = async () => {
+      try {
+        setPreparationStage('map');
+        await import('../map/GameMap');
+        if (!active) return;
+        setPreparationStage('roads');
+        await (preparationAttempt === 0
+          ? loadRoadNetwork()
+          : retryRoadNetworkLoad());
+        if (!active) return;
+        setPreparationStage('routes');
+        try {
+          const workerMetrics = await preloadRoadWorker();
+          if (active) {
+            setPreparationStage(workerMetrics ? 'ready' : 'fallback');
+          }
+        } catch {
+          if (active) setPreparationStage('fallback');
+        }
+      } catch {
+        if (active) setPreparationStage('error');
+      }
+    };
+    void prepare();
+    return () => {
+      active = false;
+    };
+  }, [preparationAttempt]);
 
   return (
     <section className="start-screen" aria-labelledby="start-title">
@@ -96,6 +144,27 @@ export function StartScreen({ onContinue, onNewGame }: StartScreenProps) {
           >
             Configuración
           </button>
+        </div>
+
+        <div
+          className={`start-preparation start-preparation--${preparationStage}`}
+          role="status"
+          data-preparation-stage={preparationStage}
+        >
+          {preparationStage !== 'ready' &&
+            preparationStage !== 'fallback' &&
+            preparationStage !== 'error' && (
+              <span className="start-preparation__spinner" aria-hidden="true" />
+            )}
+          <span>{preparationLabels[preparationStage]}</span>
+          {preparationStage === 'error' && (
+            <button
+              type="button"
+              onClick={() => setPreparationAttempt((attempt) => attempt + 1)}
+            >
+              Reintentar
+            </button>
+          )}
         </div>
 
         <small className="start-screen__offline">
