@@ -52,6 +52,13 @@ jobs:
           test "$(wc -c < /tmp/roads.json)" -gt "5000000"
           curl --fail --silent http://127.0.0.1:8080/audio/engine-idle.wav --output /tmp/engine.wav
           test "$(wc -c < /tmp/engine.wav)" -gt "40000"
+          curl --fail --silent --head http://127.0.0.1:8080/map-assets/styles/el-salvador.json | grep -qi "content-type: application/json"
+          curl --fail --silent --head http://127.0.0.1:8080/map-assets/styles/el-salvador.json | grep -qi "cache-control: no-cache, must-revalidate"
+          ! curl --fail --silent http://127.0.0.1:8080/map-assets/sprites/does-not-exist.json --output /tmp/missing-sprite.json
+          missing_headers=$(curl --silent --head http://127.0.0.1:8080/map-assets/sprites/does-not-exist.json)
+          printf "%s" "$missing_headers" | grep -q "404 Not Found"
+          printf "%s" "$missing_headers" | grep -qi "cache-control: no-cache, must-revalidate"
+          ! printf "%s" "$missing_headers" | grep -qi "immutable"
 
       - name: Probar mapa y autonomía en navegador
         env:
