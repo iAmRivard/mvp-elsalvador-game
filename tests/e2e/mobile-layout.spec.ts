@@ -54,16 +54,35 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
   const missionBox = await page.locator('.mission-panel').boundingBox();
   const joystickBox = await page.locator('.virtual-joystick').boundingBox();
   const actionsBox = await page.locator('.touch-actions').boundingBox();
+  const attribution = page.locator('.maplibregl-ctrl-attrib');
+  const attributionInner = attribution.locator('.maplibregl-ctrl-attrib-inner');
+  await expect(attribution).not.toHaveClass(/maplibregl-compact-show/);
+  await expect(attributionInner).toBeHidden();
+  const attributionBox = await attribution
+    .locator('.maplibregl-ctrl-attrib-button')
+    .boundingBox();
   expect(hudBox).not.toBeNull();
   expect(missionBox).not.toBeNull();
   expect(joystickBox).not.toBeNull();
   expect(actionsBox).not.toBeNull();
+  expect(attributionBox).not.toBeNull();
   expect(rectanglesOverlap(hudBox!, missionBox!)).toBe(false);
+  expect(rectanglesOverlap(hudBox!, joystickBox!)).toBe(false);
+  expect(rectanglesOverlap(missionBox!, actionsBox!)).toBe(false);
   expect(rectanglesOverlap(joystickBox!, actionsBox!)).toBe(false);
+  for (const box of [hudBox!, missionBox!, joystickBox!, actionsBox!]) {
+    expect(rectanglesOverlap(attributionBox!, box)).toBe(false);
+  }
 
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
-  for (const box of [hudBox!, missionBox!, joystickBox!, actionsBox!]) {
+  for (const box of [
+    hudBox!,
+    missionBox!,
+    joystickBox!,
+    actionsBox!,
+    attributionBox!,
+  ]) {
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.y).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(viewport!.width);

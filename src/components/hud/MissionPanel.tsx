@@ -96,6 +96,7 @@ export function MissionPanel() {
   const requestRouteRecalculation = useGameStore(
     (state) => state.requestMissionRouteRecalculation,
   );
+  const dismissDiscovery = useGameStore((state) => state.dismissDiscovery);
   const active = activeMissionId ? missionById.get(activeMissionId) : null;
   const coordinates: [number, number] = [
     telemetry.longitude,
@@ -146,7 +147,10 @@ export function MissionPanel() {
               : 'Contraer panel de misiones'
           }
           aria-expanded={!collapsed}
-          onClick={() => setCollapsed((value) => !value)}
+          onClick={() => {
+            if (collapsed) dismissDiscovery();
+            setCollapsed((value) => !value);
+          }}
         >
           <span aria-hidden="true">{collapsed ? '＋' : '−'}</span>
         </button>

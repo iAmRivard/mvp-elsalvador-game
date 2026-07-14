@@ -18,6 +18,7 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
+  overflow: clip;
   overscroll-behavior: none;
 }
 
@@ -3210,6 +3211,14 @@ html[data-graphics-quality='low'] .map-atmosphere {
   color: #d5d8cf;
 }
 
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  background: rgb(17 31 29 / 92%);
+}
+
+.maplibregl-ctrl-attrib-button {
+  filter: invert(1) sepia(0.2);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -3334,8 +3343,16 @@ html[data-graphics-quality='low'] .map-atmosphere {
     display: block;
   }
 
-  .maplibregl-ctrl-bottom-right {
-    bottom: 165px;
+  html[data-tutorial-target] .player-hud {
+    visibility: hidden;
+  }
+
+  .maplibregl-ctrl-bottom-right > .maplibregl-ctrl-attrib {
+    position: fixed;
+    right: 50%;
+    bottom: max(8px, calc(env(safe-area-inset-bottom) + 4px));
+    margin: 0;
+    transform: translateX(50%);
   }
 
   .location-marker__label {
@@ -3617,7 +3634,10 @@ html[data-graphics-quality='low'] .map-atmosphere {
   }
 
   .mission-panel__body {
-    max-height: min(30vh, 240px);
+    max-height: min(
+      240px,
+      max(24px, calc(100dvh - 625px - env(safe-area-inset-bottom)))
+    );
   }
 
   .discovery-toast {
@@ -3854,10 +3874,7 @@ html[data-graphics-quality='low'] .map-atmosphere {
   }
 
   .progress-readout {
-    gap: 7px;
-    margin-bottom: 7px;
-    padding-bottom: 7px;
-    border-bottom: 1px solid rgb(242 231 194 / 10%);
+    display: none;
   }
 
   .level-badge {
@@ -3867,11 +3884,21 @@ html[data-graphics-quality='low'] .map-atmosphere {
 
   .player-hud__primary {
     display: flex;
+    align-items: center;
     justify-content: space-between;
   }
 
   .player-hud__primary > div:first-child {
+    display: flex;
+    gap: 5px;
+    align-items: baseline;
     text-align: left;
+  }
+
+  .player-hud__primary .hud-label {
+    margin: 0 3px 0 0;
+    font-size: 0.48rem;
+    letter-spacing: 0;
   }
 
   .player-hud__primary > div:first-child strong {
@@ -3883,13 +3910,29 @@ html[data-graphics-quality='low'] .map-atmosphere {
   }
 
   .vehicle-readouts {
-    margin-top: 7px;
+    gap: 8px;
+    margin-top: 6px;
   }
 
   .surface-readout {
     min-height: 28px;
-    margin-top: 6px;
+    margin-top: 5px;
     padding: 5px 7px;
+  }
+
+  .fuel-readout__header .hud-label,
+  .condition-readout__header .hud-label {
+    font-size: 0.46rem;
+    letter-spacing: 0;
+  }
+
+  .fuel-readout__header strong,
+  .condition-readout__header strong {
+    font-size: 0.56rem;
+  }
+
+  .condition-readout > small {
+    display: none;
   }
 
   .surface-readout small:not(.surface-readout__warning) {
@@ -3913,6 +3956,13 @@ html[data-graphics-quality='low'] .map-atmosphere {
 
   .mission-panel__body {
     max-height: min(35vh, 140px);
+  }
+
+  .tutorial-coach {
+    top: max(54px, calc(env(safe-area-inset-top) + 48px));
+    left: max(12px, calc(env(safe-area-inset-left) + 8px));
+    width: min(390px, calc(100vw - 473px));
+    transform: none;
   }
 
   .touch-dpad {

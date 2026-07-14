@@ -197,6 +197,14 @@ test('carga el mapa sin solicitudes a terceros', async ({
     }),
   });
   await firstMission.getByRole('button', { name: 'Iniciar' }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const root = document.querySelector<HTMLElement>('#root');
+        return [root?.scrollLeft ?? -1, root?.scrollTop ?? -1];
+      }),
+    )
+    .toEqual([0, 0]);
   await page.getByRole('button', { name: 'Sintonizar' }).click();
   await expect(
     page.getByRole('heading', { name: 'La transmisión' }),

@@ -717,6 +717,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeMissionObjectiveProgress,
         vehicle,
         lastCompletedMissionId: null,
+        lastDiscoveredLocationId: null,
         lastCheckpoint: checkpoint,
         temporarilyClosedRoadEdgeIds: chapterRoadClosureEdgeIds(mission.id, []),
         activeNarrativeEventId,

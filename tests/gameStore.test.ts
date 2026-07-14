@@ -10,10 +10,12 @@ describe('estado de misiones y capítulo', () => {
   });
 
   it('inicia con evento narrativo, lo descarta y abandona la misión', () => {
+    useGameStore.setState({ lastDiscoveredLocationId: 'san-salvador' });
     expect(useGameStore.getState().startMission('la-transmision')).toBe(true);
     expect(useGameStore.getState()).toMatchObject({
       activeMissionId: 'la-transmision',
       activeNarrativeEventId: 'radio-transmision-inicial',
+      lastDiscoveredLocationId: null,
       isPaused: true,
     });
 

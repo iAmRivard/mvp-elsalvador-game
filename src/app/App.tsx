@@ -94,16 +94,10 @@ export function App() {
 
         <PlayerHud />
         <MissionPanel />
-        <DiscoveryToast />
+        {!showTutorial && <DiscoveryToast />}
         <MissionToast />
         <LevelUpToast />
         {diagnosticsEnabled && <DiagnosticsPanel input={inputController} />}
-
-        <div className="controls-hint" aria-label="Controles disponibles">
-          <span>WASD o flechas para conducir</span>
-          <span className="controls-hint__divider" aria-hidden="true" />
-          <span>Shift: turbo · Espacio: investigar · Escape: pausa</span>
-        </div>
       </section>
 
       {showTutorial && (

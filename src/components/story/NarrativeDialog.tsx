@@ -1,10 +1,17 @@
+import { useEffect, useRef } from 'react';
 import { narrativeEventById } from '../../data/chapter1';
 import { useGameStore } from '../../store/gameStore';
 
 export function NarrativeDialog() {
+  const actionRef = useRef<HTMLButtonElement>(null);
   const eventId = useGameStore((state) => state.activeNarrativeEventId);
   const dismiss = useGameStore((state) => state.dismissNarrativeEvent);
   const event = eventId ? narrativeEventById.get(eventId) : null;
+
+  useEffect(() => {
+    if (event) actionRef.current?.focus({ preventScroll: true });
+  }, [event]);
+
   if (!event) return null;
 
   return (
@@ -25,7 +32,7 @@ export function NarrativeDialog() {
         <h2 id="narrative-title">{event.title}</h2>
         <strong>{event.speaker}</strong>
         <p id="narrative-message">{event.message}</p>
-        <button type="button" onClick={dismiss} autoFocus>
+        <button ref={actionRef} type="button" onClick={dismiss}>
           {event.actionLabel}
         </button>
       </section>

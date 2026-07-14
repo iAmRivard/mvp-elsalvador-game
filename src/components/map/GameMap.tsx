@@ -175,6 +175,12 @@ export function GameMap({ inputController }: GameMapProps) {
       }),
       'bottom-right',
     );
+    // MapLibre expands compact attribution on first render until the map moves.
+    const attributionDetails = map
+      .getContainer()
+      .querySelector<HTMLDetailsElement>('.maplibregl-ctrl-attrib');
+    attributionDetails?.removeAttribute('open');
+    attributionDetails?.classList.remove('maplibregl-compact-show');
 
     let playerMarker: maplibregl.Marker | null = null;
     let threeLayer: ThreeGameLayerController | null = null;
