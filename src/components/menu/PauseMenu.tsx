@@ -48,6 +48,9 @@ export function PauseMenu({ onExitToTitle }: PauseMenuProps) {
           <button type="button" onClick={() => setSettingsOpen(true)}>
             Configuración
           </button>
+          <button type="button" onClick={() => setSettingsOpen(true)}>
+            Controles
+          </button>
           <button type="button" onClick={() => setTutorialSeen(false)}>
             Ver tutorial
           </button>

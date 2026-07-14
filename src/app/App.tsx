@@ -73,7 +73,10 @@ export function App() {
       <header className="topbar">
         <div className="brand-lockup">
           <span className="brand-eyebrow">Exploración 2.5D</span>
-          <h1>{gameConfig.title}</h1>
+          <h1>
+            <span className="brand-title--full">{gameConfig.title}</span>
+            <span className="brand-title--compact">Rutas Perdidas</span>
+          </h1>
         </div>
         <div className="topbar__right">
           <CurrentRegion />

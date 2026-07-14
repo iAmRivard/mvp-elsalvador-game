@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { requestInputClear } from '../../game/inputEvents';
+import { consumeMobileActionLabels } from '../../game/mobileControlHelp';
 import { useGameStore } from '../../store/gameStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import { SettingsDialog } from '../menu/SettingsDialog';
 import { InventoryDialog } from '../menu/InventoryDialog';
+import { IconButton } from '../ui/IconButton';
 
 function savedAtLabel(savedAt: string | null): string {
   if (!savedAt) return 'Sin guardado todavía';
@@ -19,6 +22,13 @@ export function GameActions() {
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [showMobileLabels, setShowMobileLabels] = useState(() =>
+    typeof window !== 'undefined' &&
+    window.matchMedia('(hover: none), (pointer: coarse), (max-width: 600px)')
+      .matches
+      ? consumeMobileActionLabels()
+      : false,
+  );
   const isPaused = useGameStore((state) => state.isPaused);
   const isFollowingPlayer = useGameStore((state) => state.isFollowingPlayer);
   const hasSavedGame = useGameStore((state) => state.hasSavedGame);
@@ -29,67 +39,81 @@ export function GameActions() {
   const saveGame = useGameStore((state) => state.saveGame);
   const loadGame = useGameStore((state) => state.loadGame);
   const resetGame = useGameStore((state) => state.resetGame);
+  const setTutorialSeen = useSettingsStore((state) => state.setTutorialSeen);
+
+  useEffect(() => {
+    if (!showMobileLabels) return;
+    const timer = window.setTimeout(() => setShowMobileLabels(false), 4_500);
+    return () => window.clearTimeout(timer);
+  }, [showMobileLabels]);
 
   return (
     <>
       <div className="game-actions" aria-label="Acciones del juego">
-        <button
-          className={`icon-button ${inventoryOpen ? 'icon-button--active' : ''}`}
-          type="button"
-          aria-label="Inventario"
+        <IconButton
+          className="game-action--desktop"
+          label="Inventario"
+          icon="▤"
+          active={inventoryOpen}
           aria-expanded={inventoryOpen}
           onClick={() => {
             requestInputClear();
             setInventoryOpen(true);
           }}
-        >
-          <span aria-hidden="true">▤</span>
-        </button>
-        <button
-          className={`icon-button ${settingsOpen ? 'icon-button--active' : ''}`}
-          type="button"
-          aria-label="Configuración visual"
+        />
+        <IconButton
+          className="game-action--desktop"
+          label="Configuración"
+          icon="⚙"
+          active={settingsOpen}
           aria-expanded={settingsOpen}
           onClick={() => {
             requestInputClear();
             setSettingsOpen(true);
           }}
-        >
-          <span aria-hidden="true">⚙</span>
-        </button>
-        <button
-          className={`icon-button ${isFollowingPlayer ? 'icon-button--active' : ''}`}
-          type="button"
-          aria-label={
-            isFollowingPlayer ? 'Desactivar seguimiento' : 'Seguir al jugador'
-          }
+        />
+        <IconButton
+          className="game-action--desktop"
+          label="Seguir vehículo"
+          icon="⌖"
+          active={isFollowingPlayer}
           aria-pressed={isFollowingPlayer}
           onClick={() => setFollowingPlayer(!isFollowingPlayer)}
-        >
-          <span aria-hidden="true">⌖</span>
-        </button>
-        <button
-          className={`icon-button ${isPaused ? 'icon-button--active' : ''}`}
-          type="button"
-          aria-label={isPaused ? 'Reanudar partida' : 'Pausar partida'}
+        />
+        <IconButton
+          className="game-action--desktop"
+          label={isPaused ? 'Reanudar' : 'Pausar'}
+          icon={isPaused ? '▶' : 'Ⅱ'}
+          active={isPaused}
           aria-pressed={isPaused}
           onClick={togglePaused}
-        >
-          <span aria-hidden="true">{isPaused ? '▶' : 'Ⅱ'}</span>
-        </button>
-        <button
-          className={`icon-button ${menuOpen ? 'icon-button--active' : ''}`}
-          type="button"
-          aria-label="Partida y guardado"
+        />
+        <IconButton
+          label="Partida y guardado"
+          icon={
+            <>
+              <span className="game-action__desktop-icon">▣</span>
+              <span className="game-action__mobile-icon">⋯</span>
+            </>
+          }
+          active={menuOpen}
           aria-expanded={menuOpen}
           aria-haspopup="menu"
           onClick={() => {
             requestInputClear();
             setMenuOpen((open) => !open);
           }}
-        >
-          <span aria-hidden="true">▣</span>
-        </button>
+        />
+
+        {showMobileLabels && (
+          <div className="mobile-action-labels" role="status">
+            <span>▤ Inventario</span>
+            <span>⚙ Ajustes</span>
+            <span>⌖ Seguir</span>
+            <span>Ⅱ Pausa</span>
+            <span>▣ Guardado</span>
+          </div>
+        )}
 
         {menuOpen && (
           <div className="save-menu" role="menu">
@@ -102,6 +126,32 @@ export function GameActions() {
                 {saveMessage}
               </p>
             )}
+            <button
+              type="button"
+              role="menuitem"
+              className="save-menu__mobile-action"
+              onClick={() => {
+                requestInputClear();
+                setInventoryOpen(true);
+                setMenuOpen(false);
+              }}
+            >
+              <span aria-hidden="true">▤</span>
+              Inventario
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="save-menu__mobile-action"
+              onClick={() => {
+                requestInputClear();
+                setSettingsOpen(true);
+                setMenuOpen(false);
+              }}
+            >
+              <span aria-hidden="true">⚙</span>
+              Configuración
+            </button>
             <button type="button" role="menuitem" onClick={() => saveGame()}>
               <span aria-hidden="true">↓</span>
               Guardar ahora
@@ -117,6 +167,32 @@ export function GameActions() {
             >
               <span aria-hidden="true">↻</span>
               Cargar último guardado
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="save-menu__mobile-action"
+              onClick={() => {
+                requestInputClear();
+                setTutorialSeen(false);
+                setMenuOpen(false);
+              }}
+            >
+              <span aria-hidden="true">?</span>
+              Ayuda
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="save-menu__mobile-action"
+              onClick={() => {
+                requestInputClear();
+                setSettingsOpen(true);
+                setMenuOpen(false);
+              }}
+            >
+              <span aria-hidden="true">⌘</span>
+              Controles
             </button>
             <button
               type="button"
