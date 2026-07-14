@@ -34,8 +34,12 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
 
   const touchControls = page.getByLabel('Controles táctiles');
   await expect(touchControls).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Avanzar' })).toBeVisible();
+  await expect(page.getByLabel('Joystick de dirección')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Acelerar' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Frenar o retroceder' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Turbo' })).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Centrar cámara en el jugador' }),
   ).toBeVisible();
@@ -48,18 +52,18 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
 
   const hudBox = await page.locator('.player-hud').boundingBox();
   const missionBox = await page.locator('.mission-panel').boundingBox();
-  const dpadBox = await page.locator('.touch-dpad').boundingBox();
+  const joystickBox = await page.locator('.virtual-joystick').boundingBox();
   const actionsBox = await page.locator('.touch-actions').boundingBox();
   expect(hudBox).not.toBeNull();
   expect(missionBox).not.toBeNull();
-  expect(dpadBox).not.toBeNull();
+  expect(joystickBox).not.toBeNull();
   expect(actionsBox).not.toBeNull();
   expect(rectanglesOverlap(hudBox!, missionBox!)).toBe(false);
-  expect(rectanglesOverlap(dpadBox!, actionsBox!)).toBe(false);
+  expect(rectanglesOverlap(joystickBox!, actionsBox!)).toBe(false);
 
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
-  for (const box of [hudBox!, missionBox!, dpadBox!, actionsBox!]) {
+  for (const box of [hudBox!, missionBox!, joystickBox!, actionsBox!]) {
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.y).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(viewport!.width);
@@ -70,7 +74,7 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
     .getByTestId('player-position')
     .textContent();
   const forwardBox = await page
-    .getByRole('button', { name: 'Avanzar' })
+    .getByRole('button', { name: 'Acelerar' })
     .boundingBox();
   expect(forwardBox).not.toBeNull();
   await page.mouse.move(

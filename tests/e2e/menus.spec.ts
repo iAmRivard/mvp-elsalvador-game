@@ -25,15 +25,24 @@ test('recorre inicio, tutorial, pausa y configuración', async ({ page }) => {
   await settings.getByRole('button', { name: 'Listo' }).click();
 
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
-  await expect(
-    page.getByRole('dialog', { name: 'Conduce la expedición' }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Siguiente' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Sigue señales y objetivos' }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Siguiente' }).click();
-  await page.getByRole('button', { name: 'Comenzar' }).click();
+  const tutorialTitles = [
+    'Prueba la dirección',
+    'Inicia el recorrido',
+    'Sigue la ruta',
+    'Encuentra el freno',
+    'Usa el turbo',
+    'Investiga una señal',
+    'Recoge combustible',
+    'Repara el vehículo',
+    'Recalcula la ruta',
+  ];
+  for (const [index, title] of tutorialTitles.entries()) {
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    if (index < tutorialTitles.length - 1) {
+      await page.getByRole('button', { name: 'Siguiente' }).click();
+    }
+  }
+  await page.getByRole('button', { name: 'Finalizar' }).click();
 
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,
@@ -54,4 +63,11 @@ test('recorre inicio, tutorial, pausa y configuración', async ({ page }) => {
   await page.getByRole('button', { name: 'Cerrar configuración' }).click();
   await pauseMenu.getByRole('button', { name: 'Continuar' }).click();
   await expect(pauseMenu).toBeHidden();
+
+  await page.keyboard.press('Escape');
+  await pauseMenu.getByRole('button', { name: 'Ver tutorial' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Prueba la dirección' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Omitir' }).click();
 });

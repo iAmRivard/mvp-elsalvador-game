@@ -111,8 +111,24 @@ test('carga el mapa sin solicitudes a terceros', async ({ page, baseURL }) => {
     'data-route-calculation-ms',
     /^\d+(\.\d+)?$/,
   );
+  await expect(page.locator('.mission-navigation-next')).toBeVisible();
+  await expect(page.locator('.mission-route-arrow')).toBeVisible();
+  await expect(gameMap).toHaveAttribute(
+    'data-navigation-next-type',
+    /^(continue|turn-left|turn-right|slight-left|slight-right|u-turn|arrive)$/,
+  );
+  const positionBeforeRecalculation = await page
+    .getByTestId('player-position')
+    .textContent();
   await page.getByRole('button', { name: 'Recalcular ruta' }).click();
+  await page.keyboard.down('w');
+  await expect(gameMap).toHaveAttribute('data-input-throttle', '1.000');
+  await page.waitForTimeout(350);
+  await page.keyboard.up('w');
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road');
+  await expect
+    .poll(() => page.getByTestId('player-position').textContent())
+    .not.toBe(positionBeforeRecalculation);
 
   await page.getByRole('button', { name: 'Abandonar misión' }).click();
   const suchitotoMission = page.locator('.mission-list__item').filter({
