@@ -1491,22 +1491,124 @@ input {
   background: #e6b75f;
 }
 
-html[data-tutorial-target='steer'] .virtual-joystick,
-html[data-tutorial-target='steer'] .touch-dpad,
-html[data-tutorial-target='throttle'] .mobile-pedal--accelerator,
-html[data-tutorial-target='throttle'] .touch-button--up,
-html[data-tutorial-target='throttle'] .touch-button--auto,
+html[data-tutorial-target='vehicle'] .player-marker,
+html[data-tutorial-target='drive'] .virtual-joystick,
+html[data-tutorial-target='drive'] .touch-dpad,
+html[data-tutorial-target='drive'] .mobile-pedal--accelerator,
+html[data-tutorial-target='drive'] .touch-button--up,
+html[data-tutorial-target='drive'] .touch-button--auto,
 html[data-tutorial-target='brake'] .mobile-pedal--brake,
 html[data-tutorial-target='brake'] .touch-button--down,
 html[data-tutorial-target='boost'] .touch-button--boost,
 html[data-tutorial-target='interact'] .touch-button--interact,
-html[data-tutorial-target='collect'] .touch-button--interact,
-html[data-tutorial-target='repair'] .touch-button--interact,
-html[data-tutorial-target='route'] .mission-route-summary,
-html[data-tutorial-target='recalculate'] .mission-route-summary__header button {
+html[data-tutorial-target='fuel'] .fuel-station-marker,
+html[data-tutorial-target='rejoin'] .mission-route-summary__header button {
   outline: 3px solid rgb(255 240 189 / 92%);
   outline-offset: 4px;
   animation: tutorial-target-pulse 1.1s ease-in-out infinite alternate;
+}
+
+html[data-tutorial-target='vehicle'] .player-marker--fallback-hidden {
+  opacity: 1;
+}
+
+html[data-tutorial-target='route'] .map-canvas,
+html[data-tutorial-target='target'] .map-canvas {
+  box-shadow: inset 0 0 0 3px rgb(76 220 238 / 78%);
+}
+
+.mobile-tutorial-card {
+  position: fixed;
+  z-index: 38;
+  top: max(72px, calc(env(safe-area-inset-top) + 60px));
+  left: 50%;
+  display: grid;
+  width: min(390px, calc(100vw - 24px));
+  max-height: min(25dvh, 190px);
+  padding: 10px 12px;
+  overflow-y: auto;
+  border: 1px solid rgb(230 183 95 / 48%);
+  border-radius: 8px;
+  color: #edf3ea;
+  background: rgb(15 30 27 / 96%);
+  box-shadow: 0 12px 30px rgb(4 12 10 / 42%);
+  transform: translateX(-50%);
+}
+
+.mobile-tutorial-card--moved {
+  transform: none;
+}
+
+.mobile-tutorial-card header,
+.mobile-tutorial-card footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.mobile-tutorial-card header {
+  justify-content: space-between;
+  color: #d9b96f;
+  font-size: 0.58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  touch-action: none;
+}
+
+.mobile-tutorial-card__grip {
+  flex: 1;
+  color: #71847a;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.mobile-tutorial-card h2 {
+  margin: 4px 0 2px;
+  font-size: 0.92rem;
+}
+
+.mobile-tutorial-card p {
+  margin: 0;
+  color: #b8c4ba;
+  font-size: 0.69rem;
+  line-height: 1.35;
+}
+
+.mobile-tutorial-card details {
+  margin-top: 4px;
+  color: #93aaa0;
+  font-size: 0.58rem;
+}
+
+.mobile-tutorial-card details p {
+  margin-top: 3px;
+  font-size: 0.61rem;
+}
+
+.mobile-tutorial-card footer {
+  justify-content: flex-end;
+  margin-top: 7px;
+}
+
+.mobile-tutorial-card button {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  color: #d8dfd8;
+  background: transparent;
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 750;
+}
+
+.mobile-tutorial-card button:disabled {
+  opacity: 0.35;
+}
+
+.mobile-tutorial-card .tutorial-next {
+  color: #17201c;
+  background: #e6b75f;
 }
 
 @keyframes tutorial-target-pulse {
@@ -5371,16 +5473,12 @@ html[data-reduced-motion='true'] *::after {
 
 .mission-panel__collapsed-cta {
   display: grid;
+  gap: 3px;
   width: 100%;
-  min-height: 42px;
-  padding: 7px 13px 9px;
-  border: 0;
+  padding: 10px 12px 12px;
   border-top: 1px solid rgb(49 200 219 / 20%);
-  border-radius: 0 0 7px 7px;
   color: #e7f7f5;
   background: rgb(49 200 219 / 9%);
-  cursor: pointer;
-  font: inherit;
   text-align: left;
 }
 
@@ -5393,9 +5491,70 @@ html[data-reduced-motion='true'] *::after {
 
 .mission-panel__collapsed-cta strong {
   overflow: hidden;
-  font-size: 0.64rem;
+  font-size: 0.76rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mission-panel__collapsed-cta p {
+  display: -webkit-box;
+  margin: 0 0 5px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  color: #adbbb2;
+  font-size: 0.6rem;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+}
+
+.mission-panel__collapsed-cta > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+}
+
+.mission-panel__collapsed-cta .mission-button--primary {
+  position: static;
+  min-height: 34px;
+}
+
+.mission-panel__details-button {
+  min-height: 34px;
+  padding: 0 7px;
+  border: 0;
+  color: #9cb4aa;
+  background: transparent;
+  font: inherit;
+  font-size: 0.56rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .mission-panel--collapsed {
+    width: calc(100% - 24px);
+  }
+
+  .mission-panel--collapsed .mission-panel__header {
+    display: none;
+  }
+
+  .mission-panel__body .mission-button--primary {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 560px) and (pointer: coarse) {
+  .mobile-tutorial-card {
+    top: max(54px, calc(env(safe-area-inset-top) + 48px));
+    left: max(8px, env(safe-area-inset-left));
+    width: min(320px, 38vw);
+    max-height: calc(100dvh - 66px);
+    transform: none;
+  }
 }
 
 @media (orientation: landscape) and (max-height: 560px) and (pointer: coarse) {

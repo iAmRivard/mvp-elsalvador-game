@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { MobileTutorialCard } from '../tutorial/MobileTutorialCard';
 import type {
   InputController,
   InputDiagnostics,
@@ -12,21 +13,36 @@ interface TutorialOverlayProps {
 }
 
 type TutorialTarget =
-  | 'steer'
-  | 'throttle'
+  | 'vehicle'
   | 'route'
+  | 'target'
+  | 'drive'
   | 'brake'
   | 'boost'
   | 'interact'
-  | 'collect'
-  | 'repair'
-  | 'recalculate';
+  | 'fuel'
+  | 'rejoin';
 
 interface TutorialStep {
   id: TutorialTarget;
   title: string;
   description: string;
+  details?: string;
   completed: boolean;
+  available: boolean;
+  automatic: boolean;
+}
+
+interface VisibleTutorialTargets {
+  vehicle: boolean;
+  fuel: boolean;
+}
+
+function visibleTutorialTargets(): VisibleTutorialTargets {
+  return {
+    vehicle: Boolean(document.querySelector('.player-marker')),
+    fuel: Boolean(document.querySelector('.fuel-station-marker')),
+  };
 }
 
 export function TutorialOverlay({ input, onComplete }: TutorialOverlayProps) {
@@ -34,126 +50,136 @@ export function TutorialOverlay({ input, onComplete }: TutorialOverlayProps) {
   const [diagnostics, setDiagnostics] = useState<InputDiagnostics>(() =>
     input.getDiagnostics(),
   );
+  const [visibleTargets, setVisibleTargets] = useState(visibleTutorialTargets);
   const controlMode = useSettingsStore((state) => state.controlMode);
   const routeStatus = useGameStore((state) => state.missionRoute.status);
-  const routeRevision = useGameStore(
-    (state) => state.missionRoute.recalculationRevision,
+  const routeRequiresRejoin = useGameStore(
+    (state) => state.missionRoute.activeNavigation?.requiresRejoin ?? false,
   );
-  const inventory = useGameStore((state) => state.inventory);
-  const vehicleCondition = useGameStore((state) => state.vehicle.condition);
-  const completedObjectiveIds = useGameStore(
-    (state) => state.activeMissionCompletedObjectiveIds,
-  );
-  const [usesTouch] = useState(
+  const [usesCompactCard] = useState(
     () =>
       typeof window !== 'undefined' &&
-      window.matchMedia('(pointer: coarse)').matches,
+      (window.matchMedia('(pointer: coarse)').matches ||
+        window.matchMedia('(max-width: 700px)').matches),
   );
-  const [initialRouteRevision] = useState(routeRevision);
-  const [initialCondition] = useState(vehicleCondition);
 
   useEffect(
     () => input.subscribe(() => setDiagnostics(input.getDiagnostics())),
     [input],
   );
 
+  useEffect(() => {
+    const update = () => setVisibleTargets(visibleTutorialTargets());
+    update();
+    const interval = window.setInterval(update, 300);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const routeVisible = routeStatus === 'road' || routeStatus === 'fallback';
   const steps = useMemo<TutorialStep[]>(() => {
-    const steeringDescription = !usesTouch
-      ? 'Pulsa A o D para orientar el vehículo.'
+    const driveDescription = !usesCompactCard
+      ? 'Mantén W y usa A o D para acelerar y girar.'
       : controlMode === 'classic-buttons'
-        ? 'Usa izquierda o derecha en la cruceta.'
-        : 'Mueve el joystick hacia un lado.';
-    const throttleDescription = !usesTouch
-      ? 'Mantén W para comenzar a avanzar.'
-      : controlMode === 'joystick-auto-throttle'
-        ? 'Activa AUTO para mantener el avance.'
-        : controlMode === 'classic-buttons'
-          ? 'Mantén Avanzar en la cruceta.'
-          : 'Mantén presionado el acelerador.';
+        ? 'Combina Avanzar con izquierda o derecha.'
+        : controlMode === 'joystick-auto-throttle'
+          ? 'Activa AUTO y mueve el joystick hacia un lado.'
+          : 'Acelera y mueve el joystick hacia un lado.';
     return [
       {
-        id: 'steer',
-        title: 'Prueba la dirección',
-        description: steeringDescription,
-        completed: Math.abs(diagnostics.turn) >= 0.2,
-      },
-      {
-        id: 'throttle',
-        title: 'Inicia el recorrido',
-        description: throttleDescription,
-        completed:
-          controlMode === 'joystick-auto-throttle'
-            ? diagnostics.autoThrottleStatus === 'active'
-            : diagnostics.throttle >= 0.3,
+        id: 'vehicle',
+        title: 'Tu vehículo',
+        description:
+          'El marcador iluminado representa tu vehículo. La parte delantera indica hacia dónde mira.',
+        completed: false,
+        available: visibleTargets.vehicle,
+        automatic: false,
       },
       {
         id: 'route',
-        title: 'Sigue la ruta',
-        description:
-          'Inicia una misión y mantén el vehículo sobre el tramo resaltado.',
-        completed: routeStatus === 'road' || routeStatus === 'fallback',
+        title: 'Tu ruta',
+        description: 'La línea cian marca el camino recomendado.',
+        details:
+          'El tramo blanco y celeste es la parte inmediata que debes seguir.',
+        completed: false,
+        available: routeVisible,
+        automatic: false,
+      },
+      {
+        id: 'target',
+        title: 'Tu objetivo',
+        description: 'El círculo brillante indica tu siguiente objetivo.',
+        completed: false,
+        available: routeVisible,
+        automatic: false,
+      },
+      {
+        id: 'drive',
+        title: 'Conduce',
+        description: driveDescription,
+        completed:
+          Math.abs(diagnostics.turn) >= 0.2 && diagnostics.throttle >= 0.3,
+        available: true,
+        automatic: true,
       },
       {
         id: 'brake',
-        title: 'Encuentra el freno',
-        description: !usesTouch
-          ? 'Pulsa S para frenar o retroceder.'
-          : 'Mantén Freno para reducir velocidad o dar reversa.',
+        title: 'Frena y retrocede',
+        description: !usesCompactCard
+          ? 'Pulsa S para frenar; al detenerte podrás retroceder.'
+          : 'Lleva el control hacia atrás para frenar y luego retroceder.',
         completed: diagnostics.throttle <= -0.3,
+        available: true,
+        automatic: true,
       },
       {
         id: 'boost',
         title: 'Usa el turbo',
-        description: !usesTouch
+        description: !usesCompactCard
           ? 'Mantén Shift mientras aceleras.'
-          : 'Toca Turbo para activar un impulso temporal.',
+          : 'Toca Turbo durante el avance.',
         completed: diagnostics.boost,
+        available: true,
+        automatic: true,
       },
       {
         id: 'interact',
-        title: 'Investiga una señal',
-        description: !usesTouch
+        title: 'Interactúa',
+        description: !usesCompactCard
           ? 'Pulsa Espacio cuando estés dentro de un objetivo.'
           : 'Usa la acción contextual cuando aparezca.',
         completed: diagnostics.interact,
+        available: true,
+        automatic: true,
       },
       {
-        id: 'collect',
-        title: 'Recoge combustible',
-        description:
-          'En la estación, usa Recoger cuando aparezca junto al bidón.',
-        completed: inventory.some(
-          (entry) => entry.itemId === 'bidon-combustible' && entry.quantity > 0,
-        ),
+        id: 'fuel',
+        title: 'Puntos de combustible',
+        description: 'Puedes recargar en los puntos marcados con una bomba.',
+        details:
+          'Con combustible bajo, el HUD puede marcar la estación disponible más cercana.',
+        completed: false,
+        available: visibleTargets.fuel,
+        automatic: false,
       },
       {
-        id: 'repair',
-        title: 'Repara el vehículo',
+        id: 'rejoin',
+        title: 'Vuelve a la ruta',
         description:
-          'Cuando tengas el repuesto, usa Reparar dentro del objetivo.',
-        completed:
-          vehicleCondition > initialCondition ||
-          completedObjectiveIds.includes('reparar-vehiculo'),
-      },
-      {
-        id: 'recalculate',
-        title: 'Recalcula la ruta',
-        description:
-          'Usa el botón de recálculo si abandonas el camino marcado.',
-        completed: routeRevision > initialRouteRevision,
+          'La línea celeste discontinua aparece cuando necesitas reincorporarte.',
+        details:
+          'Si la ruta deja de coincidir, usa el botón de recálculo de la bitácora.',
+        completed: routeRequiresRejoin,
+        available: routeVisible,
+        automatic: false,
       },
     ];
   }, [
-    completedObjectiveIds,
     controlMode,
     diagnostics,
-    inventory,
-    initialCondition,
-    initialRouteRevision,
-    routeRevision,
-    routeStatus,
-    usesTouch,
-    vehicleCondition,
+    routeRequiresRejoin,
+    routeVisible,
+    usesCompactCard,
+    visibleTargets,
   ]);
   const current = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
@@ -168,13 +194,37 @@ export function TutorialOverlay({ input, onComplete }: TutorialOverlayProps) {
   }, [current.id]);
 
   useEffect(() => {
-    if (!current.completed) return;
+    if (!current.automatic || !current.completed) return;
     const timeout = window.setTimeout(() => {
       if (isLast) onComplete();
       else setStepIndex((value) => Math.min(value + 1, steps.length - 1));
     }, 500);
     return () => window.clearTimeout(timeout);
-  }, [current.completed, isLast, onComplete, steps.length]);
+  }, [current.automatic, current.completed, isLast, onComplete, steps.length]);
+
+  const previous = () => setStepIndex((value) => Math.max(0, value - 1));
+  const next = () => {
+    if (!current.available) return;
+    if (isLast) onComplete();
+    else setStepIndex((value) => Math.min(steps.length - 1, value + 1));
+  };
+
+  if (usesCompactCard) {
+    return (
+      <MobileTutorialCard
+        step={stepIndex + 1}
+        totalSteps={steps.length}
+        title={current.title}
+        description={current.description}
+        details={current.details}
+        canAdvance={current.available}
+        isLast={isLast}
+        onPrevious={previous}
+        onNext={next}
+        onSkip={onComplete}
+      />
+    );
+  }
 
   return (
     <aside
@@ -205,21 +255,14 @@ export function TutorialOverlay({ input, onComplete }: TutorialOverlayProps) {
         ))}
       </div>
       <div className="tutorial-coach__actions">
-        <button
-          type="button"
-          disabled={stepIndex === 0}
-          onClick={() => setStepIndex((value) => Math.max(0, value - 1))}
-        >
+        <button type="button" disabled={stepIndex === 0} onClick={previous}>
           Anterior
         </button>
         <button
           type="button"
           className="tutorial-next"
-          onClick={() =>
-            isLast
-              ? onComplete()
-              : setStepIndex((value) => Math.min(steps.length - 1, value + 1))
-          }
+          disabled={!current.available}
+          onClick={next}
         >
           {isLast ? 'Finalizar' : 'Siguiente'}
         </button>
