@@ -425,7 +425,7 @@ function defaultGameData(): GameData {
     lastSafeCheckpoint: checkpoint,
     currentChapterId: 'chapter-1',
     completedChapterIds: [],
-    roadNetworkVersion: 1,
+    roadNetworkVersion: 2,
   };
 }
 
