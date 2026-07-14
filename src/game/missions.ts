@@ -19,6 +19,7 @@ import type {
   VehicleState,
 } from '../types/progression';
 import { distanceBetweenMeters } from './discovery';
+import { objectiveRequiresManualInteraction } from './interactions';
 
 export type Coordinates = [longitude: number, latitude: number];
 
@@ -46,6 +47,8 @@ export interface MissionAdvanceContext {
   energy: number;
   objectiveProgress: MissionObjectiveProgressMap;
   deltaTimeSeconds: number;
+  selectedChoiceOptionId: string | null;
+  timedObjectiveStartAllowed: boolean;
 }
 
 export interface MissionRewardSummary {
@@ -132,7 +135,8 @@ function isAtObjective(
 export function advanceMissionObjectives(
   mission: Mission,
   completedObjectiveIds: readonly string[],
-  player: Pick<PlayerRuntime, 'longitude' | 'latitude' | 'fuel'>,
+  player: Pick<PlayerRuntime, 'longitude' | 'latitude' | 'fuel'> &
+    Partial<Pick<PlayerRuntime, 'speedMetersPerSecond'>>,
   isInteracting: boolean,
   context: Partial<MissionAdvanceContext> = {},
 ): MissionProgressResult {
@@ -172,7 +176,10 @@ export function advanceMissionObjectives(
     const progress = objectiveProgress[objective.id];
     const atObjective = isAtObjective(objective, playerCoordinates);
 
-    if (objective.type === 'timed') {
+    if (
+      objective.type === 'timed' &&
+      context.timedObjectiveStartAllowed !== false
+    ) {
       progress.elapsedSeconds = Math.min(
         progress.durationSeconds ?? Number.POSITIVE_INFINITY,
         progress.elapsedSeconds + Math.max(0, context.deltaTimeSeconds ?? 0),
@@ -187,17 +194,40 @@ export function advanceMissionObjectives(
         break;
       }
     }
+    if (
+      objective.type === 'timed' &&
+      context.timedObjectiveStartAllowed === false
+    ) {
+      continue;
+    }
 
     if (!atObjective) continue;
-    const requiresInteraction = [
-      'interact',
-      'collect',
-      'deliver',
-      'repair',
-      'refuel',
-      'choice',
-    ].includes(objective.type);
+    const requiresInteraction = objectiveRequiresManualInteraction(objective);
     if (requiresInteraction && !isInteracting) continue;
+
+    if (objective.type === 'collect') {
+      const speedKilometersPerHour =
+        Math.abs(
+          'speedMetersPerSecond' in player &&
+            typeof player.speedMetersPerSecond === 'number'
+            ? player.speedMetersPerSecond
+            : 0,
+        ) * 3.6;
+      if (speedKilometersPerHour >= 5) continue;
+    }
+
+    if (objective.type === 'choice') {
+      const selectedOptionId = context.selectedChoiceOptionId;
+      if (
+        !selectedOptionId ||
+        !objective.choice?.options.some(
+          (option) => option.id === selectedOptionId,
+        )
+      ) {
+        continue;
+      }
+      progress.selectedOptionId = selectedOptionId;
+    }
 
     if (objective.type === 'collect') {
       if (!objective.itemId) continue;

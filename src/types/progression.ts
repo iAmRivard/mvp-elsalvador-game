@@ -24,6 +24,7 @@ export interface MissionObjectiveProgress {
   target: number;
   elapsedSeconds: number;
   durationSeconds: number | null;
+  selectedOptionId?: string;
 }
 
 export type MissionObjectiveProgressMap = Record<
@@ -39,6 +40,14 @@ export type CheckpointReason =
   | 'objective'
   | 'chapter';
 
+export interface StoryLogEntry {
+  id: string;
+  type: 'radio' | 'mission' | 'discovery';
+  title: string;
+  summary: string;
+  recordedAt: string;
+}
+
 export interface CheckpointSnapshot {
   id: string;
   createdAt: string;
@@ -50,6 +59,7 @@ export interface CheckpointSnapshot {
   activeMissionId: string | null;
   activeMissionCompletedObjectiveIds: string[];
   activeMissionObjectiveProgress: MissionObjectiveProgressMap;
+  missionChoiceSelections: Record<string, string>;
 }
 
 export type RecoveryReason =

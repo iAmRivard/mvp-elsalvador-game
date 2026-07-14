@@ -22,7 +22,7 @@ export interface VehicleHandlingConfig {
 }
 
 export interface FuelConsumptionConfig {
-  percentPerVehicleMeter: number;
+  percentPerGeographicMeter: number;
   boostMultiplier: number;
 }
 
@@ -52,7 +52,7 @@ export const vehicleHandlingConfig: VehicleHandlingConfig = {
 };
 
 export const fuelConsumptionConfig: FuelConsumptionConfig = {
-  percentPerVehicleMeter: 0.00012,
+  percentPerGeographicMeter: 0.0009,
   boostMultiplier: 1.35,
 };
 

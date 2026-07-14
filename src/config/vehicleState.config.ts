@@ -7,4 +7,5 @@ export const vehicleStateConfig = {
   blockedImpactCondition: 1.5,
   blockedImpactCooldownMilliseconds: 1_200,
   emergencyRecoveryCondition: 35,
+  emergencyRecoveryFuel: 20,
 } as const;

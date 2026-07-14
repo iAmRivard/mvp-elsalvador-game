@@ -12,7 +12,7 @@ export function NarrativeDialog() {
     if (event) actionRef.current?.focus({ preventScroll: true });
   }, [event]);
 
-  if (!event) return null;
+  if (!event || event.presentation === 'radio') return null;
 
   return (
     <div className="narrative-backdrop">
@@ -23,17 +23,24 @@ export function NarrativeDialog() {
         aria-labelledby="narrative-title"
         aria-describedby="narrative-message"
       >
+        <span className="paused-label">JUEGO EN PAUSA</span>
         <div className="narrative-signal" aria-hidden="true">
           {Array.from({ length: 18 }, (_, index) => (
             <span key={index} />
           ))}
         </div>
-        <span className="narrative-dialog__channel">{event.channel}</span>
+        <span className="narrative-dialog__channel">{event.channelLabel}</span>
         <h2 id="narrative-title">{event.title}</h2>
         <strong>{event.speaker}</strong>
         <p id="narrative-message">{event.message}</p>
+        {event.objectiveSummary && (
+          <p className="narrative-dialog__objective">
+            <strong>Objetivo:</strong>{' '}
+            {event.objectiveSummary.replace(/^Objetivo:\s*/i, '')}
+          </p>
+        )}
         <button ref={actionRef} type="button" onClick={dismiss}>
-          {event.actionLabel}
+          {event.actionLabel ?? 'Continuar'}
         </button>
       </section>
     </div>

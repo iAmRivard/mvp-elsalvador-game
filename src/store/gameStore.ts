@@ -8,6 +8,7 @@ import {
   missionCompletionNarrativeEventId,
   missionStartConditionMaximum,
   missionStartNarrativeEventId,
+  narrativeEventById,
   objectiveNarrativeEventId,
 } from '../data/chapter1';
 import type { RoadSurface } from '../config/roadHandling.config';
@@ -20,9 +21,16 @@ import {
   advanceMissionObjectives,
   initialMissionObjectiveProgress,
   missionStartBlockReason,
+  objectiveCoordinates,
   objectiveIsAvailable,
   summarizeMissionRewards,
 } from '../game/missions';
+import {
+  missionChoiceConsequence,
+  missionChoiceOption,
+  selectedMissionChoiceOption,
+} from '../game/missionChoices';
+import { distanceBetweenMeters } from '../game/discovery';
 import {
   addInventoryItem as addItemToInventory,
   consumeInventoryItem as consumeItemFromInventory,
@@ -42,6 +50,7 @@ import type {
   InventoryEntry,
   MissionObjectiveProgressMap,
   RecoveryReason,
+  StoryLogEntry,
   VehicleState,
 } from '../types/progression';
 import {
@@ -57,13 +66,22 @@ export const INITIAL_PLAYER: PlayerRuntime = {
   latitude: 13.6962937,
   heading: 0,
   speedMetersPerSecond: 0,
-  fuel: 100,
+  fuel: 75,
   totalDistanceMeters: 0,
 };
 
 export interface MissionCompletionEvent {
   missionId: string;
   fuelReward: number;
+}
+
+export type StoryLogSection =
+  'history' | 'missions' | 'transmissions' | 'discoveries';
+
+export interface GameplayFeedback {
+  id: number;
+  message: string;
+  tone: 'info' | 'success' | 'warning';
 }
 
 export type SaveMessage =
@@ -106,6 +124,8 @@ interface GameData {
   activeMissionId: string | null;
   activeMissionCompletedObjectiveIds: string[];
   activeMissionObjectiveProgress: MissionObjectiveProgressMap;
+  missionChoiceSelections: Record<string, string>;
+  storyLogEntries: StoryLogEntry[];
   completedMissionIds: string[];
   lastCompletedMissionId: string | null;
   lastLevelUp: number | null;
@@ -132,6 +152,11 @@ interface GameStore extends GameData {
   conditionWarning: ConditionWarningLevel | null;
   conditionWarningsShown: ConditionWarningLevel[];
   activeNarrativeEventId: string | null;
+  activeRadioEventId: string | null;
+  activeMissionChoiceObjectiveId: string | null;
+  missionTimerCountdownSeconds: number;
+  gameplayFeedback: GameplayFeedback | null;
+  storyLogRequest: { section: StoryLogSection; revision: number };
   playerRuntimeRevision: number;
   needsInitialRoadAlignment: boolean;
   hasSavedGame: boolean;
@@ -145,6 +170,7 @@ interface GameStore extends GameData {
     vehicleDistanceMeters: number,
     surface: RoadSurface,
     blockedImpact: boolean,
+    conditionMultiplier?: number,
   ) => void;
   alignInitialPlayerToRoad: (
     coordinates: RoadCoordinates,
@@ -185,6 +211,11 @@ interface GameStore extends GameData {
   ) => MissionCompletionEvent | null;
   dismissMissionCompletion: () => void;
   dismissNarrativeEvent: () => void;
+  dismissRadioEvent: () => void;
+  selectMissionChoice: (optionId: string) => boolean;
+  cancelMissionChoice: () => void;
+  requestStoryLog: (section?: StoryLogSection) => void;
+  dismissGameplayFeedback: () => void;
   dismissLevelUp: () => void;
   saveGame: (silent?: boolean) => boolean;
   loadGame: () => boolean;
@@ -198,6 +229,61 @@ function appendUnique(
   additions: readonly string[],
 ): string[] {
   return [...new Set([...current, ...additions])];
+}
+
+function appendStoryLogEntry(
+  entries: readonly StoryLogEntry[],
+  entry: Omit<StoryLogEntry, 'recordedAt'>,
+): StoryLogEntry[] {
+  if (entries.some((current) => current.id === entry.id)) return [...entries];
+  return [
+    ...entries,
+    {
+      ...entry,
+      recordedAt: `Registro ${String(entries.length + 1).padStart(2, '0')}`,
+    },
+  ];
+}
+
+function narrativeState(
+  state: Pick<GameStore, 'storyLogEntries' | 'isPaused'>,
+  eventId: string | null,
+): Partial<GameStore> {
+  if (!eventId) return {};
+  const event = narrativeEventById.get(eventId);
+  if (!event) return {};
+  const storyLogEntries = appendStoryLogEntry(state.storyLogEntries, {
+    id: `radio:${event.id}`,
+    type: 'radio',
+    title: event.title,
+    summary: event.objectiveSummary
+      ? `${event.message} ${event.objectiveSummary}`
+      : event.message,
+  });
+  if (event.presentation === 'radio') {
+    return {
+      activeRadioEventId: event.id,
+      storyLogEntries,
+    };
+  }
+  return {
+    activeNarrativeEventId: event.id,
+    activeRadioEventId: null,
+    storyLogEntries,
+    isPaused: true,
+  };
+}
+
+function feedback(
+  state: Pick<GameStore, 'gameplayFeedback'>,
+  message: string,
+  tone: GameplayFeedback['tone'] = 'info',
+): GameplayFeedback {
+  return {
+    id: (state.gameplayFeedback?.id ?? 0) + 1,
+    message,
+    tone,
+  };
 }
 
 function sameNumberArray(
@@ -225,6 +311,7 @@ interface CheckpointSource {
   activeMissionId: string | null;
   activeMissionCompletedObjectiveIds: string[];
   activeMissionObjectiveProgress: MissionObjectiveProgressMap;
+  missionChoiceSelections: Record<string, string>;
 }
 
 function checkpointFromState(
@@ -255,6 +342,7 @@ function checkpointFromState(
     activeMissionObjectiveProgress: structuredClone(
       state.activeMissionObjectiveProgress,
     ),
+    missionChoiceSelections: { ...state.missionChoiceSelections },
   };
 }
 
@@ -274,6 +362,7 @@ function defaultGameData(): GameData {
       activeMissionId: null,
       activeMissionCompletedObjectiveIds: [],
       activeMissionObjectiveProgress: {},
+      missionChoiceSelections: {},
     },
     'new-game',
     'checkpoint-new-game',
@@ -290,6 +379,8 @@ function defaultGameData(): GameData {
     activeMissionId: null,
     activeMissionCompletedObjectiveIds: [],
     activeMissionObjectiveProgress: {},
+    missionChoiceSelections: {},
+    storyLogEntries: [],
     completedMissionIds: [],
     lastCompletedMissionId: null,
     lastLevelUp: null,
@@ -325,6 +416,8 @@ function gameDataFromPersistence(game: PersistedGameData): GameData {
     activeMissionObjectiveProgress: structuredClone(
       game.activeMissionObjectiveProgress,
     ),
+    missionChoiceSelections: { ...game.missionChoiceSelections },
+    storyLogEntries: game.storyLogEntries.map((entry) => ({ ...entry })),
     completedMissionIds: [...game.completedMissionIds],
     lastCompletedMissionId: null,
     lastLevelUp: null,
@@ -364,6 +457,8 @@ function persistableGame(state: GameData): PersistedGameData {
     activeMissionObjectiveProgress: structuredClone(
       state.activeMissionObjectiveProgress,
     ),
+    missionChoiceSelections: { ...state.missionChoiceSelections },
+    storyLogEntries: state.storyLogEntries.map((entry) => ({ ...entry })),
     completedMissionIds: [...state.completedMissionIds],
     discoveredLocationIds: [...state.discoveredLocationIds],
     unlockedLocationIds: [...state.unlockedLocationIds],
@@ -389,6 +484,7 @@ const initialGameData =
 const initialClosedRoadEdgeIds = chapterRoadClosureEdgeIds(
   initialGameData.activeMissionId,
   initialGameData.activeMissionCompletedObjectiveIds,
+  initialGameData.missionChoiceSelections,
 );
 const recoveryReasonForGame = (game: GameData): RecoveryReason | null => {
   if (game.vehicle.condition <= 0) return 'condition';
@@ -429,6 +525,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   conditionWarning: null,
   conditionWarningsShown: [],
   activeNarrativeEventId: null,
+  activeRadioEventId: null,
+  activeMissionChoiceObjectiveId: null,
+  missionTimerCountdownSeconds: 0,
+  gameplayFeedback: null,
+  storyLogRequest: { section: 'missions', revision: 0 },
   playerRuntimeRevision: 0,
   needsInitialRoadAlignment: initialLoad.status !== 'loaded',
   hasSavedGame: initialLoad.status === 'loaded',
@@ -478,7 +579,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ),
       },
     })),
-  applyDrivingWear: (vehicleDistanceMeters, surface, blockedImpact) =>
+  applyDrivingWear: (
+    vehicleDistanceMeters,
+    surface,
+    blockedImpact,
+    conditionMultiplier = 1,
+  ) =>
     set((state) => {
       if (state.driving.roadNetworkStatus !== 'ready') return state;
       const distanceDamage =
@@ -487,7 +593,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
           ? vehicleStateConfig.offroadConditionPerVehicleMeter
           : surface === 'track'
             ? vehicleStateConfig.trackConditionPerVehicleMeter
-            : 0);
+            : 0) *
+        Math.max(0.1, conditionMultiplier);
       const damage =
         distanceDamage +
         (blockedImpact ? vehicleStateConfig.blockedImpactCondition : 0);
@@ -566,11 +673,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       activeMissionObjectiveProgress: structuredClone(
         checkpoint.activeMissionObjectiveProgress,
       ),
+      missionChoiceSelections: { ...checkpoint.missionChoiceSelections },
       recoveryReason: null,
       activeNarrativeEventId: null,
+      activeRadioEventId: null,
+      activeMissionChoiceObjectiveId: null,
+      missionTimerCountdownSeconds: 0,
       isPaused: false,
       playerRuntimeRevision: state.playerRuntimeRevision + 1,
       missionRoute: defaultMissionRouteState,
+      temporarilyClosedRoadEdgeIds: chapterRoadClosureEdgeIds(
+        checkpoint.activeMissionId,
+        checkpoint.activeMissionCompletedObjectiveIds,
+        checkpoint.missionChoiceSelections,
+      ),
     }));
     return true;
   },
@@ -580,6 +696,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set((state) => {
       const vehicle = {
         ...checkpoint.vehicle,
+        fuel:
+          state.recoveryReason === 'fuel'
+            ? Math.max(
+                checkpoint.vehicle.fuel,
+                vehicleStateConfig.emergencyRecoveryFuel,
+              )
+            : checkpoint.vehicle.fuel,
         condition:
           state.recoveryReason === 'condition'
             ? Math.max(
@@ -603,11 +726,27 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeMissionObjectiveProgress: abandonMission
           ? {}
           : structuredClone(checkpoint.activeMissionObjectiveProgress),
+        missionChoiceSelections: { ...checkpoint.missionChoiceSelections },
         recoveryReason: null,
         activeNarrativeEventId: null,
+        activeRadioEventId: null,
+        activeMissionChoiceObjectiveId: null,
+        missionTimerCountdownSeconds: 0,
         isPaused: false,
         playerRuntimeRevision: state.playerRuntimeRevision + 1,
         missionRoute: defaultMissionRouteState,
+        temporarilyClosedRoadEdgeIds: chapterRoadClosureEdgeIds(
+          abandonMission ? null : checkpoint.activeMissionId,
+          abandonMission ? [] : checkpoint.activeMissionCompletedObjectiveIds,
+          checkpoint.missionChoiceSelections,
+        ),
+        gameplayFeedback: feedback(
+          state,
+          state.recoveryReason === 'fuel'
+            ? `Recuperación de emergencia: ${vehicle.fuel.toFixed(0)}% de combustible`
+            : 'Vehículo recuperado en el último punto seguro',
+          'warning',
+        ),
       };
     });
     return true;
@@ -683,11 +822,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }),
   togglePaused: () =>
     set((state) =>
-      state.recoveryReason ? state : { isPaused: !state.isPaused },
+      state.recoveryReason ||
+      state.activeNarrativeEventId ||
+      state.activeMissionChoiceObjectiveId
+        ? state
+        : { isPaused: !state.isPaused },
     ),
   setPaused: (isPaused) =>
     set((state) => ({
-      isPaused: state.recoveryReason ? true : isPaused,
+      isPaused:
+        state.recoveryReason ||
+        state.activeNarrativeEventId ||
+        state.activeMissionChoiceObjectiveId
+          ? true
+          : isPaused,
     })),
   setFollowingPlayer: (isFollowingPlayer) => set({ isFollowingPlayer }),
   setCurrentLocationId: (currentLocationId) =>
@@ -721,9 +869,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ) {
         return state;
       }
+      const location = locationById.get(locationId);
       return {
         discoveredLocationIds: [...state.discoveredLocationIds, locationId],
         lastDiscoveredLocationId: locationId,
+        storyLogEntries: location
+          ? appendStoryLogEntry(state.storyLogEntries, {
+              id: `discovery:${location.id}`,
+              type: 'discovery',
+              title: location.name,
+              summary: location.description,
+            })
+          : state.storyLogEntries,
+        gameplayFeedback: location
+          ? feedback(state, `Descubrimiento: ${location.name}`, 'success')
+          : state.gameplayFeedback,
       };
     }),
   unlockLocation: (locationId) =>
@@ -784,6 +944,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
             : Math.min(state.vehicle.condition, conditionMaximum),
       };
       const activeNarrativeEventId = missionStartNarrativeEventId(mission.id);
+      const storyLogEntries = appendStoryLogEntry(state.storyLogEntries, {
+        id: `mission-start:${mission.id}`,
+        type: 'mission',
+        title: `Misión iniciada: ${mission.title}`,
+        summary: mission.description,
+      });
       const checkpoint = checkpointFromState(
         {
           ...state,
@@ -802,23 +968,45 @@ export const useGameStore = create<GameStore>((set, get) => ({
         lastCompletedMissionId: null,
         lastDiscoveredLocationId: null,
         lastCheckpoint: checkpoint,
-        temporarilyClosedRoadEdgeIds: chapterRoadClosureEdgeIds(mission.id, []),
-        activeNarrativeEventId,
+        temporarilyClosedRoadEdgeIds: chapterRoadClosureEdgeIds(
+          mission.id,
+          [],
+          state.missionChoiceSelections,
+        ),
+        activeNarrativeEventId: null,
+        activeRadioEventId: null,
+        activeMissionChoiceObjectiveId: null,
+        missionTimerCountdownSeconds: 0,
+        storyLogEntries,
         unlockedStoryIds: activeNarrativeEventId
           ? appendUnique(state.unlockedStoryIds, [activeNarrativeEventId])
           : state.unlockedStoryIds,
-        isPaused: activeNarrativeEventId ? true : state.isPaused,
+        gameplayFeedback: feedback(state, 'Ruta de misión activada', 'success'),
+        ...narrativeState(
+          { storyLogEntries, isPaused: state.isPaused },
+          activeNarrativeEventId,
+        ),
       };
     });
     return started;
   },
   abandonMission: () =>
-    set({
-      activeMissionId: null,
-      activeMissionCompletedObjectiveIds: [],
-      activeMissionObjectiveProgress: {},
-      temporarilyClosedRoadEdgeIds: [],
-      activeNarrativeEventId: null,
+    set((state) => {
+      const missionChoiceSelections = { ...state.missionChoiceSelections };
+      if (state.activeMissionId)
+        delete missionChoiceSelections[state.activeMissionId];
+      return {
+        activeMissionId: null,
+        activeMissionCompletedObjectiveIds: [],
+        activeMissionObjectiveProgress: {},
+        missionChoiceSelections,
+        temporarilyClosedRoadEdgeIds: [],
+        activeNarrativeEventId: null,
+        activeRadioEventId: null,
+        activeMissionChoiceObjectiveId: null,
+        missionTimerCountdownSeconds: 0,
+        isPaused: false,
+      };
     }),
   advanceActiveMission: (player, isInteracting, deltaTimeSeconds = 0.1) => {
     let completion: MissionCompletionEvent | null = null;
@@ -827,6 +1015,50 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ? missionById.get(state.activeMissionId)
         : null;
       if (!mission) return state;
+      if (state.isPaused) return state;
+
+      const completedObjectiveIds = new Set(
+        state.activeMissionCompletedObjectiveIds,
+      );
+      const pendingChoice = mission.objectives.find(
+        (objective) =>
+          objective.type === 'choice' &&
+          !completedObjectiveIds.has(objective.id) &&
+          objectiveIsAvailable(objective, completedObjectiveIds),
+      );
+      const pendingChoiceCoordinates = pendingChoice
+        ? objectiveCoordinates(pendingChoice)
+        : null;
+      if (
+        isInteracting &&
+        pendingChoice &&
+        pendingChoiceCoordinates &&
+        !state.missionChoiceSelections[mission.id] &&
+        distanceBetweenMeters(
+          [player.longitude, player.latitude],
+          pendingChoiceCoordinates,
+        ) <= pendingChoice.radiusMeters
+      ) {
+        return {
+          activeMissionChoiceObjectiveId: pendingChoice.id,
+          activeRadioEventId: null,
+          isPaused: true,
+        };
+      }
+
+      if (state.missionTimerCountdownSeconds > 0) {
+        const missionTimerCountdownSeconds = Math.max(
+          0,
+          state.missionTimerCountdownSeconds - Math.max(0, deltaTimeSeconds),
+        );
+        return {
+          missionTimerCountdownSeconds,
+          gameplayFeedback:
+            missionTimerCountdownSeconds === 0
+              ? feedback(state, 'Señal inestable: el tiempo comenzó', 'warning')
+              : state.gameplayFeedback,
+        };
+      }
 
       const progress = advanceMissionObjectives(
         mission,
@@ -839,6 +1071,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
           energy: state.energy,
           objectiveProgress: state.activeMissionObjectiveProgress,
           deltaTimeSeconds,
+          selectedChoiceOptionId:
+            state.missionChoiceSelections[mission.id] ?? null,
+          timedObjectiveStartAllowed: true,
         },
       );
       let inventory = state.inventory;
@@ -879,6 +1114,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
           activeMissionObjectiveProgress: progress.objectiveProgress,
           recoveryReason: 'timed-objective',
           isPaused: true,
+          gameplayFeedback: feedback(
+            state,
+            'La señal se perdió antes de llegar a la estación',
+            'warning',
+          ),
         };
       }
       if (progress.newlyCompletedObjectiveIds.length === 0) {
@@ -896,6 +1136,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
           : state;
       }
       if (!progress.isCompleted) {
+        const completedChoice = mission.objectives.some(
+          (objective) =>
+            objective.type === 'choice' &&
+            progress.newlyCompletedObjectiveIds.includes(objective.id),
+        );
         const nextState = {
           ...state,
           telemetry,
@@ -907,19 +1152,38 @@ export const useGameStore = create<GameStore>((set, get) => ({
         };
         const checkpointReason =
           progress.effects.fuelRestored > 0 ? 'fuel-station' : 'objective';
-        const checkpoint = checkpointFromState(nextState, checkpointReason);
+        const checkpoint = completedChoice
+          ? state.lastCheckpoint
+          : checkpointFromState(nextState, checkpointReason);
         const temporarilyClosedRoadEdgeIds = chapterRoadClosureEdgeIds(
           mission.id,
           progress.completedObjectiveIds,
+          state.missionChoiceSelections,
         );
         const closureChanged = !sameNumberArray(
           state.temporarilyClosedRoadEdgeIds,
           temporarilyClosedRoadEdgeIds,
         );
-        const activeNarrativeEventId = objectiveNarrativeEventId(
+        const narrativeEventId = objectiveNarrativeEventId(
           mission.id,
           progress.newlyCompletedObjectiveIds,
         );
+        const objectiveFeedback =
+          progress.effects.fuelRestored > 0
+            ? `Combustible +${progress.effects.fuelRestored.toFixed(0)}%`
+            : progress.effects.conditionRestored > 0
+              ? `Condición +${progress.effects.conditionRestored.toFixed(0)}%`
+              : progress.effects.addItems.some(
+                    (item) => item.itemId === 'bidon-combustible',
+                  )
+                ? 'Bidón de combustible recogido'
+                : progress.effects.addItems.some(
+                      (item) => item.itemId === 'rele-encendido',
+                    )
+                  ? 'Relé de encendido recogido'
+                  : completedChoice
+                    ? 'Ruta recalculada'
+                    : 'Objetivo actualizado';
         return {
           telemetry,
           vehicle,
@@ -929,7 +1193,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           activeMissionObjectiveProgress: progress.objectiveProgress,
           lastCheckpoint: checkpoint,
           lastSafeCheckpoint:
-            checkpointReason === 'fuel-station'
+            !completedChoice && checkpointReason === 'fuel-station'
               ? checkpoint
               : state.lastSafeCheckpoint,
           playerRuntimeRevision:
@@ -943,11 +1207,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
                   state.missionRoute.recalculationRevision + 1,
               }
             : state.missionRoute,
-          activeNarrativeEventId,
-          unlockedStoryIds: activeNarrativeEventId
-            ? appendUnique(state.unlockedStoryIds, [activeNarrativeEventId])
+          unlockedStoryIds: narrativeEventId
+            ? appendUnique(state.unlockedStoryIds, [narrativeEventId])
             : state.unlockedStoryIds,
-          isPaused: activeNarrativeEventId ? true : state.isPaused,
+          gameplayFeedback: feedback(
+            state,
+            objectiveFeedback,
+            completedChoice || progress.effects.addItems.length > 0
+              ? 'success'
+              : 'info',
+          ),
+          ...narrativeState(state, narrativeEventId),
         };
       }
 
@@ -963,7 +1233,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       for (const itemId of rewards.itemIds) {
         rewardedInventory = addItemToInventory(rewardedInventory, itemId, 1);
       }
-      const rewardedVehicle = { ...vehicle, fuel: rewardedFuel };
+      const selectedChoice = selectedMissionChoiceOption(
+        mission.id,
+        state.missionChoiceSelections,
+      );
+      const routeConditionCost = selectedChoice
+        ? (selectedChoice.conditionMultiplier ?? 1) > 1
+          ? 8
+          : 2
+        : 0;
+      const rewardedVehicle = {
+        ...vehicle,
+        condition: Math.max(0, vehicle.condition - routeConditionCost),
+        fuel: rewardedFuel,
+      };
       const rewardedTelemetry = telemetryFromPlayer({
         ...player,
         fuel: rewardedFuel,
@@ -973,6 +1256,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const activeNarrativeEventId = missionCompletionNarrativeEventId(
         mission.id,
       );
+      const storyLogEntries = appendStoryLogEntry(state.storyLogEntries, {
+        id: `mission-complete:${mission.id}`,
+        type: 'mission',
+        title: `Misión completada: ${mission.title}`,
+        summary: selectedChoice
+          ? `${mission.completionSummary} ${missionChoiceConsequence(selectedChoice)}`
+          : mission.completionSummary,
+      });
       const nextState = {
         ...state,
         telemetry: rewardedTelemetry,
@@ -982,6 +1273,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeMissionId: null,
         activeMissionCompletedObjectiveIds: [],
         activeMissionObjectiveProgress: {},
+        storyLogEntries,
       };
       const checkpointReason = chapterCompleted
         ? 'chapter'
@@ -1028,8 +1320,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
           ? appendUnique(state.completedChapterIds, [CHAPTER_ONE_ID])
           : state.completedChapterIds,
         temporarilyClosedRoadEdgeIds: [],
-        activeNarrativeEventId,
-        isPaused: activeNarrativeEventId ? true : state.isPaused,
+        activeNarrativeEventId: null,
+        activeRadioEventId: null,
+        activeMissionChoiceObjectiveId: null,
+        missionTimerCountdownSeconds: 0,
+        storyLogEntries,
+        gameplayFeedback:
+          routeConditionCost > 0
+            ? feedback(
+                state,
+                `Consecuencia de ruta: condición -${String(routeConditionCost)}%`,
+                routeConditionCost >= 8 ? 'warning' : 'info',
+              )
+            : state.gameplayFeedback,
+        ...narrativeState(
+          { storyLogEntries, isPaused: state.isPaused },
+          activeNarrativeEventId,
+        ),
       };
     });
     return completion;
@@ -1038,8 +1345,75 @@ export const useGameStore = create<GameStore>((set, get) => ({
   dismissNarrativeEvent: () =>
     set((state) => ({
       activeNarrativeEventId: null,
-      isPaused: state.recoveryReason ? true : false,
+      isPaused: Boolean(
+        state.recoveryReason || state.activeMissionChoiceObjectiveId,
+      ),
     })),
+  dismissRadioEvent: () => set({ activeRadioEventId: null }),
+  selectMissionChoice: (optionId) => {
+    const state = get();
+    const mission = state.activeMissionId
+      ? missionById.get(state.activeMissionId)
+      : null;
+    const objective = mission?.objectives.find(
+      (candidate) => candidate.id === state.activeMissionChoiceObjectiveId,
+    );
+    const option = objective ? missionChoiceOption(objective, optionId) : null;
+    if (
+      !mission ||
+      !objective ||
+      !option ||
+      state.missionChoiceSelections[mission.id]
+    ) {
+      return false;
+    }
+
+    const storyLogEntries = appendStoryLogEntry(state.storyLogEntries, {
+      id: `choice:${mission.id}`,
+      type: 'mission',
+      title: `Ruta elegida: ${option.label}`,
+      summary: `${option.description} ${missionChoiceConsequence(option)}`,
+    });
+    set({
+      missionChoiceSelections: {
+        ...state.missionChoiceSelections,
+        [mission.id]: option.id,
+      },
+      storyLogEntries,
+      activeMissionChoiceObjectiveId: null,
+      isPaused: false,
+    });
+    get().advanceActiveMission(get().telemetry, true, 0);
+    set((current) => ({
+      missionTimerCountdownSeconds: 3,
+      temporarilyClosedRoadEdgeIds: [
+        ...(option.closedRoadEdgeIds ?? current.temporarilyClosedRoadEdgeIds),
+      ],
+      missionRoute: {
+        ...current.missionRoute,
+        recalculationRevision: current.missionRoute.recalculationRevision + 1,
+      },
+      gameplayFeedback: feedback(
+        current,
+        `Ruta recalculada · ${missionChoiceConsequence(option)}`,
+        option.risk === 'high' ? 'warning' : 'success',
+      ),
+    }));
+    return true;
+  },
+  cancelMissionChoice: () =>
+    set((state) => ({
+      activeMissionChoiceObjectiveId: null,
+      isPaused: Boolean(state.recoveryReason || state.activeNarrativeEventId),
+    })),
+  requestStoryLog: (section = 'history') =>
+    set((state) => ({
+      storyLogRequest: {
+        section,
+        revision: state.storyLogRequest.revision + 1,
+      },
+    })),
+  dismissGameplayFeedback: () => set({ gameplayFeedback: null }),
   dismissLevelUp: () => set({ lastLevelUp: null }),
   saveGame: (silent = false) => {
     const save = writeGameSave(persistableGame(get()));
@@ -1074,10 +1448,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
         conditionWarning: null,
         conditionWarningsShown: [],
         activeNarrativeEventId: null,
+        activeRadioEventId: null,
+        activeMissionChoiceObjectiveId: null,
+        missionTimerCountdownSeconds: 0,
+        gameplayFeedback: null,
         needsInitialRoadAlignment: false,
         temporarilyClosedRoadEdgeIds: chapterRoadClosureEdgeIds(
           loaded.save.game.activeMissionId,
           loaded.save.game.activeMissionCompletedObjectiveIds,
+          loaded.save.game.missionChoiceSelections,
         ),
         missionRoute: defaultMissionRouteState,
       };
@@ -1096,6 +1475,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       conditionWarning: null,
       conditionWarningsShown: [],
       activeNarrativeEventId: null,
+      activeRadioEventId: null,
+      activeMissionChoiceObjectiveId: null,
+      missionTimerCountdownSeconds: 0,
+      gameplayFeedback: null,
+      storyLogRequest: { section: 'missions', revision: 0 },
       needsInitialRoadAlignment: true,
       playerRuntimeRevision: state.playerRuntimeRevision + 1,
       hasSavedGame: false,

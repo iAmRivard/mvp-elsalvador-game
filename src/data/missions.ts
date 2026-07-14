@@ -9,6 +9,23 @@ export type MissionObjectiveType =
   | 'timed'
   | 'choice';
 
+export interface MissionChoiceOption {
+  id: string;
+  label: string;
+  description: string;
+  estimatedDistanceMeters: number;
+  estimatedDurationSeconds: number;
+  risk: 'low' | 'medium' | 'high';
+  closedRoadEdgeIds?: readonly number[];
+  fuelMultiplier?: number;
+  conditionMultiplier?: number;
+}
+
+export interface MissionChoiceDefinition {
+  prompt: string;
+  options: readonly MissionChoiceOption[];
+}
+
 export interface MissionObjective {
   id: string;
   type: MissionObjectiveType;
@@ -25,6 +42,7 @@ export interface MissionObjective {
   durationSeconds?: number;
   energyCost?: number;
   prerequisiteObjectiveIds?: readonly string[];
+  choice?: MissionChoiceDefinition;
 }
 
 export type MissionReward =
@@ -44,6 +62,8 @@ export interface Mission {
   objectives: readonly MissionObjective[];
   rewards: readonly MissionReward[];
   prerequisites: readonly string[];
+  optional?: boolean;
+  completionSummary: string;
 }
 
 export const missions: readonly Mission[] = [
@@ -51,14 +71,14 @@ export const missions: readonly Mission[] = [
     id: 'la-transmision',
     title: 'La transmisión',
     description:
-      'Una frecuencia desconocida cruza la capital. Registra el pulso y sigue su rastro hacia el oeste.',
+      'Una señal de auxilio apareció en una frecuencia abandonada. Escúchala y sigue su origen hacia el occidente.',
     startLocationId: 'san-salvador',
     destinationLocationId: 'repetidor-las-delicias',
     objectives: [
       {
         id: 'sintonizar-transmision',
         type: 'interact',
-        label: 'Sintoniza la transmisión en San Salvador',
+        label: 'Acércate al marcador y escucha la señal',
         targetLocationId: 'san-salvador',
         radiusMeters: 500,
       },
@@ -74,7 +94,7 @@ export const missions: readonly Mission[] = [
       {
         id: 'registrar-frecuencia-oeste',
         type: 'interact',
-        label: 'Registra la frecuencia del repetidor',
+        label: 'Detén el vehículo y registra la transmisión',
         targetLocationId: 'repetidor-las-delicias',
         radiusMeters: 220,
         prerequisiteObjectiveIds: ['llegar-repetidor-oeste'],
@@ -89,6 +109,8 @@ export const missions: readonly Mission[] = [
       },
     ],
     prerequisites: [],
+    completionSummary:
+      'La señal continúa hacia Santa Ana, pero alguien advierte que la carretera principal está bloqueada.',
   },
   {
     id: 'camino-hacia-santa-ana',
@@ -117,10 +139,39 @@ export const missions: readonly Mission[] = [
       {
         id: 'elegir-ruta-secundaria',
         type: 'choice',
-        label: 'Confirma el desvío por la vía secundaria',
-        coordinates: [-89.3981679, 13.7673945],
-        radiusMeters: 420,
+        label: 'Elige el desvío hacia la estación',
+        coordinates: [-89.3592277, 13.7305749],
+        radiusMeters: 180,
         prerequisiteObjectiveIds: ['inspeccionar-bloqueo'],
+        choice: {
+          prompt: '¿Qué ruta usarás para seguir la señal hasta la estación?',
+          options: [
+            {
+              id: 'north',
+              label: 'Ruta norte',
+              description:
+                'Más larga y estable. Menor consumo y menor desgaste.',
+              estimatedDistanceMeters: 30_795,
+              estimatedDurationSeconds: 258,
+              risk: 'low',
+              closedRoadEdgeIds: [14_072, 14_336],
+              fuelMultiplier: 0.92,
+              conditionMultiplier: 0.65,
+            },
+            {
+              id: 'south',
+              label: 'Ruta sur',
+              description:
+                'Más corta, por caminos secundarios en mal estado. Consume y desgasta más.',
+              estimatedDistanceMeters: 30_288,
+              estimatedDurationSeconds: 245,
+              risk: 'high',
+              closedRoadEdgeIds: [14_072],
+              fuelMultiplier: 1.25,
+              conditionMultiplier: 1.35,
+            },
+          ],
+        },
       },
       {
         id: 'alcanzar-estacion-a-tiempo',
@@ -128,7 +179,7 @@ export const missions: readonly Mission[] = [
         label: 'Alcanza la estación antes de perder la señal',
         targetLocationId: 'estacion-el-congo',
         radiusMeters: 550,
-        durationSeconds: 210,
+        durationSeconds: 270,
         requiresFuel: true,
         prerequisiteObjectiveIds: ['elegir-ruta-secundaria'],
       },
@@ -138,6 +189,8 @@ export const missions: readonly Mission[] = [
       { type: 'unlock-location', locationId: 'estacion-el-congo' },
     ],
     prerequisites: ['la-transmision'],
+    completionSummary:
+      'Llegaste a la estación antes de perder la señal. El desvío dejó consecuencias visibles en el vehículo.',
   },
   {
     id: 'estacion-abandonada',
@@ -190,6 +243,8 @@ export const missions: readonly Mission[] = [
       { type: 'energy', amount: 10 },
     ],
     prerequisites: ['camino-hacia-santa-ana'],
+    completionSummary:
+      'Recuperaste combustible y una pieza de encendido para continuar el viaje.',
   },
   {
     id: 'reparacion-de-emergencia',
@@ -215,6 +270,8 @@ export const missions: readonly Mission[] = [
       { type: 'energy', amount: 5 },
     ],
     prerequisites: ['estacion-abandonada'],
+    completionSummary:
+      'El vehículo vuelve a responder. Santa Ana es el siguiente punto seguro.',
   },
   {
     id: 'llegada-a-santa-ana',
@@ -252,6 +309,8 @@ export const missions: readonly Mission[] = [
       },
     ],
     prerequisites: ['reparacion-de-emergencia'],
+    completionSummary:
+      'La señal no nació en Santa Ana: rebota desde los alrededores de Coatepeque.',
   },
   {
     id: 'secreto-de-coatepeque',
@@ -321,6 +380,8 @@ export const missions: readonly Mission[] = [
       },
     ],
     prerequisites: ['llegada-a-santa-ana'],
+    completionSummary:
+      'La baliza reenvía una transmisión más antigua desde Cerro Verde.',
   },
   {
     id: 'senales-en-suchitoto',
@@ -348,6 +409,9 @@ export const missions: readonly Mission[] = [
       },
     ],
     prerequisites: [],
+    optional: true,
+    completionSummary:
+      'La señal de Suchitoto quedó registrada como una transmisión secundaria.',
   },
 ] as const;
 

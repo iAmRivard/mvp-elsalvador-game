@@ -14,84 +14,114 @@ export const chapterOneFinalMissionId = 'secreto-de-coatepeque';
 
 export interface NarrativeEvent {
   id: string;
-  channel: string;
+  presentation: 'radio' | 'modal' | 'chapter';
+  channelLabel: string;
   title: string;
   speaker: string;
   message: string;
-  actionLabel: string;
+  objectiveSummary?: string;
+  actionLabel?: string;
 }
 
 export const narrativeEvents: readonly NarrativeEvent[] = [
   {
     id: 'radio-transmision-inicial',
-    channel: 'Frecuencia 87.9 / Señal inestable',
-    title: 'Una voz entre la estática',
-    speaker: 'Transmisión desconocida',
+    presentation: 'chapter',
+    channelLabel: 'Capítulo 1 · La señal de Occidente',
+    title: 'Una señal de auxilio',
+    speaker: 'Voz desconocida',
     message:
-      '...occidente... repite el patrón... si alguien escucha, siga la portadora antes de que cambie.',
-    actionLabel: 'Sintonizar',
+      'Una señal de auxilio apareció en una frecuencia abandonada. Parece venir desde el occidente de El Salvador. Tu misión es seguirla, descubrir quién la envía y registrar lo que encuentres. “Si alguien puede escucharme… no sigan la carretera principal.”',
+    objectiveSummary: 'Acércate al marcador de radio y escucha la señal.',
+    actionLabel: 'Comenzar investigación',
   },
   {
     id: 'radio-ruta-occidental',
-    channel: 'Bitácora de ruta',
-    title: 'La señal cruza la cordillera',
-    speaker: 'Operador de campo',
+    presentation: 'radio',
+    channelLabel: 'Radio de emergencia · 87.9',
+    title: 'La señal continúa al oeste',
+    speaker: 'Sistema de expedición',
     message:
-      'El pulso continúa hacia Santa Ana. La carretera principal es la única lectura estable por ahora.',
-    actionLabel: 'Salir al oeste',
+      'La señal es más clara fuera de la capital. La ruta cian conduce al repetidor de Las Delicias, donde podrás registrar su origen.',
+    objectiveSummary: 'Sigue la ruta cian hasta el repetidor marcado.',
+    actionLabel: 'Cerrar',
+  },
+  {
+    id: 'radio-camino-bloqueado',
+    presentation: 'radio',
+    channelLabel: 'Radio de emergencia · 87.9',
+    title: 'Advertencia en la carretera',
+    speaker: 'Voz desconocida',
+    message:
+      'La señal continúa hacia Santa Ana, pero la advertencia es clara: la carretera principal está bloqueada. Acércate al cierre y averigua qué ocurrió.',
+    objectiveSummary: 'Sigue la ruta hasta el bloqueo de la carretera.',
+    actionLabel: 'Cerrar',
   },
   {
     id: 'radio-bloqueo-confirmado',
-    channel: 'Alerta vial local',
-    title: 'Camino interrumpido',
+    presentation: 'radio',
+    channelLabel: 'Navegación local',
+    title: 'Dos desvíos disponibles',
     speaker: 'Sistema de navegación',
     message:
-      'El tramo principal quedó cerrado. La red local encontró una vía secundaria; recalculando sin conexión externa.',
-    actionLabel: 'Tomar el desvío',
+      'El cierre no puede cruzarse. La red local encontró una ruta norte más estable y una ruta sur más corta, pero de mayor desgaste.',
+    objectiveSummary: 'Detén el vehículo y elige un desvío.',
+    actionLabel: 'Cerrar',
   },
   {
     id: 'radio-estacion-abandonada',
-    channel: 'Frecuencia 87.9 / Eco cercano',
+    presentation: 'radio',
+    channelLabel: 'Radio de emergencia · Eco cercano',
     title: 'La estación sigue emitiendo',
     speaker: 'Transmisión desconocida',
     message:
       'No hay personal, pero la interferencia nace bajo el techo de la estación. Busca combustible y una pieza útil.',
+    objectiveSummary: 'Investiga la estación y recupera suministros.',
     actionLabel: 'Registrar la estación',
   },
   {
     id: 'radio-averia-encendido',
-    channel: 'Diagnóstico del vehículo',
+    presentation: 'radio',
+    channelLabel: 'Diagnóstico del vehículo',
     title: 'Encendido inestable',
     speaker: 'Sistema de expedición',
     message:
       'El desvío dañó el circuito de encendido. El relé recuperado puede restaurarlo usando energía de reserva.',
+    objectiveSummary: 'Instala el relé recuperado para reparar el vehículo.',
     actionLabel: 'Preparar reparación',
   },
   {
     id: 'radio-rumbo-santa-ana',
-    channel: 'Bitácora de ruta',
+    presentation: 'radio',
+    channelLabel: 'Bitácora de ruta',
     title: 'Último tramo hacia Santa Ana',
     speaker: 'Operador de campo',
     message:
       'El vehículo vuelve a responder. Santa Ana es el punto seguro más cercano y la señal gana intensidad.',
+    objectiveSummary: 'Conduce hasta el punto seguro de Santa Ana.',
     actionLabel: 'Continuar',
   },
   {
     id: 'radio-ecos-coatepeque',
-    channel: 'Frecuencia 87.9 / Tres ecos',
+    presentation: 'radio',
+    channelLabel: 'Radio de emergencia · 87.9',
     title: 'La caldera devuelve la señal',
     speaker: 'Transmisión desconocida',
     message:
-      'Santa Ana sólo repetía la frecuencia. Tres ecos rodean Coatepeque; la fuente real está entre ellos.',
+      'Santa Ana sólo repetía la frecuencia. La señal rebota en tres puntos alrededor de Coatepeque; revisarlos permitirá localizar la baliza.',
+    objectiveSummary:
+      'Explora los tres accesos marcados alrededor de Coatepeque.',
     actionLabel: 'Seguir los ecos',
   },
   {
     id: 'final-senal-occidente',
-    channel: 'Capítulo 1 completado',
+    presentation: 'chapter',
+    channelLabel: 'Capítulo 1 completado',
     title: 'La señal de Occidente',
     speaker: 'Registro recuperado',
     message:
       'La baliza no nació en Santa Ana. Reenvía una transmisión más antigua desde las alturas de Cerro Verde. La siguiente ruta ya está abierta.',
+    objectiveSummary: 'La investigación continuará desde Cerro Verde.',
     actionLabel: 'Cerrar bitácora',
   },
 ] as const;
@@ -102,7 +132,7 @@ export const narrativeEventById = new Map(
 
 const missionStartEventIds: Readonly<Record<string, string>> = {
   'la-transmision': 'radio-transmision-inicial',
-  'camino-hacia-santa-ana': 'radio-ruta-occidental',
+  'camino-hacia-santa-ana': 'radio-camino-bloqueado',
   'estacion-abandonada': 'radio-estacion-abandonada',
   'reparacion-de-emergencia': 'radio-averia-encendido',
   'llegada-a-santa-ana': 'radio-rumbo-santa-ana',
@@ -110,6 +140,7 @@ const missionStartEventIds: Readonly<Record<string, string>> = {
 };
 
 const objectiveEventIds: Readonly<Record<string, string>> = {
+  'la-transmision:sintonizar-transmision': 'radio-ruta-occidental',
   'camino-hacia-santa-ana:inspeccionar-bloqueo': 'radio-bloqueo-confirmado',
 };
 
@@ -145,12 +176,16 @@ export function missionStartConditionMaximum(missionId: string): number | null {
 export function chapterRoadClosureEdgeIds(
   missionId: string | null,
   completedObjectiveIds: readonly string[],
+  missionChoiceSelections: Readonly<Record<string, string>> = {},
 ): number[] {
   if (
     missionId !== 'camino-hacia-santa-ana' ||
     !completedObjectiveIds.includes('inspeccionar-bloqueo')
   ) {
     return [];
+  }
+  if (missionChoiceSelections[missionId] === 'north') {
+    return [...westernRoadClosureEdgeIds, 14_336];
   }
   return [...westernRoadClosureEdgeIds];
 }

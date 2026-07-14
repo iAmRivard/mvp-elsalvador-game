@@ -70,6 +70,7 @@ export interface StepPlayerOptions {
     position: RoadCoordinates,
   ) => RestrictedAreaType | null;
   driveEnabled?: boolean;
+  routeFuelMultiplier?: number;
 }
 
 export interface PlayerStepEnvironment {
@@ -243,7 +244,9 @@ function stepPlayerOnce(
   const deltaTime = Math.max(0, deltaTimeSeconds);
   const { surface, contact } = roadState(player, options);
   const speedMultiplier = roadSpeedMultipliers[surface];
-  const fuelMultiplier = roadFuelMultipliers[surface];
+  const fuelMultiplier =
+    roadFuelMultipliers[surface] *
+    Math.max(0.1, options.routeFuelMultiplier ?? 1);
   const hasFuel = player.fuel > 0;
   const driveEnabled = options.driveEnabled !== false;
   const throttle = hasFuel && driveEnabled ? input.throttle : 0;
@@ -381,8 +384,8 @@ function stepPlayerOnce(
     ? 0
     : movement.geographicDistanceMeters;
   const fuelConsumed =
-    appliedVehicleDistanceMeters *
-    fuel.percentPerVehicleMeter *
+    appliedGeographicDistanceMeters *
+    fuel.percentPerGeographicMeter *
     fuelMultiplier *
     (input.boost && throttle > 0 ? fuel.boostMultiplier : 1);
   const blockedPosition = hitBoundary

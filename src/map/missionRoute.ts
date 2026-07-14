@@ -12,6 +12,8 @@ import {
 import { travelConfig } from '../config/travel.config';
 import { missionById } from '../data/missions';
 import { distanceBetweenMeters } from '../game/discovery';
+import { getRecommendedMission } from '../game/missionRecommendations';
+import { locationById } from '../data/locations';
 import {
   generateNavigationInstructions,
   navigationProgress,
@@ -52,17 +54,50 @@ function currentMissionTarget() {
   const mission = state.activeMissionId
     ? missionById.get(state.activeMissionId)
     : null;
-  if (!mission) return null;
   const playerCoordinates: RoadCoordinates = [
     state.telemetry.longitude,
     state.telemetry.latitude,
   ];
-  const next = nearestPendingObjective(
-    mission,
-    state.activeMissionCompletedObjectiveIds,
+  if (mission) {
+    const next = nearestPendingObjective(
+      mission,
+      state.activeMissionCompletedObjectiveIds,
+      playerCoordinates,
+    );
+    return next
+      ? {
+          state,
+          mission,
+          objective: next.objective,
+          coordinates: next.coordinates,
+          targetId: next.objective.id,
+          isMissionStart: false,
+          playerCoordinates,
+        }
+      : null;
+  }
+  const recommendation = getRecommendedMission(
+    state.completedMissionIds,
+    null,
     playerCoordinates,
   );
-  return next ? { state, mission, next, playerCoordinates } : null;
+  const recommendedMission = recommendation
+    ? missionById.get(recommendation.missionId)
+    : null;
+  const start = recommendation
+    ? locationById.get(recommendation.startLocationId)
+    : null;
+  return recommendedMission && start
+    ? {
+        state,
+        mission: recommendedMission,
+        objective: null,
+        coordinates: start.coordinates,
+        targetId: `start:${start.id}`,
+        isMissionStart: true,
+        playerCoordinates,
+      }
+    : null;
 }
 
 function updateTargets(map: MapLibreMap): void {
@@ -71,6 +106,19 @@ function updateTargets(map: MapLibreMap): void {
   const target = currentMissionTarget();
   if (!target) {
     source.setData(emptyTargets);
+    return;
+  }
+  if (target.isMissionStart) {
+    source.setData({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { objectiveId: target.targetId, isNext: true },
+          geometry: { type: 'Point', coordinates: target.coordinates },
+        },
+      ],
+    });
     return;
   }
   const completed = new Set(target.state.activeMissionCompletedObjectiveIds);
@@ -90,7 +138,7 @@ function updateTargets(map: MapLibreMap): void {
               type: 'Feature' as const,
               properties: {
                 objectiveId: objective.id,
-                isNext: objective.id === target.next.objective.id,
+                isNext: objective.id === target.targetId,
               },
               geometry: { type: 'Point' as const, coordinates },
             },
@@ -102,7 +150,7 @@ function updateTargets(map: MapLibreMap): void {
 
 function targetKey(): string | null {
   const target = currentMissionTarget();
-  return target ? `${target.mission.id}:${target.next.objective.id}` : null;
+  return target ? `${target.mission.id}:${target.targetId}` : null;
 }
 
 export function distanceToRouteMeters(
@@ -357,7 +405,7 @@ export function addMissionRoute(
     const route = await localRoutingService
       .getRoute({
         origin: target.playerCoordinates,
-        destination: target.next.coordinates,
+        destination: target.coordinates,
         temporarilyClosedEdgeIds:
           useGameStore.getState().temporarilyClosedRoadEdgeIds,
       })
@@ -382,7 +430,7 @@ export function addMissionRoute(
       );
     }
     if (disposed || token !== calculationToken) return;
-    if (targetKey() !== `${target.mission.id}:${target.next.objective.id}`) {
+    if (targetKey() !== `${target.mission.id}:${target.targetId}`) {
       void calculateRoute();
       return;
     }
@@ -398,7 +446,7 @@ export function addMissionRoute(
             type: 'Feature',
             properties: {
               missionId: target.mission.id,
-              objectiveId: target.next.objective.id,
+              objectiveId: target.targetId,
               mode: 'road',
             },
             geometry: { type: 'LineString', coordinates: route.coordinates },
@@ -423,11 +471,11 @@ export function addMissionRoute(
 
     const coordinates = [
       target.playerCoordinates,
-      target.next.coordinates,
+      target.coordinates,
     ] as RoadCoordinates[];
     const distanceMeters = distanceBetweenMeters(
       target.playerCoordinates,
-      target.next.coordinates,
+      target.coordinates,
     );
     routeCoordinates = coordinates;
     routeInstructions = generateNavigationInstructions(coordinates);
@@ -439,7 +487,7 @@ export function addMissionRoute(
           type: 'Feature',
           properties: {
             missionId: target.mission.id,
-            objectiveId: target.next.objective.id,
+            objectiveId: target.targetId,
             mode: 'fallback',
           },
           geometry: { type: 'LineString', coordinates },

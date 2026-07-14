@@ -14,11 +14,12 @@ import type {
   CheckpointSnapshot,
   InventoryEntry,
   MissionObjectiveProgressMap,
+  StoryLogEntry,
   VehicleState,
 } from '../types/progression';
 
 export const GAME_SAVE_KEY = 'el-salvador-rutas-perdidas:save';
-export const GAME_SAVE_VERSION = 2;
+export const GAME_SAVE_VERSION = 3;
 
 export interface PersistedGameData {
   player: PlayerRuntime;
@@ -28,6 +29,8 @@ export interface PersistedGameData {
   activeMissionId: string | null;
   activeMissionCompletedObjectiveIds: string[];
   activeMissionObjectiveProgress: MissionObjectiveProgressMap;
+  missionChoiceSelections: Record<string, string>;
+  storyLogEntries: StoryLogEntry[];
   completedMissionIds: string[];
   discoveredLocationIds: string[];
   unlockedLocationIds: string[];
@@ -107,6 +110,52 @@ function validMissionIds(value: unknown): string[] {
   return stringArray(value).filter((id) => missionIds.has(id));
 }
 
+function validMissionChoiceSelections(value: unknown): Record<string, string> {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([missionId, optionId]) => {
+      if (typeof optionId !== 'string') return [];
+      const mission = missionById.get(missionId);
+      const exists = mission?.objectives.some((objective) =>
+        objective.choice?.options.some((option) => option.id === optionId),
+      );
+      return exists ? [[missionId, optionId]] : [];
+    }),
+  );
+}
+
+function validStoryLogEntries(value: unknown): StoryLogEntry[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((entry, index) => {
+    if (
+      !isRecord(entry) ||
+      typeof entry.id !== 'string' ||
+      seen.has(entry.id) ||
+      (entry.type !== 'radio' &&
+        entry.type !== 'mission' &&
+        entry.type !== 'discovery') ||
+      typeof entry.title !== 'string' ||
+      typeof entry.summary !== 'string'
+    ) {
+      return [];
+    }
+    seen.add(entry.id);
+    return [
+      {
+        id: entry.id,
+        type: entry.type,
+        title: entry.title,
+        summary: entry.summary,
+        recordedAt:
+          typeof entry.recordedAt === 'string'
+            ? entry.recordedAt
+            : `Registro ${String(index + 1).padStart(2, '0')}`,
+      },
+    ];
+  });
+}
+
 function inventoryEntries(value: unknown): InventoryEntry[] {
   if (!Array.isArray(value)) return [];
   return sanitizeInventory(
@@ -143,14 +192,15 @@ function objectiveProgress(
   activeMissionId: string | null,
 ): MissionObjectiveProgressMap {
   if (!isRecord(value) || !activeMissionId) return {};
-  const objectiveIds = new Set(
+  const objectiveById = new Map(
     missionById
       .get(activeMissionId)
-      ?.objectives.map((objective) => objective.id) ?? [],
+      ?.objectives.map((objective) => [objective.id, objective]) ?? [],
   );
   return Object.fromEntries(
     Object.entries(value).flatMap(([objectiveId, rawProgress]) => {
-      if (!objectiveIds.has(objectiveId) || !isRecord(rawProgress)) return [];
+      const objective = objectiveById.get(objectiveId);
+      if (!objective || !isRecord(rawProgress)) return [];
       const duration =
         rawProgress.durationSeconds === null
           ? null
@@ -170,6 +220,12 @@ function objectiveProgress(
               finiteNumber(rawProgress.elapsedSeconds, 0),
             ),
             durationSeconds: duration,
+            ...(typeof rawProgress.selectedOptionId === 'string' &&
+            objective.choice?.options.some(
+              (option) => option.id === rawProgress.selectedOptionId,
+            )
+              ? { selectedOptionId: rawProgress.selectedOptionId }
+              : {}),
           },
         ],
       ];
@@ -221,6 +277,9 @@ function sanitizedCheckpoint(value: unknown): CheckpointSnapshot | null {
     activeMissionObjectiveProgress: objectiveProgress(
       value.activeMissionObjectiveProgress,
       activeMissionId,
+    ),
+    missionChoiceSelections: validMissionChoiceSelections(
+      value.missionChoiceSelections,
     ),
   };
 }
@@ -315,6 +374,9 @@ function sanitizeGame(value: unknown): PersistedGameData | null {
       value.activeMissionCompletedObjectiveIds,
     ).filter((id) => allowedObjectiveIds.has(id)),
     activeMissionObjectiveProgress,
+    missionChoiceSelections: validMissionChoiceSelections(
+      value.missionChoiceSelections,
+    ),
   };
   const lastCheckpoint =
     sanitizedCheckpoint(value.lastCheckpoint) ?? fallbackCheckpoint;
@@ -331,6 +393,10 @@ function sanitizeGame(value: unknown): PersistedGameData | null {
       value.activeMissionCompletedObjectiveIds,
     ).filter((id) => allowedObjectiveIds.has(id)),
     activeMissionObjectiveProgress,
+    missionChoiceSelections: validMissionChoiceSelections(
+      value.missionChoiceSelections,
+    ),
+    storyLogEntries: validStoryLogEntries(value.storyLogEntries),
     completedMissionIds,
     discoveredLocationIds: validLocationIds(value.discoveredLocationIds).filter(
       (id) => unlockedLocationIds.includes(id),
@@ -452,8 +518,12 @@ export function parseGameSave(raw: string): LoadGameResult {
     };
   }
 
-  if (parsed.version === 1) {
-    const game = sanitizeGame(expandVersionOneChapterProgress(parsed.game));
+  if (parsed.version === 1 || parsed.version === 2) {
+    const game = sanitizeGame(
+      parsed.version === 1
+        ? expandVersionOneChapterProgress(parsed.game)
+        : parsed.game,
+    );
     if (!game) return { status: 'invalid' };
     return {
       status: 'loaded',
