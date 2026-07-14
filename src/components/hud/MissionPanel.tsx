@@ -227,6 +227,7 @@ export function MissionPanel() {
   const completedMissions = missions.filter((mission) =>
     completedMissionIds.includes(mission.id),
   );
+  const compactMission = active ?? recommendedMission;
   useEffect(
     () =>
       useGameStore.subscribe((state, previousState) => {
@@ -281,23 +282,48 @@ export function MissionPanel() {
         </button>
       </header>
 
-      {collapsed && recommendedMission && recommendation && (
-        <button
-          type="button"
+      {collapsed && compactMission && (
+        <section
           className="mission-panel__collapsed-cta"
-          onClick={
-            recommendation.canStartNow
-              ? () => startMission(recommendedMission.id)
-              : requestRouteRecalculation
-          }
+          aria-label={active ? 'Misión activa' : 'Siguiente misión'}
+          data-testid="mobile-mission-cta"
         >
-          <span>Siguiente misión</span>
-          <strong>
-            {recommendation.canStartNow
-              ? `Iniciar ${recommendedMission.title}`
-              : `Ir al inicio de ${recommendedMission.title}`}
-          </strong>
-        </button>
+          <span>{active ? 'Misión activa' : 'Siguiente misión'}</span>
+          <strong>{compactMission.title}</strong>
+          <p>{compactMission.description}</p>
+          <div>
+            <button
+              type="button"
+              className="mission-button mission-button--primary"
+              onClick={() => {
+                if (active) {
+                  setSection('missions');
+                  setCollapsed(false);
+                } else if (recommendedMission && recommendation?.canStartNow) {
+                  startMission(recommendedMission.id);
+                } else {
+                  requestRouteRecalculation();
+                }
+              }}
+            >
+              {active
+                ? 'Continuar misión'
+                : recommendation?.canStartNow
+                  ? 'Iniciar misión'
+                  : 'Ir al inicio'}
+            </button>
+            <button
+              type="button"
+              className="mission-panel__details-button"
+              onClick={() => {
+                setSection('missions');
+                setCollapsed(false);
+              }}
+            >
+              Ver detalles
+            </button>
+          </div>
+        </section>
       )}
 
       {!collapsed && (
