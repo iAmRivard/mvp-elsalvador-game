@@ -62,6 +62,7 @@ export interface StepPlayerOptions {
   steeringSensitivity?: SteeringSensitivity;
   roadNetworkEnabled?: boolean;
   roadContact?: RoadContact | null;
+  roadContactAt?: (player: PlayerRuntime) => RoadContact | null;
   roadAssistMode?: RoadAssistMode;
   roadAssistStrengthMultiplier?: number;
   movementSubsteps?: MovementSubstepConfig;
@@ -208,10 +209,13 @@ function roadState(
   contact: RoadContact | null;
 } {
   if (!options.roadNetworkEnabled) return { surface: 'primary', contact: null };
-  if (!options.roadContact) return { surface: 'offroad', contact: null };
+  const roadContact = options.roadContactAt
+    ? options.roadContactAt(player)
+    : options.roadContact;
+  if (!roadContact) return { surface: 'offroad', contact: null };
   const nearest = roadResultForEdge(
     [player.longitude, player.latitude],
-    options.roadContact.edge,
+    roadContact.edge,
   );
   if (
     !nearest ||
@@ -220,8 +224,8 @@ function roadState(
     return { surface: 'offroad', contact: null };
   }
   return {
-    surface: options.roadContact.edge.roadClass,
-    contact: { edge: options.roadContact.edge, nearest },
+    surface: roadContact.edge.roadClass,
+    contact: { edge: roadContact.edge, nearest },
   };
 }
 

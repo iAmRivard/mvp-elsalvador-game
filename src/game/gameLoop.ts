@@ -1,11 +1,17 @@
 import type { InputController } from './inputController';
+import { movementSubstepConfig } from '../config/movementSubstep.config';
 import {
   stepPlayer,
   stepPlayerDetailed,
   type PlayerStepEnvironment,
+  type PlayerStepSample,
   type StepPlayerOptions,
 } from './movement';
-import type { PlayerRuntime } from '../types/game';
+import type { PlayerInput, PlayerRuntime } from '../types/game';
+
+export interface PlayerSimulationSample extends PlayerStepSample {
+  input: PlayerInput;
+}
 
 export interface PlayerGameLoopOptions {
   initialPlayer: PlayerRuntime;
@@ -13,7 +19,10 @@ export interface PlayerGameLoopOptions {
   isPaused: () => boolean;
   getMovementOptions?: () => StepPlayerOptions;
   onVisualUpdate: (player: PlayerRuntime, timestamp: number) => void;
-  onTelemetryUpdate: (player: PlayerRuntime) => void;
+  onTelemetryUpdate: (
+    player: PlayerRuntime,
+    samples: readonly PlayerSimulationSample[],
+  ) => void;
 }
 
 export function advancePlayerFrame(
@@ -44,6 +53,7 @@ export function startPlayerGameLoop(
   let lastTelemetryTimestamp = previousTimestamp;
   let animationFrame = 0;
   let stopped = false;
+  let pendingSamples: PlayerSimulationSample[] = [];
   let environment: PlayerStepEnvironment = {
     surface: 'primary',
     speedMultiplier: 1,
@@ -53,30 +63,36 @@ export function startPlayerGameLoop(
   };
 
   options.onVisualUpdate(player, previousTimestamp);
-  options.onTelemetryUpdate(player);
+  options.onTelemetryUpdate(player, []);
 
   const frame = (timestamp: number) => {
     if (stopped) return;
     const deltaTimeSeconds = Math.min(
-      0.05,
+      movementSubstepConfig.maximumDeltaTimeSeconds,
       Math.max(0, (timestamp - previousTimestamp) / 1000),
     );
     previousTimestamp = timestamp;
 
     if (!options.isPaused()) {
+      const input = options.input.snapshot();
       const result = stepPlayerDetailed(
         player,
-        options.input.snapshot(),
+        input,
         deltaTimeSeconds,
         options.getMovementOptions?.(),
       );
       player = result.player;
       environment = result.environment;
+      pendingSamples.push(
+        ...result.samples.map((sample) => ({ ...sample, input })),
+      );
     }
     options.onVisualUpdate(player, timestamp);
 
     if (timestamp - lastTelemetryTimestamp >= 100) {
-      options.onTelemetryUpdate(player);
+      const telemetrySamples = pendingSamples;
+      pendingSamples = [];
+      options.onTelemetryUpdate(player, telemetrySamples);
       lastTelemetryTimestamp = timestamp;
     }
 
@@ -100,6 +116,7 @@ export function startPlayerGameLoop(
     },
     replacePlayer: (nextPlayer) => {
       player = { ...nextPlayer };
+      pendingSamples = [];
       previousTimestamp = performance.now();
     },
   };

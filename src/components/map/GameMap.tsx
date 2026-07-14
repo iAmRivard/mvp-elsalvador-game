@@ -6,7 +6,6 @@ import { followCameraConfig } from '../../config/followCamera.config';
 import { mapSourceConfig, mapViewConfig } from '../../config/map.config';
 import { roadAssistConfig } from '../../config/roadHandling.config';
 import { autoThrottleConfig } from '../../config/mobileControls.config';
-import { travelConfig } from '../../config/travel.config';
 import { vehicleStateConfig } from '../../config/vehicleState.config';
 import { missionById } from '../../data/missions';
 import { restrictedAreaTypeAt } from '../../data/restrictedAreas';
@@ -192,9 +191,6 @@ export function GameMap() {
     let roadTracker: RoadTracker | null = null;
     let roadContact: RoadContact | null = null;
     let roadNetworkEnabled = false;
-    let previousTelemetryDistanceMeters =
-      useGameStore.getState().telemetry.totalDistanceMeters;
-    let previousTelemetryTimestamp = performance.now();
     let lastBlockedImpactTimestamp = Number.NEGATIVE_INFINITY;
     let visualFrameCount = 0;
     let lastFrameSampleTimestamp = performance.now();
@@ -367,6 +363,14 @@ export function GameMap() {
             : 1,
           roadNetworkEnabled,
           roadContact,
+          roadContactAt: roadTracker
+            ? (runtime) => {
+                roadContact =
+                  roadTracker?.update([runtime.longitude, runtime.latitude]) ??
+                  null;
+                return roadContact ?? null;
+              }
+            : undefined,
           restrictedAreaTypeAt,
           driveEnabled: useGameStore.getState().vehicle.condition > 0,
         }),
@@ -453,16 +457,8 @@ export function GameMap() {
           }
           wasFollowing = true;
         },
-        onTelemetryUpdate: (player) => {
+        onTelemetryUpdate: (player, movementSamples) => {
           const telemetryTimestamp = performance.now();
-          const telemetryDeltaSeconds = Math.min(
-            0.5,
-            Math.max(
-              0,
-              (telemetryTimestamp - previousTelemetryTimestamp) / 1_000,
-            ),
-          );
-          previousTelemetryTimestamp = telemetryTimestamp;
           const coordinates: [number, number] = [
             player.longitude,
             player.latitude,
@@ -470,7 +466,6 @@ export function GameMap() {
           const state = useGameStore.getState();
           state.setTelemetry(player);
           if (roadTracker) {
-            roadContact = roadTracker.update(coordinates);
             const metrics = roadTracker.getMetrics();
             if (containerRef.current) {
               containerRef.current.dataset.roadSearchMs =
@@ -480,7 +475,8 @@ export function GameMap() {
               );
             }
           }
-          const environment = gameLoop?.getEnvironment();
+          const environment =
+            movementSamples.at(-1)?.environment ?? gameLoop?.getEnvironment();
           if (environment) {
             inputController.setAutoThrottleScale(
               environment.surface === 'offroad'
@@ -488,57 +484,80 @@ export function GameMap() {
                 : 1,
             );
             state.setDrivingEnvironment(environment);
-            const vehicleDistanceMeters =
-              Math.max(
-                0,
-                player.totalDistanceMeters - previousTelemetryDistanceMeters,
-              ) / travelConfig.geographicTravelScale;
-            const blockedImpact =
-              environment.movementBlockedBy !== null &&
-              telemetryTimestamp - lastBlockedImpactTimestamp >=
-                vehicleStateConfig.blockedImpactCooldownMilliseconds;
-            if (blockedImpact) lastBlockedImpactTimestamp = telemetryTimestamp;
             const hapticsEnabled = useSettingsStore.getState().hapticsEnabled;
-            if (
-              environment.surface === 'offroad' &&
-              previousHapticSurface !== 'offroad'
-            ) {
-              triggerHaptic('offroad', hapticsEnabled);
+            for (const sample of movementSamples) {
+              const blockedImpact =
+                sample.environment.movementBlockedBy !== null &&
+                telemetryTimestamp - lastBlockedImpactTimestamp >=
+                  vehicleStateConfig.blockedImpactCooldownMilliseconds;
+              if (blockedImpact) {
+                lastBlockedImpactTimestamp = telemetryTimestamp;
+              }
+              if (
+                sample.environment.surface === 'offroad' &&
+                previousHapticSurface !== 'offroad'
+              ) {
+                triggerHaptic('offroad', hapticsEnabled);
+              }
+              if (blockedImpact) triggerHaptic('collision', hapticsEnabled);
+              previousHapticSurface = sample.environment.surface;
+              state.applyDrivingWear(
+                sample.vehicleDistanceMeters,
+                sample.environment.surface,
+                blockedImpact,
+              );
             }
-            if (blockedImpact) triggerHaptic('collision', hapticsEnabled);
-            previousHapticSurface = environment.surface;
-            state.applyDrivingWear(
-              vehicleDistanceMeters,
-              environment.surface,
-              blockedImpact,
-            );
             if (containerRef.current) {
               containerRef.current.dataset.roadSurface = environment.surface;
               containerRef.current.dataset.movementBlockedBy =
                 environment.movementBlockedBy ?? '';
             }
           }
-          previousTelemetryDistanceMeters = player.totalDistanceMeters;
 
           const nearestLocation = findNearestLocation(coordinates);
           state.setCurrentLocationId(nearestLocation?.id ?? null);
 
-          const discoveries = findDiscoverableLocations(
-            coordinates,
-            state.discoveredLocationIds,
-            state.unlockedLocationIds,
-          );
-          discoveries.forEach((location) =>
-            useGameStore.getState().discoverLocation(location.id),
-          );
-
-          const currentState = useGameStore.getState();
-          if (!currentState.isPaused && !currentState.recoveryReason) {
-            currentState.advanceActiveMission(
-              player,
-              inputController.snapshot().interact,
-              telemetryDeltaSeconds,
+          const sampledPlayers =
+            movementSamples.length > 0
+              ? movementSamples.map((sample) => sample.player)
+              : [player];
+          for (const sampledPlayer of sampledPlayers) {
+            const currentState = useGameStore.getState();
+            const discoveries = findDiscoverableLocations(
+              [sampledPlayer.longitude, sampledPlayer.latitude],
+              currentState.discoveredLocationIds,
+              currentState.unlockedLocationIds,
             );
+            discoveries.forEach((location) =>
+              useGameStore.getState().discoverLocation(location.id),
+            );
+          }
+
+          for (const sample of movementSamples) {
+            const currentState = useGameStore.getState();
+            if (
+              currentState.isPaused ||
+              currentState.recoveryReason ||
+              currentState.activeNarrativeEventId
+            ) {
+              break;
+            }
+            const completedBefore =
+              currentState.activeMissionCompletedObjectiveIds.length;
+            currentState.advanceActiveMission(
+              sample.player,
+              sample.input.interact,
+              sample.deltaTimeSeconds,
+            );
+            if (
+              useGameStore.getState().activeMissionCompletedObjectiveIds
+                .length > completedBefore
+            ) {
+              triggerHaptic(
+                'objective',
+                useSettingsStore.getState().hapticsEnabled,
+              );
+            }
           }
         },
       });
@@ -559,8 +578,6 @@ export function GameMap() {
           return;
         }
         const restoredPlayer = runtimeFromTelemetry(state.telemetry);
-        previousTelemetryDistanceMeters = restoredPlayer.totalDistanceMeters;
-        previousTelemetryTimestamp = performance.now();
         roadTracker?.reset();
         roadContact =
           roadTracker?.update([

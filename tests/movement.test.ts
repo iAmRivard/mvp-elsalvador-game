@@ -236,6 +236,24 @@ describe('movimiento geografico del jugador', () => {
     expect(result.substeps).toBeLessThan(12);
   });
 
+  it('expone posiciones intermedias para objetivos cruzados entre frames', () => {
+    const objectiveLatitude = player.latitude + 0.002;
+    const result = stepPlayerDetailed(
+      { ...player, speedMetersPerSecond: 20 },
+      idleInput,
+      0.25,
+      { travel: travelAtScale(100) },
+    );
+
+    expect(result.player.latitude).toBeGreaterThan(objectiveLatitude + 0.001);
+    expect(
+      result.samples.some(
+        (sample) =>
+          Math.abs(sample.player.latitude - objectiveLatitude) < 0.0004,
+      ),
+    ).toBe(true);
+  });
+
   it('detiene el vehiculo al alcanzar los limites geograficos', () => {
     const boundaryPlayer = {
       ...player,
