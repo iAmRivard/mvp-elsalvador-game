@@ -1,4 +1,6 @@
 import type { GraphicsQuality } from '../../config/game.config';
+import type { RoadAssistMode } from '../../config/roadHandling.config';
+import type { SteeringSensitivity } from '../../config/travel.config';
 import { useSettingsStore } from '../../store/settingsStore';
 
 interface SettingsDialogProps {
@@ -29,6 +31,24 @@ const qualityOptions: readonly {
   },
 ];
 
+const steeringOptions: readonly {
+  value: SteeringSensitivity;
+  label: string;
+}[] = [
+  { value: 'low', label: 'Suave' },
+  { value: 'medium', label: 'Equilibrada' },
+  { value: 'high', label: 'Directa' },
+];
+
+const roadAssistOptions: readonly {
+  value: RoadAssistMode;
+  label: string;
+}[] = [
+  { value: 'off', label: 'Libre' },
+  { value: 'soft', label: 'Suave' },
+  { value: 'strong', label: 'Firme' },
+];
+
 export function SettingsDialog({
   open,
   onClose,
@@ -37,11 +57,41 @@ export function SettingsDialog({
   const graphicsQuality = useSettingsStore((state) => state.graphicsQuality);
   const reduceMotion = useSettingsStore((state) => state.reduceMotion);
   const ambientFog = useSettingsStore((state) => state.ambientFog);
+  const steeringSensitivity = useSettingsStore(
+    (state) => state.steeringSensitivity,
+  );
+  const roadAssistMode = useSettingsStore((state) => state.roadAssistMode);
+  const audioMasterVolume = useSettingsStore(
+    (state) => state.audioMasterVolume,
+  );
+  const audioEffectsVolume = useSettingsStore(
+    (state) => state.audioEffectsVolume,
+  );
+  const audioMuted = useSettingsStore((state) => state.audioMuted);
+  const reduceAudioEffects = useSettingsStore(
+    (state) => state.reduceAudioEffects,
+  );
   const setGraphicsQuality = useSettingsStore(
     (state) => state.setGraphicsQuality,
   );
   const setReduceMotion = useSettingsStore((state) => state.setReduceMotion);
   const setAmbientFog = useSettingsStore((state) => state.setAmbientFog);
+  const setSteeringSensitivity = useSettingsStore(
+    (state) => state.setSteeringSensitivity,
+  );
+  const setRoadAssistMode = useSettingsStore(
+    (state) => state.setRoadAssistMode,
+  );
+  const setAudioMasterVolume = useSettingsStore(
+    (state) => state.setAudioMasterVolume,
+  );
+  const setAudioEffectsVolume = useSettingsStore(
+    (state) => state.setAudioEffectsVolume,
+  );
+  const setAudioMuted = useSettingsStore((state) => state.setAudioMuted);
+  const setReduceAudioEffects = useSettingsStore(
+    (state) => state.setReduceAudioEffects,
+  );
   const setTutorialSeen = useSettingsStore((state) => state.setTutorialSeen);
   if (!open) return null;
 
@@ -88,7 +138,105 @@ export function SettingsDialog({
           </div>
         </fieldset>
 
+        <fieldset className="steering-options">
+          <legend>Sensibilidad de dirección</legend>
+          <div>
+            {steeringOptions.map((option) => (
+              <label key={option.value}>
+                <input
+                  type="radio"
+                  name="steering-sensitivity"
+                  value={option.value}
+                  checked={steeringSensitivity === option.value}
+                  onChange={() => setSteeringSensitivity(option.value)}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="steering-options road-assist-options">
+          <legend>Asistencia de carretera</legend>
+          <div>
+            {roadAssistOptions.map((option) => (
+              <label key={option.value}>
+                <input
+                  type="radio"
+                  name="road-assist-mode"
+                  value={option.value}
+                  checked={roadAssistMode === option.value}
+                  onChange={() => setRoadAssistMode(option.value)}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="audio-options">
+          <legend>Audio</legend>
+          <label>
+            <span>
+              <strong>Volumen general</strong>
+              <output>{Math.round(audioMasterVolume * 100)}%</output>
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={audioMasterVolume}
+              aria-label="Volumen general"
+              onChange={(event) =>
+                setAudioMasterVolume(event.currentTarget.valueAsNumber)
+              }
+            />
+          </label>
+          <label>
+            <span>
+              <strong>Volumen de efectos</strong>
+              <output>{Math.round(audioEffectsVolume * 100)}%</output>
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={audioEffectsVolume}
+              aria-label="Volumen de efectos"
+              onChange={(event) =>
+                setAudioEffectsVolume(event.currentTarget.valueAsNumber)
+              }
+            />
+          </label>
+        </fieldset>
+
         <div className="settings-toggles">
+          <label>
+            <span>
+              <strong>Silenciar audio</strong>
+              <small>
+                Mantiene tus niveles para cuando vuelvas a activarlo.
+              </small>
+            </span>
+            <input
+              type="checkbox"
+              checked={audioMuted}
+              onChange={(event) => setAudioMuted(event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>
+              <strong>Reducir efectos sonoros</strong>
+              <small>Atenúa turbo, frenado, terreno y estática.</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={reduceAudioEffects}
+              onChange={(event) => setReduceAudioEffects(event.target.checked)}
+            />
+          </label>
           <label>
             <span>
               <strong>Reducir movimiento</strong>

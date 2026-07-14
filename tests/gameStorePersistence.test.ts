@@ -11,7 +11,8 @@ describe('acciones de guardado del estado global', () => {
   });
 
   it('guarda y vuelve a cargar posición, combustible y misión activa', () => {
-    useGameStore.getState().startMission('camino-hacia-santa-ana');
+    useGameStore.getState().startMission('la-transmision');
+    useGameStore.getState().dismissNarrativeEvent();
     useGameStore.getState().setTelemetry({
       ...INITIAL_PLAYER,
       longitude: -89.25,
@@ -31,7 +32,7 @@ describe('acciones de guardado del estado global', () => {
     expect(state.telemetry.latitude).toBe(13.75);
     expect(state.telemetry.fuel).toBe(63);
     expect(state.telemetry.totalDistanceMeters).toBe(8_200);
-    expect(state.activeMissionId).toBe('camino-hacia-santa-ana');
+    expect(state.activeMissionId).toBe('la-transmision');
     expect(state.playerRuntimeRevision).toBe(previousRevision + 1);
   });
 

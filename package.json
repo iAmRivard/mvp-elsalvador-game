@@ -18,10 +18,14 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "generate:models": "node scripts/models/generate-models.mjs",
+    "generate:audio": "node scripts/audio/generate-audio.mjs",
+    "download:roads": "sh scripts/roads/download-source.sh",
+    "build:roads": "node scripts/roads/build-road-network.mjs",
+    "check:roads": "node scripts/roads/validate-road-network.mjs",
     "sync:map-assets": "node scripts/sync-map-assets.mjs",
     "check:external-resources": "node scripts/check-external-resources.mjs",
     "check:map": "sh scripts/maps/validate-map.sh",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run check:external-resources && npm run check:map && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run test && npm run check:external-resources && npm run check:map && npm run check:roads && npm run build"
   },
   "dependencies": {
     "@fontsource-variable/noto-sans": "5.2.10",

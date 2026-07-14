@@ -4,7 +4,9 @@ import { mapSourceConfig, mapViewConfig } from '../src/config/map.config';
 describe('configuración cartográfica', () => {
   it('usa solamente recursos locales en tiempo de ejecución', () => {
     expect(mapSourceConfig.archiveUrl).toBe('/maps/el-salvador.pmtiles');
-    expect(mapSourceConfig.styleUrl).toBe('/map-assets/styles/el-salvador.json');
+    expect(mapSourceConfig.styleUrl).toBe(
+      '/map-assets/styles/el-salvador.json',
+    );
     expect(mapSourceConfig.archiveUrl).not.toMatch(/^https?:/);
     expect(mapSourceConfig.styleUrl).not.toMatch(/^https?:/);
   });
@@ -17,5 +19,6 @@ describe('configuración cartográfica', () => {
     expect(longitude).toBeLessThan(east);
     expect(latitude).toBeGreaterThan(south);
     expect(latitude).toBeLessThan(north);
+    expect(mapSourceConfig.maxZoom).toBe(16);
   });
 });

@@ -17,11 +17,28 @@
 - Geofabrik: extracto PBF de El Salvador disponible para auditoría y futuras reconstrucciones
   completas mediante `scripts/maps/download-source.sh`.
 
-La aplicación no consulta estas fuentes durante la ejecución. Todos los datos necesarios están
-en `public/maps/el-salvador.pmtiles`.
+## Red vial jugable
+
+- Distribución: Geofabrik, snapshot `el-salvador-260712.osm.pbf`.
+- Publicación fijada: 12 de julio de 2026, 23:45:51 UTC.
+- MD5 de origen: `f3949ed1a850cd4f672fb3ad40033544`.
+- Área inicial: corredor San Salvador–Santa Tecla–Santa Ana–Coatepeque–Cerro Verde.
+- Artefacto: `public/data/roads/western-corridor.json`.
+
+El grafo vial es una base de datos derivada bajo ODbL. Su procedimiento y limitaciones están en
+`docs/maps/road-data.md`; la aplicación no consulta Geofabrik ni OpenStreetMap durante la ejecución.
+
+La aplicación no consulta estas fuentes durante la ejecución. La cartografía base está en
+`public/maps/el-salvador.pmtiles` y el grafo derivado en `public/data/roads`.
 
 ## Modelos 3D
 
 El vehículo y la baliza de `public/models` son geometría original construida con primitivas de
 Three.js por `scripts/models/generate-models.mjs`. No derivan de una fuente externa, no usan texturas
 y no realizan solicitudes fuera del origen de la aplicación.
+
+## Audio
+
+Los diez WAV de `public/audio` son señales originales sintetizadas por
+`scripts/audio/generate-audio.mjs`. No incorporan grabaciones, librerías de muestras ni material
+descargado; el script genera PCM mono a 22.05 kHz de forma determinista.

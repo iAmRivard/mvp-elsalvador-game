@@ -10,19 +10,23 @@ type Coordinates = [longitude: number, latitude: number];
 type Bounds = [southwest: Coordinates, northeast: Coordinates];
 
 function sameOriginPath(value: string | undefined, fallback: string): string {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) return fallback;
+  if (!value || !value.startsWith('/') || value.startsWith('//'))
+    return fallback;
   return value;
 }
 
 export const mapSourceConfig: MapSourceConfig = {
-  archiveUrl: sameOriginPath(import.meta.env.VITE_MAP_ARCHIVE_URL, '/maps/el-salvador.pmtiles'),
+  archiveUrl: sameOriginPath(
+    import.meta.env.VITE_MAP_ARCHIVE_URL,
+    '/maps/el-salvador.pmtiles',
+  ),
   styleUrl: sameOriginPath(
     import.meta.env.VITE_MAP_STYLE_URL,
     '/map-assets/styles/el-salvador.json',
   ),
   attribution: '© OpenStreetMap contributors · Datos distribuidos bajo ODbL',
   minZoom: 7,
-  maxZoom: 15,
+  maxZoom: 16,
 };
 
 export const mapViewConfig = {

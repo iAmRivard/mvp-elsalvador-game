@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { GameActions } from '../components/hud/GameActions';
+import { GameAudioBridge } from '../components/audio/GameAudioBridge';
 import { CurrentRegion } from '../components/hud/CurrentRegion';
 import { DiscoveryToast } from '../components/hud/DiscoveryToast';
 import { LevelUpToast } from '../components/hud/LevelUpToast';
@@ -7,8 +8,10 @@ import { MissionPanel } from '../components/hud/MissionPanel';
 import { MissionToast } from '../components/hud/MissionToast';
 import { PlayerHud } from '../components/hud/PlayerHud';
 import { PauseMenu } from '../components/menu/PauseMenu';
+import { VehicleRecoveryDialog } from '../components/menu/VehicleRecoveryDialog';
 import { StartScreen } from '../components/menu/StartScreen';
 import { TutorialOverlay } from '../components/menu/TutorialOverlay';
+import { NarrativeDialog } from '../components/story/NarrativeDialog';
 import { gameConfig } from '../config/game.config';
 import { startGameAutosave, useGameStore } from '../store/gameStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -22,6 +25,7 @@ export function App() {
   const [sessionStarted, setSessionStarted] = useState(false);
   const hasSavedGame = useGameStore((state) => state.hasSavedGame);
   const isPaused = useGameStore((state) => state.isPaused);
+  const recoveryReason = useGameStore((state) => state.recoveryReason);
   const setPaused = useGameStore((state) => state.setPaused);
   const loadGame = useGameStore((state) => state.loadGame);
   const resetGame = useGameStore((state) => state.resetGame);
@@ -56,6 +60,7 @@ export function App() {
 
   return (
     <main className="game-shell">
+      <GameAudioBridge />
       <header className="topbar">
         <div className="brand-lockup">
           <span className="brand-eyebrow">Exploración 2.5D</span>
@@ -99,7 +104,7 @@ export function App() {
           }}
         />
       )}
-      {isPaused && !showTutorial && (
+      {isPaused && !showTutorial && !recoveryReason && (
         <PauseMenu
           onExitToTitle={() => {
             setPaused(true);
@@ -107,6 +112,8 @@ export function App() {
           }}
         />
       )}
+      <VehicleRecoveryDialog />
+      <NarrativeDialog />
     </main>
   );
 }

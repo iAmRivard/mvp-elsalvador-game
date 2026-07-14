@@ -23,18 +23,29 @@ la página. El mapa está envuelto en `React.lazy` para mantener el motor WebGL 
 - calidad gráfica `low`, `medium` o `high`;
 - reducción de movimiento;
 - atmósfera decorativa;
-- tutorial completado.
+- tutorial completado;
+- sensibilidad de dirección `low`, `medium` o `high`;
+- asistencia de carretera `off`, `soft` o `strong`;
+- volumen general y volumen de efectos entre 0 y 1;
+- silencio y reducción de efectos intensos.
 
 Estas preferencias no forman parte del guardado de la expedición. Reiniciar progreso no debe borrar
 decisiones de accesibilidad. Cambiar calidad o movimiento recrea MapLibre para aplicar antialias,
 pixel ratio y tiempos de cámara de manera coherente; cambiar la atmósfera sólo actualiza una capa
-CSS sin interacción.
+CSS sin interacción. La sensibilidad se lee desde el game loop y cambia sin reconstruir el mapa.
+La versión 4 agrega audio. Documentos de versiones 1 a 3 cargan volúmenes predeterminados de 0.7 y
+0.8 sin perder calidad, accesibilidad ni manejo. La versión 3 agregó asistencia vial: documentos de
+versiones 1 y 2 cargan `soft`; la sensibilidad ausente continúa migrando a `medium`.
 
 ## Indicadores
 
 - El combustible cambia a advertencia bajo 20 % y a estado crítico bajo 10 %.
+- El bloque de terreno muestra clase de vía, porcentaje de ritmo y consumo, estado offroad y una
+  advertencia textual cuando agua, un bloqueo o los límites detienen el vehículo.
 - La ruta activa anuncia que el objetivo está cercano al entrar a 1,5 veces su radio de validación.
 - Una subida de nivel genera una notificación descartable con tiempo limitado.
+- Inicio de misión, objetivo, combustible bajo, descubrimiento e interferencia tienen señales
+  sonoras locales equivalentes a sus indicadores visuales.
 - El movimiento decorativo respeta tanto la configuración local como
   `prefers-reduced-motion: reduce`.
 

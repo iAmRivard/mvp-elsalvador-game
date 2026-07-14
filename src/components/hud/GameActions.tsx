@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { SettingsDialog } from '../menu/SettingsDialog';
+import { InventoryDialog } from '../menu/InventoryDialog';
 
 function savedAtLabel(savedAt: string | null): string {
   if (!savedAt) return 'Sin guardado todavía';
@@ -16,6 +17,7 @@ export function GameActions() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
   const isPaused = useGameStore((state) => state.isPaused);
   const isFollowingPlayer = useGameStore((state) => state.isFollowingPlayer);
   const hasSavedGame = useGameStore((state) => state.hasSavedGame);
@@ -30,6 +32,15 @@ export function GameActions() {
   return (
     <>
       <div className="game-actions" aria-label="Acciones del juego">
+        <button
+          className={`icon-button ${inventoryOpen ? 'icon-button--active' : ''}`}
+          type="button"
+          aria-label="Inventario"
+          aria-expanded={inventoryOpen}
+          onClick={() => setInventoryOpen(true)}
+        >
+          <span aria-hidden="true">▤</span>
+        </button>
         <button
           className={`icon-button ${settingsOpen ? 'icon-button--active' : ''}`}
           type="button"
@@ -145,6 +156,10 @@ export function GameActions() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         allowTutorial
+      />
+      <InventoryDialog
+        open={inventoryOpen}
+        onClose={() => setInventoryOpen(false)}
       />
     </>
   );

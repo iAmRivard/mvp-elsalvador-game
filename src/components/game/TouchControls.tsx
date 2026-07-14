@@ -5,10 +5,20 @@ import type {
 import type { InputAction, InputController } from '../../game/inputController';
 import { useGameStore } from '../../store/gameStore';
 import { missionById } from '../../data/missions';
+import { objectiveIsAvailable } from '../../game/missions';
 
 interface TouchControlsProps {
   input: InputController;
 }
+
+const interactionLabels = {
+  interact: 'Investigar',
+  collect: 'Recoger',
+  deliver: 'Entregar',
+  repair: 'Reparar',
+  refuel: 'Cargar',
+  choice: 'Elegir',
+} as const;
 
 export function TouchControls({ input }: TouchControlsProps) {
   const isPaused = useGameStore((state) => state.isPaused);
@@ -21,30 +31,40 @@ export function TouchControls({ input }: TouchControlsProps) {
   const activeMission = activeMissionId
     ? missionById.get(activeMissionId)
     : null;
-  const canInteract = activeMission?.objectives.some(
+  const interactionObjective = activeMission?.objectives.find(
     (objective) =>
-      objective.type === 'interact' &&
-      !completedObjectiveIds.includes(objective.id),
+      objective.type in interactionLabels &&
+      !completedObjectiveIds.includes(objective.id) &&
+      objectiveIsAvailable(objective, completedObjectiveIds),
   );
+  const interactionLabel = interactionObjective
+    ? interactionLabels[
+        interactionObjective.type as keyof typeof interactionLabels
+      ]
+    : null;
 
-  const press = (action: InputAction) => ({
-    onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      input.setPointerAction(action, true);
-    },
-    onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      input.setPointerAction(action, false);
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-    },
-    onPointerCancel: () => input.setPointerAction(action, false),
-    onLostPointerCapture: () => input.setPointerAction(action, false),
-    onContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) =>
-      event.preventDefault(),
-  });
+  const press = (action: InputAction) => {
+    const releaseDelayMilliseconds = action === 'interact' ? 250 : 0;
+    return {
+      onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        input.setPointerAction(action, true);
+      },
+      onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        input.releasePointerAction(action, releaseDelayMilliseconds);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      },
+      onPointerCancel: () => input.setPointerAction(action, false),
+      onLostPointerCapture: () =>
+        input.releasePointerAction(action, releaseDelayMilliseconds),
+      onContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) =>
+        event.preventDefault(),
+    };
+  };
 
   return (
     <div
@@ -108,15 +128,15 @@ export function TouchControls({ input }: TouchControlsProps) {
         </div>
 
         <div className="touch-primary-actions">
-          {canInteract && (
+          {interactionLabel && (
             <button
               type="button"
               className="touch-button touch-button--interact"
-              aria-label="Investigar señal"
+              aria-label={interactionLabel}
               {...press('interact')}
             >
               <span aria-hidden="true">✦</span>
-              <small>Investigar</small>
+              <small>{interactionLabel}</small>
             </button>
           )}
           <button

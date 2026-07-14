@@ -1,7 +1,21 @@
 import { useGameStore } from '../../store/gameStore';
 import { experienceProgress } from '../../game/progression';
+import type { RoadSurface } from '../../config/roadHandling.config';
+import { locations } from '../../data/locations';
 
 const compassPoints = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'] as const;
+
+const surfaceLabels: Readonly<Record<RoadSurface, string>> = {
+  motorway: 'Autopista',
+  trunk: 'Carretera troncal',
+  primary: 'Vía primaria',
+  secondary: 'Vía secundaria',
+  tertiary: 'Vía terciaria',
+  residential: 'Calle residencial',
+  service: 'Vía de servicio',
+  track: 'Camino de tierra',
+  offroad: 'Fuera de carretera',
+};
 
 function compassPoint(heading: number): string {
   return compassPoints[Math.round(heading / 45) % compassPoints.length];
@@ -17,6 +31,11 @@ export function PlayerHud() {
   const level = useGameStore((state) => state.level);
   const energy = useGameStore((state) => state.energy);
   const maxEnergy = useGameStore((state) => state.maxEnergy);
+  const driving = useGameStore((state) => state.driving);
+  const vehicle = useGameStore((state) => state.vehicle);
+  const inventoryCount = useGameStore((state) =>
+    state.inventory.reduce((total, entry) => total + entry.quantity, 0),
+  );
   const progress = experienceProgress(experience);
 
   return (
@@ -74,28 +93,89 @@ export function PlayerHud() {
           </div>
         </div>
 
-        <div className="fuel-readout">
-          <div className="fuel-readout__header">
-            <span className="hud-label">Combustible</span>
-            <strong>{telemetry.fuel.toFixed(1)}%</strong>
+        <div
+          className={`surface-readout surface-readout--${driving.surface}`}
+          data-testid="driving-surface"
+          role={driving.movementBlockedBy ? 'status' : undefined}
+        >
+          <div>
+            <span className="hud-label">Terreno</span>
+            <strong>
+              {driving.roadNetworkStatus === 'loading'
+                ? 'Analizando vías'
+                : driving.roadNetworkStatus === 'unavailable'
+                  ? 'Conducción libre'
+                  : surfaceLabels[driving.surface]}
+            </strong>
           </div>
-          <div
-            className="fuel-meter"
-            role="meter"
-            aria-label="Combustible restante"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(telemetry.fuel)}
-          >
-            <span style={{ width: `${telemetry.fuel}%` }} />
-          </div>
-          {telemetry.fuel <= 20 && (
-            <small className="fuel-warning" role="status">
-              {telemetry.fuel <= 10
-                ? 'Combustible crítico'
-                : 'Combustible bajo'}
+          {driving.movementBlockedBy ? (
+            <small className="surface-readout__warning">
+              {driving.movementBlockedBy === 'water'
+                ? 'Agua: paso bloqueado'
+                : driving.movementBlockedBy === 'out-of-bounds'
+                  ? 'Límite del área jugable'
+                  : 'Camino bloqueado'}
+            </small>
+          ) : driving.roadNetworkStatus === 'ready' ? (
+            <small>
+              Ritmo {Math.round(driving.speedMultiplier * 100)}% · Consumo{' '}
+              {Math.round(driving.fuelMultiplier * 100)}%
+            </small>
+          ) : (
+            <small>
+              {driving.roadNetworkStatus === 'loading'
+                ? 'Preparando corredor local'
+                : 'Sin penalización vial'}
             </small>
           )}
+        </div>
+
+        <div className="vehicle-readouts">
+          <div className="fuel-readout">
+            <div className="fuel-readout__header">
+              <span className="hud-label">Combustible</span>
+              <strong>{telemetry.fuel.toFixed(1)}%</strong>
+            </div>
+            <div
+              className="fuel-meter"
+              role="meter"
+              aria-label="Combustible restante"
+              aria-valuemin={0}
+              aria-valuemax={vehicle.maximumFuel}
+              aria-valuenow={Math.round(telemetry.fuel)}
+            >
+              <span
+                style={{
+                  width: `${(telemetry.fuel / vehicle.maximumFuel) * 100}%`,
+                }}
+              />
+            </div>
+            {telemetry.fuel <= 20 && (
+              <small className="fuel-warning" role="status">
+                {telemetry.fuel <= 10
+                  ? 'Combustible crítico'
+                  : 'Combustible bajo'}
+              </small>
+            )}
+          </div>
+
+          <div className="condition-readout">
+            <div className="condition-readout__header">
+              <span className="hud-label">Condición</span>
+              <strong>{vehicle.condition.toFixed(0)}%</strong>
+            </div>
+            <div
+              className="condition-meter"
+              role="meter"
+              aria-label="Condición del vehículo"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(vehicle.condition)}
+            >
+              <span style={{ width: `${vehicle.condition}%` }} />
+            </div>
+            <small>{inventoryCount} objetos</small>
+          </div>
         </div>
 
         <dl className="telemetry-grid">
@@ -115,7 +195,9 @@ export function PlayerHud() {
           </div>
           <div>
             <dt>Descubiertos</dt>
-            <dd>{discoveredCount} / 12</dd>
+            <dd>
+              {discoveredCount} / {locations.length}
+            </dd>
           </div>
         </dl>
       </aside>

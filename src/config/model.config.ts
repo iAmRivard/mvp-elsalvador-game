@@ -12,6 +12,4 @@ function localModelPath(path: string): string {
 export const modelConfig = {
   playerVehicleUrl: localModelPath('/models/expedition-vehicle.glb'),
   interactiveSignalUrl: localModelPath('/models/suchitoto-signal.glb'),
-  interactiveMissionId: 'senales-en-suchitoto',
-  interactiveObjectiveId: 'investigar-senal',
 } as const;

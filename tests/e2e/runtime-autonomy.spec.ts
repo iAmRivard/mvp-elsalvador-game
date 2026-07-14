@@ -15,6 +15,12 @@ async function enterExpedition(page: Page) {
   });
 }
 
+async function interact(page: Page) {
+  await page.keyboard.down('Space');
+  await page.waitForTimeout(180);
+  await page.keyboard.up('Space');
+}
+
 test('carga el mapa sin solicitudes a terceros', async ({ page, baseURL }) => {
   const applicationOrigin = new URL(baseURL ?? 'http://127.0.0.1:4173').origin;
   const externalRequests: string[] = [];
@@ -44,29 +50,88 @@ test('carga el mapa sin solicitudes a terceros', async ({ page, baseURL }) => {
   const playerMarker = page.locator('.player-marker');
   await expect(playerMarker).toBeAttached();
   if (playerRenderer !== 'ready') await expect(playerMarker).toBeVisible();
-  await expect(page.locator('.location-marker')).toHaveCount(12);
-  await expect(page.getByText('Nueva ubicación descubierta')).toBeVisible();
+  await expect(page.locator('.location-marker')).toHaveCount(14);
+  await expect(page.locator('.player-hud')).toContainText('1 / 14');
   await expect(
     page.getByText('San Salvador', { exact: true }).first(),
-  ).toBeVisible();
+  ).toBeAttached();
   await expect(page.getByRole('heading', { name: 'Misiones' })).toBeVisible();
+  const gameMap = page.getByTestId('game-map');
+  await expect(gameMap).toHaveAttribute('data-road-network-status', 'ready', {
+    timeout: 20_000,
+  });
+  await expect(gameMap).toHaveAttribute('data-road-load-ms', /^\d+(\.\d+)?$/);
+  await expect(gameMap).toHaveAttribute('data-road-search-ms', /^\d+(\.\d+)?$/);
+  expect(
+    Number(await gameMap.getAttribute('data-road-file-bytes')),
+  ).toBeGreaterThan(5_000_000);
+  await expect(gameMap).toHaveAttribute('data-runtime-fps', /^\d+(\.\d+)?$/, {
+    timeout: 5_000,
+  });
+  await expect(page.getByTestId('driving-surface')).toContainText(
+    /Vía secundaria|Calle residencial|Vía terciaria/,
+  );
+  await expect(gameMap).toHaveAttribute('data-follow-offset-y', /^[1-9]\d*$/);
+  const stoppedZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
+  expect(stoppedZoom).toBeGreaterThan(15.5);
 
   const expandMissions = page.getByRole('button', {
     name: 'Expandir panel de misiones',
   });
   if (await expandMissions.isVisible()) await expandMissions.click();
 
-  const firstMission = page
-    .getByRole('article')
-    .filter({ hasText: 'Camino hacia Santa Ana' });
+  const firstMission = page.locator('.mission-list__item').filter({
+    has: page.getByRole('heading', {
+      name: 'La transmisión',
+      exact: true,
+    }),
+  });
   await firstMission.getByRole('button', { name: 'Iniciar' }).click();
+  await page.getByRole('button', { name: 'Sintonizar' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Camino hacia Santa Ana' }),
+    page.getByRole('heading', { name: 'La transmisión' }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Abandonar misión' }),
   ).toBeVisible();
   await expect(page.locator('.location-marker--mission')).toHaveCount(1);
+  await interact(page);
+  await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road', {
+    timeout: 20_000,
+  });
+  const routeCoordinateCount = Number(
+    await gameMap.getAttribute('data-mission-route-coordinate-count'),
+  );
+  expect(routeCoordinateCount).toBeGreaterThan(20);
+  await expect(page.locator('.mission-route-summary')).toHaveAttribute(
+    'data-route-status',
+    'road',
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-route-calculation-ms',
+    /^\d+(\.\d+)?$/,
+  );
+  await page.getByRole('button', { name: 'Recalcular ruta' }).click();
+  await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road');
+
+  await page.getByRole('button', { name: 'Abandonar misión' }).click();
+  const suchitotoMission = page.locator('.mission-list__item').filter({
+    has: page.getByRole('heading', {
+      name: 'Señales en Suchitoto',
+      exact: true,
+    }),
+  });
+  await suchitotoMission.getByRole('button', { name: 'Iniciar' }).click();
+  await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'fallback');
+  await expect(gameMap).toHaveAttribute(
+    'data-mission-route-coordinate-count',
+    '2',
+  );
+  await page.getByRole('button', { name: 'Abandonar misión' }).click();
+  await firstMission.getByRole('button', { name: 'Iniciar' }).click();
+  await page.getByRole('button', { name: 'Sintonizar' }).click();
+  await interact(page);
+  await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road');
 
   const position = page.getByTestId('player-position');
   const initialPosition = await position.textContent();
@@ -74,6 +139,8 @@ test('carga el mapa sin solicitudes a terceros', async ({ page, baseURL }) => {
   await page.waitForTimeout(700);
   await page.keyboard.up('w');
   await expect(position).not.toHaveText(initialPosition ?? '');
+  const movingZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
+  expect(movingZoom).toBeLessThan(stoppedZoom);
 
   await page.getByRole('button', { name: 'Partida y guardado' }).click();
   await page.getByRole('menuitem', { name: 'Guardar ahora' }).click();
@@ -81,7 +148,7 @@ test('carga el mapa sin solicitudes a terceros', async ({ page, baseURL }) => {
   await page.reload();
   await enterExpedition(page);
   await expect(
-    page.getByRole('heading', { name: 'Camino hacia Santa Ana' }),
+    page.getByRole('heading', { name: 'La transmisión' }),
   ).toBeVisible();
 
   const canvas = page.locator('.maplibregl-canvas');
@@ -94,6 +161,13 @@ test('carga el mapa sin solicitudes a terceros', async ({ page, baseURL }) => {
     });
     await page.mouse.up();
   }
+  await expect(
+    page.getByRole('button', { name: 'Seguir al jugador' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Seguir al jugador' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Desactivar seguimiento' }),
+  ).toBeVisible();
 
   expect(externalRequests).toEqual([]);
   expect(criticalErrors).toEqual([]);

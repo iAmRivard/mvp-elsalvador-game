@@ -11,7 +11,16 @@ test('recorre inicio, tutorial, pausa y configuración', async ({ page }) => {
   await page.getByRole('button', { name: 'Configuración' }).click();
   const settings = page.getByRole('dialog', { name: 'Configuración' });
   await expect(settings).toBeVisible();
-  await settings.getByRole('radio', { name: /Alta/ }).check();
+  const highQuality = settings.getByRole('radio', { name: /Alta/ });
+  await settings.getByText('Alta', { exact: true }).click();
+  await expect(highQuality).toBeChecked();
+  const directSteering = settings.getByRole('radio', { name: 'Directa' });
+  await settings.getByText('Directa', { exact: true }).click();
+  await expect(directSteering).toBeChecked();
+  await settings.getByRole('slider', { name: 'Volumen general' }).fill('0.45');
+  await settings
+    .getByRole('checkbox', { name: /Reducir efectos sonoros/ })
+    .check();
   await settings.getByRole('checkbox', { name: /Reducir movimiento/ }).check();
   await settings.getByRole('button', { name: 'Listo' }).click();
 

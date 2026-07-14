@@ -14,6 +14,15 @@ function formatDistance(distanceMeters: number): string {
     : `${(distanceMeters / 1_000).toFixed(1)} km`;
 }
 
+const actionableObjectiveTypes = new Set([
+  'interact',
+  'collect',
+  'deliver',
+  'repair',
+  'refuel',
+  'choice',
+]);
+
 function inactiveMissionStatus(
   mission: Mission,
   completedMissionIds: readonly string[],
@@ -57,8 +66,15 @@ export function MissionPanel() {
   const completedMissionIds = useGameStore(
     (state) => state.completedMissionIds,
   );
+  const objectiveProgress = useGameStore(
+    (state) => state.activeMissionObjectiveProgress,
+  );
   const startMission = useGameStore((state) => state.startMission);
   const abandonMission = useGameStore((state) => state.abandonMission);
+  const missionRoute = useGameStore((state) => state.missionRoute);
+  const requestRouteRecalculation = useGameStore(
+    (state) => state.requestMissionRouteRecalculation,
+  );
   const active = activeMissionId ? missionById.get(activeMissionId) : null;
   const coordinates: [number, number] = [
     telemetry.longitude,
@@ -124,19 +140,38 @@ export function MissionPanel() {
 
           <div
             className={`mission-route-summary ${next && next.distanceMeters <= next.objective.radiusMeters * 1.5 ? 'mission-route-summary--near' : ''}`}
+            data-route-status={missionRoute.status}
           >
-            <span>
-              {next && next.distanceMeters <= next.objective.radiusMeters * 1.5
-                ? 'Objetivo cercano'
-                : 'Destino'}
-            </span>
+            <div className="mission-route-summary__header">
+              <span>
+                {next &&
+                next.distanceMeters <= next.objective.radiusMeters * 1.5
+                  ? 'Objetivo cercano'
+                  : missionRoute.status === 'fallback'
+                    ? 'Ruta provisional'
+                    : 'Ruta por carretera'}
+              </span>
+              <button
+                type="button"
+                aria-label="Recalcular ruta"
+                title="Recalcular ruta"
+                disabled={missionRoute.status === 'calculating'}
+                onClick={requestRouteRecalculation}
+              >
+                <span aria-hidden="true">↻</span>
+              </button>
+            </div>
             <strong>
               {locationById.get(active.destinationLocationId)?.name}
             </strong>
             <small>
-              {next
-                ? `${formatDistance(next.distanceMeters)} restantes`
-                : 'Objetivos registrados'}
+              {missionRoute.status === 'calculating'
+                ? 'Calculando…'
+                : missionRoute.distanceMeters !== null
+                  ? `${formatDistance(missionRoute.distanceMeters)} · ${Math.max(1, Math.round((missionRoute.estimatedGameDurationSeconds ?? 0) / 60))} min`
+                  : next
+                    ? `${formatDistance(next.distanceMeters)} restantes`
+                    : 'Objetivos registrados'}
             </small>
           </div>
 
@@ -148,13 +183,32 @@ export function MissionPanel() {
             <ul>
               {active.objectives.map((objective) => {
                 const completed = completedObjectiveIds.includes(objective.id);
+                const progress = objectiveProgress[objective.id];
+                const showProgress =
+                  !completed &&
+                  progress &&
+                  (objective.type === 'timed' || progress.target > 1);
                 return (
                   <li
                     key={objective.id}
                     className={completed ? 'is-completed' : ''}
                   >
-                    <span aria-hidden="true">{completed ? '✓' : '○'}</span>
-                    {objective.label}
+                    <span
+                      className="mission-objective__marker"
+                      aria-hidden="true"
+                    >
+                      {completed ? '✓' : '○'}
+                    </span>
+                    <span className="mission-objective__content">
+                      {objective.label}
+                      {showProgress && (
+                        <small>
+                          {objective.type === 'timed'
+                            ? `${Math.max(0, Math.ceil((progress.durationSeconds ?? progress.target) - progress.elapsedSeconds))} s`
+                            : `${Math.floor(progress.value)} / ${progress.target}`}
+                        </small>
+                      )}
+                    </span>
                   </li>
                 );
               })}
@@ -172,11 +226,11 @@ export function MissionPanel() {
             </div>
           </section>
 
-          {next?.objective.type === 'interact' &&
+          {next &&
+            actionableObjectiveTypes.has(next.objective.type) &&
             next.distanceMeters <= next.objective.radiusMeters && (
               <p className="mission-interaction-hint" role="status">
-                Presiona <kbd>Espacio</kbd> o Investigar para registrar la
-                señal.
+                Presiona <kbd>Espacio</kbd> o el botón de acción para continuar.
               </p>
             )}
 

@@ -1,18 +1,37 @@
 import type { InputController } from './inputController';
-import { stepPlayer } from './movement';
+import {
+  stepPlayer,
+  stepPlayerDetailed,
+  type PlayerStepEnvironment,
+  type StepPlayerOptions,
+} from './movement';
 import type { PlayerRuntime } from '../types/game';
 
 export interface PlayerGameLoopOptions {
   initialPlayer: PlayerRuntime;
   input: InputController;
   isPaused: () => boolean;
+  getMovementOptions?: () => StepPlayerOptions;
   onVisualUpdate: (player: PlayerRuntime, timestamp: number) => void;
   onTelemetryUpdate: (player: PlayerRuntime) => void;
+}
+
+export function advancePlayerFrame(
+  player: PlayerRuntime,
+  input: ReturnType<InputController['snapshot']>,
+  deltaTimeSeconds: number,
+  isPaused: boolean,
+  movementOptions?: StepPlayerOptions,
+): PlayerRuntime {
+  return isPaused
+    ? player
+    : stepPlayer(player, input, deltaTimeSeconds, movementOptions);
 }
 
 export interface PlayerGameLoop {
   stop: () => void;
   getPlayer: () => PlayerRuntime;
+  getEnvironment: () => PlayerStepEnvironment;
   restoreFuel: (amount: number) => void;
   replacePlayer: (player: PlayerRuntime) => void;
 }
@@ -25,6 +44,13 @@ export function startPlayerGameLoop(
   let lastTelemetryTimestamp = previousTimestamp;
   let animationFrame = 0;
   let stopped = false;
+  let environment: PlayerStepEnvironment = {
+    surface: 'primary',
+    speedMultiplier: 1,
+    fuelMultiplier: 1,
+    roadDistanceMeters: null,
+    movementBlockedBy: null,
+  };
 
   options.onVisualUpdate(player, previousTimestamp);
   options.onTelemetryUpdate(player);
@@ -38,7 +64,14 @@ export function startPlayerGameLoop(
     previousTimestamp = timestamp;
 
     if (!options.isPaused()) {
-      player = stepPlayer(player, options.input.snapshot(), deltaTimeSeconds);
+      const result = stepPlayerDetailed(
+        player,
+        options.input.snapshot(),
+        deltaTimeSeconds,
+        options.getMovementOptions?.(),
+      );
+      player = result.player;
+      environment = result.environment;
     }
     options.onVisualUpdate(player, timestamp);
 
@@ -58,6 +91,7 @@ export function startPlayerGameLoop(
       cancelAnimationFrame(animationFrame);
     },
     getPlayer: () => ({ ...player }),
+    getEnvironment: () => ({ ...environment }),
     restoreFuel: (amount) => {
       player = {
         ...player,

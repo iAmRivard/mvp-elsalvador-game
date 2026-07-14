@@ -1,14 +1,24 @@
 import { initiallyUnlockedLocationIds, locations } from '../data/locations';
+import { inventoryItemById } from '../data/items';
 import { missionById, missions } from '../data/missions';
+import { vehicleStateConfig } from '../config/vehicleState.config';
+import { addInventoryItem, sanitizeInventory } from '../game/inventory';
 import { INITIAL_ENERGY, INITIAL_MAX_ENERGY } from '../game/progression';
 import {
   EL_SALVADOR_MOVEMENT_BOUNDS,
   normalizeHeading,
 } from '../game/movement';
 import type { PlayerRuntime } from '../types/game';
+import type {
+  CheckpointReason,
+  CheckpointSnapshot,
+  InventoryEntry,
+  MissionObjectiveProgressMap,
+  VehicleState,
+} from '../types/progression';
 
 export const GAME_SAVE_KEY = 'el-salvador-rutas-perdidas:save';
-export const GAME_SAVE_VERSION = 1;
+export const GAME_SAVE_VERSION = 2;
 
 export interface PersistedGameData {
   player: PlayerRuntime;
@@ -17,11 +27,19 @@ export interface PersistedGameData {
   experience: number;
   activeMissionId: string | null;
   activeMissionCompletedObjectiveIds: string[];
+  activeMissionObjectiveProgress: MissionObjectiveProgressMap;
   completedMissionIds: string[];
   discoveredLocationIds: string[];
   unlockedLocationIds: string[];
   specialItemIds: string[];
   unlockedStoryIds: string[];
+  inventory: InventoryEntry[];
+  vehicle: VehicleState;
+  lastCheckpoint: CheckpointSnapshot;
+  lastSafeCheckpoint: CheckpointSnapshot;
+  currentChapterId: string;
+  completedChapterIds: string[];
+  roadNetworkVersion: number;
   isPaused: boolean;
   isFollowingPlayer: boolean;
 }
@@ -75,15 +93,134 @@ function validMissionIds(value: unknown): string[] {
   return stringArray(value).filter((id) => missionIds.has(id));
 }
 
+function inventoryEntries(value: unknown): InventoryEntry[] {
+  if (!Array.isArray(value)) return [];
+  return sanitizeInventory(
+    value.flatMap((entry) => {
+      if (!isRecord(entry) || typeof entry.itemId !== 'string') return [];
+      return [
+        {
+          itemId: entry.itemId,
+          quantity: Math.max(0, Math.floor(finiteNumber(entry.quantity, 0))),
+        },
+      ];
+    }),
+  );
+}
+
+function sanitizedVehicle(value: unknown, fallbackFuel: number): VehicleState {
+  const record = isRecord(value) ? value : {};
+  const maximumFuel = Math.max(
+    1,
+    finiteNumber(record.maximumFuel, vehicleStateConfig.initialMaximumFuel),
+  );
+  return {
+    condition: clamp(
+      finiteNumber(record.condition, vehicleStateConfig.initialCondition),
+      0,
+      vehicleStateConfig.maximumCondition,
+    ),
+    fuel: clamp(finiteNumber(record.fuel, fallbackFuel), 0, maximumFuel),
+    maximumFuel,
+  };
+}
+
+function objectiveProgress(
+  value: unknown,
+  activeMissionId: string | null,
+): MissionObjectiveProgressMap {
+  if (!isRecord(value) || !activeMissionId) return {};
+  const objectiveIds = new Set(
+    missionById
+      .get(activeMissionId)
+      ?.objectives.map((objective) => objective.id) ?? [],
+  );
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([objectiveId, rawProgress]) => {
+      if (!objectiveIds.has(objectiveId) || !isRecord(rawProgress)) return [];
+      const duration =
+        rawProgress.durationSeconds === null
+          ? null
+          : Math.max(1, finiteNumber(rawProgress.durationSeconds, 1));
+      const target = Math.max(
+        1,
+        finiteNumber(rawProgress.target, duration ?? 1),
+      );
+      return [
+        [
+          objectiveId,
+          {
+            value: clamp(finiteNumber(rawProgress.value, 0), 0, target),
+            target,
+            elapsedSeconds: Math.max(
+              0,
+              finiteNumber(rawProgress.elapsedSeconds, 0),
+            ),
+            durationSeconds: duration,
+          },
+        ],
+      ];
+    }),
+  );
+}
+
+const checkpointReasons = new Set<CheckpointReason>([
+  'new-game',
+  'mission-start',
+  'city',
+  'fuel-station',
+  'objective',
+  'chapter',
+]);
+
+function sanitizedCheckpoint(value: unknown): CheckpointSnapshot | null {
+  if (!isRecord(value)) return null;
+  const player = sanitizedPlayer(value.player);
+  const vehicle = sanitizedVehicle(value.vehicle, player.fuel);
+  const activeMissionId =
+    typeof value.activeMissionId === 'string' &&
+    missionIds.has(value.activeMissionId)
+      ? value.activeMissionId
+      : null;
+  const allowedObjectiveIds = new Set(
+    missionById
+      .get(activeMissionId ?? '')
+      ?.objectives.map((objective) => objective.id) ?? [],
+  );
+  const reason = checkpointReasons.has(value.reason as CheckpointReason)
+    ? (value.reason as CheckpointReason)
+    : 'objective';
+  return {
+    id: typeof value.id === 'string' ? value.id : 'checkpoint-migrated',
+    createdAt:
+      typeof value.createdAt === 'string'
+        ? value.createdAt
+        : new Date(0).toISOString(),
+    reason,
+    player: { ...player, fuel: vehicle.fuel, speedMetersPerSecond: 0 },
+    vehicle,
+    inventory: inventoryEntries(value.inventory),
+    energy: Math.max(0, finiteNumber(value.energy, INITIAL_ENERGY)),
+    activeMissionId,
+    activeMissionCompletedObjectiveIds: stringArray(
+      value.activeMissionCompletedObjectiveIds,
+    ).filter((objectiveId) => allowedObjectiveIds.has(objectiveId)),
+    activeMissionObjectiveProgress: objectiveProgress(
+      value.activeMissionObjectiveProgress,
+      activeMissionId,
+    ),
+  };
+}
+
 function sanitizedPlayer(value: unknown): PlayerRuntime {
   const record = isRecord(value) ? value : {};
   const longitude = clamp(
-    finiteNumber(record.longitude, -89.191111),
+    finiteNumber(record.longitude, -89.1908911),
     EL_SALVADOR_MOVEMENT_BOUNDS.west,
     EL_SALVADOR_MOVEMENT_BOUNDS.east,
   );
   const latitude = clamp(
-    finiteNumber(record.latitude, 13.6975),
+    finiteNumber(record.latitude, 13.6962937),
     EL_SALVADOR_MOVEMENT_BOUNDS.south,
     EL_SALVADOR_MOVEMENT_BOUNDS.north,
   );
@@ -138,9 +275,41 @@ function sanitizeGame(value: unknown): PersistedGameData | null {
     requestedEnergy,
     finiteNumber(value.maxEnergy, INITIAL_MAX_ENERGY),
   );
+  const requestedPlayer = sanitizedPlayer(value.player);
+  const vehicle = sanitizedVehicle(value.vehicle, requestedPlayer.fuel);
+  const player = { ...requestedPlayer, fuel: vehicle.fuel };
+  const specialItemIds = stringArray(value.specialItemIds);
+  let inventory = inventoryEntries(value.inventory);
+  for (const itemId of specialItemIds) {
+    if (inventoryItemById.has(itemId)) {
+      inventory = addInventoryItem(inventory, itemId, 1);
+    }
+  }
+  const activeMissionObjectiveProgress = objectiveProgress(
+    value.activeMissionObjectiveProgress,
+    requestedActiveMissionId,
+  );
+  const fallbackCheckpoint: CheckpointSnapshot = {
+    id: 'checkpoint-migrated',
+    createdAt: new Date(0).toISOString(),
+    reason: 'new-game',
+    player: { ...player, speedMetersPerSecond: 0 },
+    vehicle,
+    inventory,
+    energy: clamp(requestedEnergy, 0, maxEnergy),
+    activeMissionId: requestedActiveMissionId,
+    activeMissionCompletedObjectiveIds: stringArray(
+      value.activeMissionCompletedObjectiveIds,
+    ).filter((id) => allowedObjectiveIds.has(id)),
+    activeMissionObjectiveProgress,
+  };
+  const lastCheckpoint =
+    sanitizedCheckpoint(value.lastCheckpoint) ?? fallbackCheckpoint;
+  const lastSafeCheckpoint =
+    sanitizedCheckpoint(value.lastSafeCheckpoint) ?? lastCheckpoint;
 
   return {
-    player: sanitizedPlayer(value.player),
+    player,
     energy: clamp(requestedEnergy, 0, maxEnergy),
     maxEnergy,
     experience: Math.max(0, Math.floor(finiteNumber(value.experience, 0))),
@@ -148,13 +317,27 @@ function sanitizeGame(value: unknown): PersistedGameData | null {
     activeMissionCompletedObjectiveIds: stringArray(
       value.activeMissionCompletedObjectiveIds,
     ).filter((id) => allowedObjectiveIds.has(id)),
+    activeMissionObjectiveProgress,
     completedMissionIds,
     discoveredLocationIds: validLocationIds(value.discoveredLocationIds).filter(
       (id) => unlockedLocationIds.includes(id),
     ),
     unlockedLocationIds,
-    specialItemIds: stringArray(value.specialItemIds),
+    specialItemIds,
     unlockedStoryIds: stringArray(value.unlockedStoryIds),
+    inventory,
+    vehicle,
+    lastCheckpoint,
+    lastSafeCheckpoint,
+    currentChapterId:
+      typeof value.currentChapterId === 'string'
+        ? value.currentChapterId
+        : 'chapter-1',
+    completedChapterIds: stringArray(value.completedChapterIds),
+    roadNetworkVersion: Math.max(
+      1,
+      Math.floor(finiteNumber(value.roadNetworkVersion, 1)),
+    ),
     isPaused: value.isPaused === true,
     isFollowingPlayer: value.isFollowingPlayer !== false,
   };
@@ -185,22 +368,49 @@ function migrateLegacySave(
       telemetry.totalDistanceMeters ?? value.totalDistanceMeters,
   };
 
-  return sanitizeGame({
-    player: legacyPlayer,
-    energy: value.energy,
-    maxEnergy: value.maxEnergy,
-    experience: value.experience,
-    activeMissionId: value.activeMissionId,
-    activeMissionCompletedObjectiveIds:
-      value.activeMissionCompletedObjectiveIds,
-    completedMissionIds: value.completedMissionIds,
-    discoveredLocationIds: value.discoveredLocationIds,
-    unlockedLocationIds: value.unlockedLocationIds,
-    specialItemIds: value.specialItemIds,
-    unlockedStoryIds: value.unlockedStoryIds,
-    isPaused: value.isPaused,
-    isFollowingPlayer: value.isFollowingPlayer,
-  });
+  return sanitizeGame(
+    expandVersionOneChapterProgress({
+      player: legacyPlayer,
+      energy: value.energy,
+      maxEnergy: value.maxEnergy,
+      experience: value.experience,
+      activeMissionId: value.activeMissionId,
+      activeMissionCompletedObjectiveIds:
+        value.activeMissionCompletedObjectiveIds,
+      completedMissionIds: value.completedMissionIds,
+      discoveredLocationIds: value.discoveredLocationIds,
+      unlockedLocationIds: value.unlockedLocationIds,
+      specialItemIds: value.specialItemIds,
+      unlockedStoryIds: value.unlockedStoryIds,
+      isPaused: value.isPaused,
+      isFollowingPlayer: value.isFollowingPlayer,
+    }),
+  );
+}
+
+function expandVersionOneChapterProgress(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  const completedMissionIds = stringArray(value.completedMissionIds);
+  const activeMissionId =
+    typeof value.activeMissionId === 'string' ? value.activeMissionId : null;
+  const reachedSantaAna =
+    completedMissionIds.includes('camino-hacia-santa-ana') ||
+    completedMissionIds.includes('secreto-de-coatepeque') ||
+    activeMissionId === 'secreto-de-coatepeque';
+  const additions = reachedSantaAna
+    ? [
+        'la-transmision',
+        'estacion-abandonada',
+        'reparacion-de-emergencia',
+        'llegada-a-santa-ana',
+      ]
+    : activeMissionId === 'camino-hacia-santa-ana'
+      ? ['la-transmision']
+      : [];
+  return {
+    ...value,
+    completedMissionIds: [...new Set([...completedMissionIds, ...additions])],
+  };
 }
 
 export function parseGameSave(raw: string): LoadGameResult {
@@ -218,6 +428,23 @@ export function parseGameSave(raw: string): LoadGameResult {
     return {
       status: 'loaded',
       migrated: false,
+      save: {
+        version: GAME_SAVE_VERSION,
+        savedAt:
+          typeof parsed.savedAt === 'string'
+            ? parsed.savedAt
+            : new Date(0).toISOString(),
+        game,
+      },
+    };
+  }
+
+  if (parsed.version === 1) {
+    const game = sanitizeGame(expandVersionOneChapterProgress(parsed.game));
+    if (!game) return { status: 'invalid' };
+    return {
+      status: 'loaded',
+      migrated: true,
       save: {
         version: GAME_SAVE_VERSION,
         savedAt:

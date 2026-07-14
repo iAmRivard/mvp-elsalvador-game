@@ -1,12 +1,7 @@
 import type { PlayerInput } from '../types/game';
 
 export type InputAction =
-  | 'forward'
-  | 'backward'
-  | 'left'
-  | 'right'
-  | 'boost'
-  | 'interact';
+  'forward' | 'backward' | 'left' | 'right' | 'boost' | 'interact';
 
 const keyActions: Readonly<Record<string, InputAction>> = {
   KeyW: 'forward',
@@ -25,11 +20,29 @@ const keyActions: Readonly<Record<string, InputAction>> = {
 export class InputController {
   private readonly keyboardActions = new Set<InputAction>();
   private readonly pointerActions = new Set<InputAction>();
+  private readonly pointerReleaseTimers = new Map<
+    InputAction,
+    ReturnType<typeof setTimeout>
+  >();
 
-  bindKeyboard(target: Window, onTogglePause: () => void): () => void {
+  bindKeyboard(
+    target: Window,
+    onTogglePause: () => void,
+    onRecalculateRoute: () => void = () => undefined,
+  ): () => void {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.code === 'Escape') {
         if (!event.repeat) onTogglePause();
+        event.preventDefault();
+        return;
+      }
+      if (
+        event.code === 'KeyR' &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey
+      ) {
+        if (!event.repeat) onRecalculateRoute();
         event.preventDefault();
         return;
       }
@@ -61,11 +74,33 @@ export class InputController {
   }
 
   setPointerAction(action: InputAction, active: boolean): void {
+    const releaseTimer = this.pointerReleaseTimers.get(action);
+    if (releaseTimer) clearTimeout(releaseTimer);
+    this.pointerReleaseTimers.delete(action);
     if (active) this.pointerActions.add(action);
     else this.pointerActions.delete(action);
   }
 
+  releasePointerAction(action: InputAction, delayMilliseconds = 0): void {
+    const releaseTimer = this.pointerReleaseTimers.get(action);
+    if (releaseTimer) clearTimeout(releaseTimer);
+    if (delayMilliseconds <= 0) {
+      this.pointerReleaseTimers.delete(action);
+      this.pointerActions.delete(action);
+      return;
+    }
+    this.pointerReleaseTimers.set(
+      action,
+      setTimeout(() => {
+        this.pointerActions.delete(action);
+        this.pointerReleaseTimers.delete(action);
+      }, delayMilliseconds),
+    );
+  }
+
   clearPointerActions(): void {
+    for (const timer of this.pointerReleaseTimers.values()) clearTimeout(timer);
+    this.pointerReleaseTimers.clear();
     this.pointerActions.clear();
   }
 

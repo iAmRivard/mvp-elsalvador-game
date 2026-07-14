@@ -37,16 +37,21 @@ jobs:
       - name: Iniciar contenedor
         run: docker run --detach --rm --name rutas-perdidas --publish 8080:80 rutas-perdidas:test
 
-      - name: Verificar salud, SPA y Range Requests
+      - name: Verificar salud, CSP, archivos locales y Range Requests
         run: |
           for attempt in $(seq 1 20); do
             curl --fail --silent http://127.0.0.1:8080/healthz && break
             sleep 1
           done
           curl --fail --silent http://127.0.0.1:8080/ | grep -q "root"
+          curl --fail --silent --head http://127.0.0.1:8080/ | grep -qi "content-security-policy:"
           status=$(curl --silent --output /tmp/map-range.bin --write-out "%{http_code}" --header "Range: bytes=0-1023" http://127.0.0.1:8080/maps/el-salvador.pmtiles)
           test "$status" = "206"
           test "$(wc -c < /tmp/map-range.bin)" = "1024"
+          curl --fail --silent http://127.0.0.1:8080/data/roads/western-corridor.json --output /tmp/roads.json
+          test "$(wc -c < /tmp/roads.json)" -gt "5000000"
+          curl --fail --silent http://127.0.0.1:8080/audio/engine-idle.wav --output /tmp/engine.wav
+          test "$(wc -c < /tmp/engine.wav)" -gt "40000"
 
       - name: Probar mapa y autonomía en navegador
         env:

@@ -15,6 +15,12 @@ describe('configuración visual', () => {
       reduceMotion: false,
       ambientFog: true,
       tutorialSeen: false,
+      steeringSensitivity: 'medium',
+      roadAssistMode: 'soft',
+      audioMasterVolume: 0.7,
+      audioEffectsVolume: 0.8,
+      audioMuted: false,
+      reduceAudioEffects: false,
     });
   });
 
@@ -24,12 +30,14 @@ describe('configuración visual', () => {
     expect(
       parseVisualSettings(
         JSON.stringify({
-          version: 1,
+          version: 3,
           settings: {
             graphicsQuality: 'high',
             reduceMotion: true,
             ambientFog: false,
             tutorialSeen: true,
+            steeringSensitivity: 'high',
+            roadAssistMode: 'strong',
           },
         }),
       ),
@@ -38,6 +46,33 @@ describe('configuración visual', () => {
       reduceMotion: true,
       ambientFog: false,
       tutorialSeen: true,
+      steeringSensitivity: 'high',
+      roadAssistMode: 'strong',
+      audioMasterVolume: 0.7,
+      audioEffectsVolume: 0.8,
+      audioMuted: false,
+      reduceAudioEffects: false,
+    });
+  });
+
+  it('migra preferencias version 1 con sensibilidad equilibrada', () => {
+    expect(
+      parseVisualSettings(
+        JSON.stringify({
+          version: 1,
+          settings: {
+            graphicsQuality: 'low',
+            reduceMotion: false,
+            ambientFog: true,
+            tutorialSeen: true,
+          },
+        }),
+      ),
+    ).toMatchObject({
+      graphicsQuality: 'low',
+      tutorialSeen: true,
+      steeringSensitivity: 'medium',
+      roadAssistMode: 'soft',
     });
   });
 
@@ -45,6 +80,12 @@ describe('configuración visual', () => {
     useSettingsStore.getState().setGraphicsQuality('low');
     useSettingsStore.getState().setAmbientFog(false);
     useSettingsStore.getState().setTutorialSeen(true);
+    useSettingsStore.getState().setSteeringSensitivity('high');
+    useSettingsStore.getState().setRoadAssistMode('off');
+    useSettingsStore.getState().setAudioMasterVolume(0.45);
+    useSettingsStore.getState().setAudioEffectsVolume(0.6);
+    useSettingsStore.getState().setAudioMuted(true);
+    useSettingsStore.getState().setReduceAudioEffects(true);
 
     const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
     expect(raw).not.toBeNull();
@@ -52,6 +93,34 @@ describe('configuración visual', () => {
       graphicsQuality: 'low',
       ambientFog: false,
       tutorialSeen: true,
+      steeringSensitivity: 'high',
+      roadAssistMode: 'off',
+      audioMasterVolume: 0.45,
+      audioEffectsVolume: 0.6,
+      audioMuted: true,
+      reduceAudioEffects: true,
+    });
+  });
+
+  it('sanea los niveles de audio de la versión 4', () => {
+    expect(
+      parseVisualSettings(
+        JSON.stringify({
+          version: 4,
+          settings: {
+            graphicsQuality: 'medium',
+            audioMasterVolume: 5,
+            audioEffectsVolume: -2,
+            audioMuted: true,
+            reduceAudioEffects: true,
+          },
+        }),
+      ),
+    ).toMatchObject({
+      audioMasterVolume: 1,
+      audioEffectsVolume: 0,
+      audioMuted: true,
+      reduceAudioEffects: true,
     });
   });
 });

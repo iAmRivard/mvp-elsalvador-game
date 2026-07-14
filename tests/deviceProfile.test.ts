@@ -18,6 +18,9 @@ describe('perfil de dispositivo', () => {
     expect(profile.isCompact).toBe(false);
     expect(profile.antialias).toBe(true);
     expect(profile.pixelRatio).toBe(2);
+    expect(profile.cameraUpdateIntervalMilliseconds).toBe(33);
+    expect(profile.cameraDurationMilliseconds).toBe(40);
+    expect(profile.maximumInitialPitch).toBe(60);
   });
 
   it('reduce automáticamente la carga en hardware limitado', () => {
@@ -38,6 +41,9 @@ describe('perfil de dispositivo', () => {
     expect(profile.antialias).toBe(false);
     expect(profile.pixelRatio).toBe(1);
     expect(profile.mapDataUpdateIntervalMilliseconds).toBe(250);
+    expect(profile.cameraUpdateIntervalMilliseconds).toBe(66);
+    expect(profile.cameraDurationMilliseconds).toBe(50);
+    expect(profile.maximumInitialPitch).toBe(50);
   });
 
   it('respeta movimiento reducido y una selección explícita alta', () => {
@@ -57,5 +63,7 @@ describe('perfil de dispositivo', () => {
     expect(profile.cameraDurationMilliseconds).toBe(0);
     expect(profile.fadeDurationMilliseconds).toBe(0);
     expect(profile.pixelRatio).toBe(2);
+    expect(profile.cameraUpdateIntervalMilliseconds).toBe(50);
+    expect(profile.maximumInitialPitch).toBe(56);
   });
 });

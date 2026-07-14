@@ -25,12 +25,21 @@ el game loop. Calidad baja desactiva la capa completa para evitar el costo de de
 La capa libera geometrías, materiales, texturas y recursos del renderer al cambiar de perfil o
 desmontar el mapa. No fuerza la pérdida del contexto porque éste pertenece a MapLibre.
 
-## Baliza interactiva
+## Balizas y referencias
 
-La baliza aparece únicamente mientras `senales-en-suchitoto` tiene pendiente
-`investigar-senal`. Su animación aumenta cerca del radio de interacción y respeta movimiento
-reducido. La validación sigue perteneciendo a las reglas de misión existentes: el objeto no crea un
-segundo estado ni una ruta alternativa para completar el objetivo.
+La baliza aparece para cualquier objetivo de acción disponible y pendiente. Su animación aumenta
+cerca del radio de interacción y respeta movimiento reducido. La validación sigue perteneciendo a
+las reglas de misión: el objeto no crea un segundo estado ni una ruta alternativa para completar el
+objetivo.
+
+El capítulo agrega 55 referencias estáticas repartidas por el corredor: árboles, postes, barreras,
+luces y estaciones. Se agrupan por tipo en cinco `InstancedMesh`, sin nodos DOM ni un draw call por
+objeto. Las geometrías son primitivas locales y se omiten junto con toda la capa en calidad baja.
+
+Dos luces añadidas al vehículo se activan durante una desaceleración. Un grupo pequeño de partículas
+acompaña el vehículo al moverse fuera de carretera; se anima únicamente mientras es visible y se
+desactiva con movimiento reducido. La cámara dinámica, la escala de pantalla y el pulso de la baliza
+completan las señales de velocidad y proximidad.
 
 ## Recursos
 

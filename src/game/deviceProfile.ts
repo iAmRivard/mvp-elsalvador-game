@@ -55,14 +55,16 @@ export function resolveDeviceProfile(signals: DeviceSignals): DeviceProfile {
       1,
       Math.min(signals.devicePixelRatio, pixelRatioLimit),
     ),
-    maximumInitialPitch: quality === 'low' ? 32 : isCompact ? 38 : 52,
+    maximumInitialPitch: quality === 'low' ? 50 : isCompact ? 56 : 60,
     cameraUpdateIntervalMilliseconds:
-      quality === 'low' ? 140 : signals.coarsePointer ? 100 : 80,
+      quality === 'low' ? 66 : signals.coarsePointer ? 50 : 33,
     cameraDurationMilliseconds: signals.reducedMotion
       ? 0
       : quality === 'low'
-        ? 100
-        : 140,
+        ? 50
+        : signals.coarsePointer
+          ? 60
+          : 40,
     mapDataUpdateIntervalMilliseconds:
       quality === 'low' ? 250 : signals.coarsePointer ? 140 : 100,
     fadeDurationMilliseconds: signals.reducedMotion

@@ -40,11 +40,87 @@ const game: PersistedGameData = {
   experience: 650,
   activeMissionId: 'secreto-de-coatepeque',
   activeMissionCompletedObjectiveIds: ['mirador-norte'],
-  completedMissionIds: ['camino-hacia-santa-ana'],
+  activeMissionObjectiveProgress: {
+    'mirador-norte': {
+      value: 1,
+      target: 1,
+      elapsedSeconds: 0,
+      durationSeconds: null,
+    },
+  },
+  completedMissionIds: [
+    'la-transmision',
+    'camino-hacia-santa-ana',
+    'estacion-abandonada',
+    'reparacion-de-emergencia',
+    'llegada-a-santa-ana',
+  ],
   discoveredLocationIds: ['san-salvador'],
   unlockedLocationIds: ['san-salvador', 'volcan-santa-ana'],
   specialItemIds: [],
   unlockedStoryIds: [],
+  inventory: [],
+  vehicle: {
+    condition: 84,
+    fuel: 72,
+    maximumFuel: 100,
+  },
+  lastCheckpoint: {
+    id: 'checkpoint-test',
+    createdAt: '2026-07-13T00:00:00.000Z',
+    reason: 'objective',
+    player: {
+      longitude: -89.3,
+      latitude: 13.8,
+      heading: 45,
+      speedMetersPerSecond: 0,
+      fuel: 72,
+      totalDistanceMeters: 12_500,
+    },
+    vehicle: {
+      condition: 84,
+      fuel: 72,
+      maximumFuel: 100,
+    },
+    inventory: [],
+    energy: 90,
+    activeMissionId: 'secreto-de-coatepeque',
+    activeMissionCompletedObjectiveIds: ['mirador-norte'],
+    activeMissionObjectiveProgress: {
+      'mirador-norte': {
+        value: 1,
+        target: 1,
+        elapsedSeconds: 0,
+        durationSeconds: null,
+      },
+    },
+  },
+  lastSafeCheckpoint: {
+    id: 'checkpoint-safe-test',
+    createdAt: '2026-07-13T00:00:00.000Z',
+    reason: 'city',
+    player: {
+      longitude: -89.3,
+      latitude: 13.8,
+      heading: 45,
+      speedMetersPerSecond: 0,
+      fuel: 72,
+      totalDistanceMeters: 12_500,
+    },
+    vehicle: {
+      condition: 84,
+      fuel: 72,
+      maximumFuel: 100,
+    },
+    inventory: [],
+    energy: 90,
+    activeMissionId: null,
+    activeMissionCompletedObjectiveIds: [],
+    activeMissionObjectiveProgress: {},
+  },
+  currentChapterId: 'chapter-1',
+  completedChapterIds: [],
+  roadNetworkVersion: 1,
   isPaused: false,
   isFollowingPlayer: true,
 };
@@ -89,6 +165,59 @@ describe('guardado versionado', () => {
       expect(result.save.game.unlockedLocationIds).toContain(
         'volcan-santa-ana',
       );
+      expect(result.save.game.inventory).toEqual([]);
+      expect(result.save.game.vehicle.condition).toBe(100);
+      expect(result.save.game.lastCheckpoint.reason).toBe('new-game');
+      expect(result.save.game.currentChapterId).toBe('chapter-1');
+      expect(result.save.game.roadNetworkVersion).toBe(1);
+    }
+  });
+
+  it('migra una partida v1 sin perder el progreso existente', () => {
+    const versionOneGame = {
+      player: game.player,
+      energy: game.energy,
+      maxEnergy: game.maxEnergy,
+      experience: game.experience,
+      activeMissionId: game.activeMissionId,
+      activeMissionCompletedObjectiveIds:
+        game.activeMissionCompletedObjectiveIds,
+      completedMissionIds: ['camino-hacia-santa-ana'],
+      discoveredLocationIds: game.discoveredLocationIds,
+      unlockedLocationIds: game.unlockedLocationIds,
+      specialItemIds: ['fragmento-de-caldera'],
+      unlockedStoryIds: ['eco-del-embalse'],
+      isPaused: false,
+      isFollowingPlayer: true,
+    };
+    const result = parseGameSave(
+      JSON.stringify({
+        version: 1,
+        savedAt: '2026-01-01T00:00:00.000Z',
+        game: versionOneGame,
+      }),
+    );
+
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.migrated).toBe(true);
+      expect(result.save.game.player.longitude).toBe(game.player.longitude);
+      expect(result.save.game.experience).toBe(game.experience);
+      expect(result.save.game.completedMissionIds).toEqual([
+        'camino-hacia-santa-ana',
+        'la-transmision',
+        'estacion-abandonada',
+        'reparacion-de-emergencia',
+        'llegada-a-santa-ana',
+      ]);
+      expect(result.save.game.unlockedStoryIds).toEqual(['eco-del-embalse']);
+      expect(result.save.game.inventory).toEqual([
+        { itemId: 'fragmento-de-caldera', quantity: 1 },
+      ]);
+      expect(result.save.game.vehicle.condition).toBe(100);
+      expect(result.save.game.lastCheckpoint.activeMissionId).toBe(
+        game.activeMissionId,
+      );
     }
   });
 
@@ -102,6 +231,11 @@ describe('guardado versionado', () => {
         fuel: 400,
         totalDistanceMeters: -5,
       },
+      vehicle: {
+        condition: -20,
+        fuel: 400,
+        maximumFuel: 100,
+      },
       activeMissionId: 'mision-inexistente',
       completedMissionIds: ['mision-inexistente'],
       discoveredLocationIds: ['sitio-inexistente'],
@@ -114,6 +248,7 @@ describe('guardado versionado', () => {
       expect(result.save.game.player.longitude).toBe(-87.65);
       expect(result.save.game.player.latitude).toBe(13);
       expect(result.save.game.player.fuel).toBe(100);
+      expect(result.save.game.vehicle.condition).toBe(0);
       expect(result.save.game.player.totalDistanceMeters).toBe(0);
       expect(result.save.game.activeMissionId).toBeNull();
       expect(result.save.game.completedMissionIds).toEqual([]);
