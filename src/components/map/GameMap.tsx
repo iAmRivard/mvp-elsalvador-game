@@ -20,8 +20,12 @@ import {
   findNearestLocation,
 } from '../../game/discovery';
 import { nearestPendingObjective } from '../../game/missions';
+import { selectedMissionChoiceOption } from '../../game/missionChoices';
 import { InputController } from '../../game/inputController';
-import { CLEAR_GAME_INPUT_EVENT } from '../../game/inputEvents';
+import {
+  CLEAR_GAME_INPUT_EVENT,
+  RESET_GAME_INPUT_EVENT,
+} from '../../game/inputEvents';
 import { triggerHaptic } from '../../game/haptics';
 import { normalizeHeading } from '../../game/movement';
 import { addLocationMarkers } from '../../map/locationMarkers';
@@ -234,6 +238,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let visualFrameCount = 0;
     let lastFrameSampleTimestamp = performance.now();
     let previousHapticSurface = useGameStore.getState().driving.surface;
+    let interactionWasActive = false;
     let startupReady = false;
 
     const finishStartup = () => {
@@ -278,12 +283,17 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       useGameStore.getState().requestMissionRouteRecalculation,
     );
     const clearInterruptedInput = () => inputController.clearAllInput();
+    const resetInput = () => {
+      inputController.clearAllInput();
+      inputController.resetMobileBoostCompletely();
+    };
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') clearInterruptedInput();
     };
     window.addEventListener('blur', clearInterruptedInput);
     window.addEventListener('orientationchange', clearInterruptedInput);
     window.addEventListener(CLEAR_GAME_INPUT_EVENT, clearInterruptedInput);
+    window.addEventListener(RESET_GAME_INPUT_EVENT, resetInput);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     unsubscribeSettings = useSettingsStore.subscribe((state, previousState) => {
       if (state.controlMode !== previousState.controlMode) {
@@ -465,6 +475,11 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             : undefined,
           restrictedAreaTypeAt,
           driveEnabled: useGameStore.getState().vehicle.condition > 0,
+          routeFuelMultiplier:
+            selectedMissionChoiceOption(
+              useGameStore.getState().activeMissionId,
+              useGameStore.getState().missionChoiceSelections,
+            )?.fuelMultiplier ?? 1,
         }),
         onVisualUpdate: (player, timestamp) => {
           visualFrameCount += 1;
@@ -640,6 +655,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 sample.vehicleDistanceMeters,
                 sample.environment.surface,
                 blockedImpact,
+                selectedMissionChoiceOption(
+                  state.activeMissionId,
+                  state.missionChoiceSelections,
+                )?.conditionMultiplier ?? 1,
               );
             }
             if (containerRef.current) {
@@ -670,6 +689,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
 
           for (const sample of movementSamples) {
             const currentState = useGameStore.getState();
+            const interactionStarted =
+              sample.input.interact && !interactionWasActive;
+            interactionWasActive = sample.input.interact;
             if (
               currentState.isPaused ||
               currentState.recoveryReason ||
@@ -681,7 +703,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               currentState.activeMissionCompletedObjectiveIds.length;
             currentState.advanceActiveMission(
               sample.player,
-              sample.input.interact,
+              interactionStarted,
               sample.deltaTimeSeconds,
             );
             if (
@@ -709,9 +731,38 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           (!previousState.isPaused && state.isPaused) ||
           (!previousState.recoveryReason && state.recoveryReason) ||
           (!previousState.activeNarrativeEventId &&
-            state.activeNarrativeEventId)
+            state.activeNarrativeEventId) ||
+          (!previousState.activeMissionChoiceObjectiveId &&
+            state.activeMissionChoiceObjectiveId)
         ) {
           clearInterruptedInput();
+        }
+        if (previousState.recoveryReason && !state.recoveryReason) {
+          inputController.resetMobileBoostCompletely();
+        }
+        if (state.needsInitialRoadAlignment && roadTracker) {
+          const player = runtimeFromTelemetry(state.telemetry);
+          const contact = roadTracker.update(
+            [player.longitude, player.latitude],
+            roadContextFor(player),
+          );
+          if (
+            contact &&
+            contact.nearest.distanceMeters <=
+              roadAssistConfig.disengageDistanceMeters
+          ) {
+            useGameStore
+              .getState()
+              .alignInitialPlayerToRoad(
+                contact.nearest.coordinates,
+                alignedRoadHeading(
+                  player.heading,
+                  contact.nearest.heading,
+                  contact.edge.oneWay,
+                ),
+              );
+            return;
+          }
         }
         if (
           state.playerRuntimeRevision === previousState.playerRuntimeRevision
@@ -756,6 +807,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       if (!isFatalMapError(event.error)) return;
       startupReady = false;
       inputController.clearAllInput();
+      inputController.resetMobileBoostCompletely();
       setErrorMessage(mapErrorDetails(event.error));
       setStatus('error');
     };
@@ -792,6 +844,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       window.removeEventListener('blur', clearInterruptedInput);
       window.removeEventListener('orientationchange', clearInterruptedInput);
       window.removeEventListener(CLEAR_GAME_INPUT_EVENT, clearInterruptedInput);
+      window.removeEventListener(RESET_GAME_INPUT_EVENT, resetInput);
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       inputController.clearAllInput();

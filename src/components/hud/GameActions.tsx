@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { requestInputClear } from '../../game/inputEvents';
+import { requestInputClear, requestInputReset } from '../../game/inputEvents';
 import { consumeMobileActionLabels } from '../../game/mobileControlHelp';
 import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -21,6 +21,9 @@ export function GameActions() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<
+    'general' | 'mobile-controls'
+  >('general');
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [showMobileLabels, setShowMobileLabels] = useState(() =>
     typeof window !== 'undefined' &&
@@ -69,6 +72,7 @@ export function GameActions() {
           aria-expanded={settingsOpen}
           onClick={() => {
             requestInputClear();
+            setSettingsSection('general');
             setSettingsOpen(true);
           }}
         />
@@ -145,6 +149,7 @@ export function GameActions() {
               className="save-menu__mobile-action"
               onClick={() => {
                 requestInputClear();
+                setSettingsSection('general');
                 setSettingsOpen(true);
                 setMenuOpen(false);
               }}
@@ -187,6 +192,7 @@ export function GameActions() {
               className="save-menu__mobile-action"
               onClick={() => {
                 requestInputClear();
+                setSettingsSection('mobile-controls');
                 setSettingsOpen(true);
                 setMenuOpen(false);
               }}
@@ -233,7 +239,7 @@ export function GameActions() {
                 type="button"
                 className="confirm-dialog__danger"
                 onClick={() => {
-                  requestInputClear();
+                  requestInputReset();
                   resetGame();
                   setConfirmingReset(false);
                   setMenuOpen(false);
@@ -249,6 +255,7 @@ export function GameActions() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         allowTutorial
+        initialSection={settingsSection}
       />
       <InventoryDialog
         open={inventoryOpen}

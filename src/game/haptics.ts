@@ -5,7 +5,8 @@ export type HapticEvent =
   | 'collision'
   | 'objective'
   | 'auto-throttle'
-  | 'condition-warning';
+  | 'condition-warning'
+  | 'timer-warning';
 
 const hapticPatterns: Readonly<Record<HapticEvent, number | number[]>> = {
   button: 12,
@@ -15,6 +16,7 @@ const hapticPatterns: Readonly<Record<HapticEvent, number | number[]>> = {
   objective: [16, 35, 28],
   'auto-throttle': [12, 24, 12],
   'condition-warning': [28, 45, 28],
+  'timer-warning': [18, 24, 18],
 };
 
 export function triggerHaptic(event: HapticEvent, enabled: boolean): void {

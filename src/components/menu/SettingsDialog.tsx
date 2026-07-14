@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { GraphicsQuality } from '../../config/game.config';
 import type {
   JoystickPositionMode,
@@ -12,6 +13,7 @@ interface SettingsDialogProps {
   open: boolean;
   onClose: () => void;
   allowTutorial?: boolean;
+  initialSection?: 'general' | 'mobile-controls';
 }
 
 const qualityOptions: readonly {
@@ -94,7 +96,9 @@ export function SettingsDialog({
   open,
   onClose,
   allowTutorial = false,
+  initialSection = 'general',
 }: SettingsDialogProps) {
+  const mobileControlsRef = useRef<HTMLFieldSetElement>(null);
   const graphicsQuality = useSettingsStore((state) => state.graphicsQuality);
   const reduceMotion = useSettingsStore((state) => state.reduceMotion);
   const ambientFog = useSettingsStore((state) => state.ambientFog);
@@ -108,7 +112,9 @@ export function SettingsDialog({
   const audioEffectsVolume = useSettingsStore(
     (state) => state.audioEffectsVolume,
   );
+  const audioMusicVolume = useSettingsStore((state) => state.audioMusicVolume);
   const audioMuted = useSettingsStore((state) => state.audioMuted);
+  const musicMuted = useSettingsStore((state) => state.musicMuted);
   const reduceAudioEffects = useSettingsStore(
     (state) => state.reduceAudioEffects,
   );
@@ -136,7 +142,11 @@ export function SettingsDialog({
   const setAudioEffectsVolume = useSettingsStore(
     (state) => state.setAudioEffectsVolume,
   );
+  const setAudioMusicVolume = useSettingsStore(
+    (state) => state.setAudioMusicVolume,
+  );
   const setAudioMuted = useSettingsStore((state) => state.setAudioMuted);
+  const setMusicMuted = useSettingsStore((state) => state.setMusicMuted);
   const setReduceAudioEffects = useSettingsStore(
     (state) => state.setReduceAudioEffects,
   );
@@ -154,6 +164,20 @@ export function SettingsDialog({
     (state) => state.setHapticsEnabled,
   );
   const setTutorialSeen = useSettingsStore((state) => state.setTutorialSeen);
+  useEffect(() => {
+    if (!open || initialSection !== 'mobile-controls') return;
+    window.requestAnimationFrame(() => {
+      mobileControlsRef.current?.scrollIntoView({
+        block: 'start',
+        behavior: 'smooth',
+      });
+      mobileControlsRef.current
+        ?.querySelector<HTMLInputElement>('input')
+        ?.focus({
+          preventScroll: true,
+        });
+    });
+  }, [initialSection, open]);
   if (!open) return null;
 
   return (
@@ -235,7 +259,7 @@ export function SettingsDialog({
           </div>
         </fieldset>
 
-        <fieldset className="mobile-control-options">
+        <fieldset ref={mobileControlsRef} className="mobile-control-options">
           <legend>Controles móviles</legend>
           <div className="mobile-control-options__modes">
             {mobileControlOptions.map((option) => (
@@ -347,6 +371,23 @@ export function SettingsDialog({
               }
             />
           </label>
+          <label>
+            <span>
+              <strong>Volumen de música</strong>
+              <output>{Math.round(audioMusicVolume * 100)}%</output>
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={audioMusicVolume}
+              aria-label="Volumen de música"
+              onChange={(event) =>
+                setAudioMusicVolume(event.currentTarget.valueAsNumber)
+              }
+            />
+          </label>
         </fieldset>
 
         <div className="settings-toggles">
@@ -359,6 +400,17 @@ export function SettingsDialog({
               type="checkbox"
               checked={hapticsEnabled}
               onChange={(event) => setHapticsEnabled(event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>
+              <strong>Silenciar música</strong>
+              <small>Mantiene motor, radio y efectos activos.</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={musicMuted}
+              onChange={(event) => setMusicMuted(event.target.checked)}
             />
           </label>
           <label>

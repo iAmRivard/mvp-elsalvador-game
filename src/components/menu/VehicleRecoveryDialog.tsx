@@ -11,8 +11,9 @@ const recoveryCopy = {
       'La condición del vehículo llegó a 0%. Regresa al último punto seguro para continuar.',
   },
   'timed-objective': {
-    title: 'Objetivo agotado',
-    description: 'El tiempo de la misión terminó antes de alcanzar el punto.',
+    title: 'La señal se perdió',
+    description:
+      'No llegaste a la estación antes de que terminara la transmisión. Puedes volver al checkpoint anterior a la elección y probar otra ruta.',
   },
   'out-of-bounds': {
     title: 'Fuera del área segura',
@@ -41,6 +42,7 @@ export function VehicleRecoveryDialog() {
         aria-labelledby="recovery-title"
         aria-describedby="recovery-description"
       >
+        <span className="paused-label">JUEGO EN PAUSA</span>
         <span className="confirm-dialog__eyebrow">Recuperación</span>
         <h2 id="recovery-title">{copy.title}</h2>
         <p id="recovery-description">{copy.description}</p>

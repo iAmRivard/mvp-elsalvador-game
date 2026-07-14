@@ -1,18 +1,23 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { DiagnosticsPanel } from '../components/dev/DiagnosticsPanel';
 import { GameActions } from '../components/hud/GameActions';
+import { GameplayToast } from '../components/hud/GameplayToast';
 import { GameAudioBridge } from '../components/audio/GameAudioBridge';
 import { CurrentRegion } from '../components/hud/CurrentRegion';
 import { DiscoveryToast } from '../components/hud/DiscoveryToast';
 import { LevelUpToast } from '../components/hud/LevelUpToast';
 import { MissionPanel } from '../components/hud/MissionPanel';
 import { MissionToast } from '../components/hud/MissionToast';
+import { MissionTimer } from '../components/hud/MissionTimer';
 import { PlayerHud } from '../components/hud/PlayerHud';
 import { PauseMenu } from '../components/menu/PauseMenu';
+import { RecommendedControlsPrompt } from '../components/menu/RecommendedControlsPrompt';
 import { VehicleRecoveryDialog } from '../components/menu/VehicleRecoveryDialog';
 import { StartScreen } from '../components/menu/StartScreen';
 import { TutorialOverlay } from '../components/menu/TutorialOverlay';
 import { NarrativeDialog } from '../components/story/NarrativeDialog';
+import { RadioMessageOverlay } from '../components/story/RadioMessageOverlay';
+import { MissionChoiceDialog } from '../components/story/MissionChoiceDialog';
 import { gameConfig } from '../config/game.config';
 import { InputController } from '../game/inputController';
 import { startGameAutosave, useGameStore } from '../store/gameStore';
@@ -35,6 +40,9 @@ export function App() {
   const activeNarrativeEventId = useGameStore(
     (state) => state.activeNarrativeEventId,
   );
+  const activeMissionChoiceObjectiveId = useGameStore(
+    (state) => state.activeMissionChoiceObjectiveId,
+  );
   const setPaused = useGameStore((state) => state.setPaused);
   const loadGame = useGameStore((state) => state.loadGame);
   const resetGame = useGameStore((state) => state.resetGame);
@@ -44,7 +52,7 @@ export function App() {
 
   useEffect(() => startGameAutosave(), []);
   useEffect(() => {
-    if (showTutorial) setPaused(false);
+    if (showTutorial) setPaused(true);
   }, [setPaused, showTutorial]);
 
   const enterGame = (loadSavedGame: boolean) => {
@@ -59,6 +67,8 @@ export function App() {
         <StartScreen
           onContinue={() => enterGame(hasSavedGame)}
           onNewGame={() => {
+            inputController.clearAllInput();
+            inputController.resetMobileBoostCompletely();
             resetGame();
             enterGame(false);
           }}
@@ -103,9 +113,12 @@ export function App() {
         </Suspense>
 
         <PlayerHud />
+        <MissionTimer />
         <MissionPanel />
         {!showTutorial && <DiscoveryToast />}
         <MissionToast />
+        <GameplayToast />
+        <RadioMessageOverlay />
         <LevelUpToast />
         {diagnosticsEnabled && <DiagnosticsPanel input={inputController} />}
       </section>
@@ -122,7 +135,8 @@ export function App() {
       {isPaused &&
         !showTutorial &&
         !recoveryReason &&
-        !activeNarrativeEventId && (
+        !activeNarrativeEventId &&
+        !activeMissionChoiceObjectiveId && (
           <PauseMenu
             onExitToTitle={() => {
               setPaused(true);
@@ -131,6 +145,8 @@ export function App() {
           />
         )}
       <VehicleRecoveryDialog />
+      <RecommendedControlsPrompt />
+      <MissionChoiceDialog />
       <NarrativeDialog />
     </main>
   );

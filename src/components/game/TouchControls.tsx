@@ -5,6 +5,10 @@ import {
 } from '../../config/mobileControls.config';
 import { missionById } from '../../data/missions';
 import type { InputController } from '../../game/inputController';
+import {
+  interactionLabelForObjective,
+  objectiveRequiresManualInteraction,
+} from '../../game/interactions';
 import { nearestPendingObjective } from '../../game/missions';
 import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -16,15 +20,6 @@ import { VirtualJoystick } from './VirtualJoystick';
 interface TouchControlsProps {
   input: InputController;
 }
-
-const interactionLabels = {
-  interact: 'Investigar',
-  collect: 'Recoger',
-  deliver: 'Entregar',
-  repair: 'Reparar',
-  refuel: 'Cargar',
-  choice: 'Elegir',
-} as const;
 
 export function TouchControls({ input }: TouchControlsProps) {
   const isPaused = useGameStore((state) => state.isPaused);
@@ -54,11 +49,9 @@ export function TouchControls({ input }: TouchControlsProps) {
   const interactionObjective = nearestObjective?.objective;
   const interactionLabel =
     interactionObjective &&
-    interactionObjective.type in interactionLabels &&
+    objectiveRequiresManualInteraction(interactionObjective) &&
     nearestObjective.distanceMeters <= interactionObjective.radiusMeters
-      ? interactionLabels[
-          interactionObjective.type as keyof typeof interactionLabels
-        ]
+      ? interactionLabelForObjective(interactionObjective)
       : null;
   const sizeMultiplier = joystickSizeMultipliers[joystickSize];
 

@@ -11,7 +11,7 @@ import type { RoadAssistMode } from '../config/roadHandling.config';
 import type { SteeringSensitivity } from '../config/travel.config';
 
 export const SETTINGS_STORAGE_KEY = 'el-salvador-rutas-perdidas:settings';
-export const SETTINGS_VERSION = 5;
+export const SETTINGS_VERSION = 6;
 
 export interface VisualSettings extends MobileControlsSettings {
   graphicsQuality: GraphicsQuality;
@@ -22,8 +22,11 @@ export interface VisualSettings extends MobileControlsSettings {
   roadAssistMode: RoadAssistMode;
   audioMasterVolume: number;
   audioEffectsVolume: number;
+  audioMusicVolume: number;
   audioMuted: boolean;
+  musicMuted: boolean;
   reduceAudioEffects: boolean;
+  recommendedControlsPromptDismissed: boolean;
 }
 
 interface SettingsStore extends VisualSettings {
@@ -35,7 +38,9 @@ interface SettingsStore extends VisualSettings {
   setRoadAssistMode: (mode: RoadAssistMode) => void;
   setAudioMasterVolume: (volume: number) => void;
   setAudioEffectsVolume: (volume: number) => void;
+  setAudioMusicVolume: (volume: number) => void;
   setAudioMuted: (muted: boolean) => void;
+  setMusicMuted: (muted: boolean) => void;
   setReduceAudioEffects: (reduced: boolean) => void;
   setMobileControlMode: (mode: MobileControlMode) => void;
   setJoystickPositionMode: (mode: JoystickPositionMode) => void;
@@ -43,6 +48,7 @@ interface SettingsStore extends VisualSettings {
   setJoystickDeadZone: (deadZone: number) => void;
   setAutoThrottleDefault: (enabled: boolean) => void;
   setHapticsEnabled: (enabled: boolean) => void;
+  setRecommendedControlsPromptDismissed: (dismissed: boolean) => void;
 }
 
 interface SettingsEnvelope {
@@ -59,8 +65,11 @@ const defaultSettings: VisualSettings = {
   roadAssistMode: 'soft',
   audioMasterVolume: 0.7,
   audioEffectsVolume: 0.8,
+  audioMusicVolume: 0.42,
   audioMuted: false,
+  musicMuted: false,
   reduceAudioEffects: false,
+  recommendedControlsPromptDismissed: true,
   ...defaultMobileControlsSettings,
 };
 
@@ -121,6 +130,7 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
       parsed.version !== 2 &&
       parsed.version !== 3 &&
       parsed.version !== 4 &&
+      parsed.version !== 5 &&
       parsed.version !== SETTINGS_VERSION)
   ) {
     return null;
@@ -149,7 +159,12 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
       value.audioEffectsVolume,
       defaultSettings.audioEffectsVolume,
     ),
+    audioMusicVolume: volume(
+      value.audioMusicVolume,
+      defaultSettings.audioMusicVolume,
+    ),
     audioMuted: value.audioMuted === true,
+    musicMuted: value.musicMuted === true,
     reduceAudioEffects: value.reduceAudioEffects === true,
     controlMode: isMobileControlMode(value.controlMode)
       ? value.controlMode
@@ -163,6 +178,11 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
     joystickDeadZone: joystickDeadZone(value.joystickDeadZone),
     autoThrottleDefault: value.autoThrottleDefault === true,
     hapticsEnabled: value.hapticsEnabled !== false,
+    recommendedControlsPromptDismissed:
+      value.recommendedControlsPromptDismissed === true ||
+      (value.recommendedControlsPromptDismissed !== false &&
+        isMobileControlMode(value.controlMode) &&
+        value.controlMode !== 'joystick-pedals'),
   };
 }
 
@@ -205,8 +225,12 @@ function visualSettings(state: VisualSettings): VisualSettings {
     roadAssistMode: state.roadAssistMode,
     audioMasterVolume: state.audioMasterVolume,
     audioEffectsVolume: state.audioEffectsVolume,
+    audioMusicVolume: state.audioMusicVolume,
     audioMuted: state.audioMuted,
+    musicMuted: state.musicMuted,
     reduceAudioEffects: state.reduceAudioEffects,
+    recommendedControlsPromptDismissed:
+      state.recommendedControlsPromptDismissed,
     controlMode: state.controlMode,
     joystickPositionMode: state.joystickPositionMode,
     joystickSize: state.joystickSize,
@@ -277,9 +301,24 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       saveVisualSettings(next);
       return next;
     }),
+  setAudioMusicVolume: (audioMusicVolume) =>
+    set((state) => {
+      const next = {
+        ...visualSettings(state),
+        audioMusicVolume: volume(audioMusicVolume, state.audioMusicVolume),
+      };
+      saveVisualSettings(next);
+      return next;
+    }),
   setAudioMuted: (audioMuted) =>
     set((state) => {
       const next = { ...visualSettings(state), audioMuted };
+      saveVisualSettings(next);
+      return next;
+    }),
+  setMusicMuted: (musicMuted) =>
+    set((state) => {
+      const next = { ...visualSettings(state), musicMuted };
       saveVisualSettings(next);
       return next;
     }),
@@ -291,7 +330,11 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     }),
   setMobileControlMode: (controlMode) =>
     set((state) => {
-      const next = { ...visualSettings(state), controlMode };
+      const next = {
+        ...visualSettings(state),
+        controlMode,
+        recommendedControlsPromptDismissed: true,
+      };
       saveVisualSettings(next);
       return next;
     }),
@@ -325,6 +368,15 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   setHapticsEnabled: (hapticsEnabled) =>
     set((state) => {
       const next = { ...visualSettings(state), hapticsEnabled };
+      saveVisualSettings(next);
+      return next;
+    }),
+  setRecommendedControlsPromptDismissed: (recommendedControlsPromptDismissed) =>
+    set((state) => {
+      const next = {
+        ...visualSettings(state),
+        recommendedControlsPromptDismissed,
+      };
       saveVisualSettings(next);
       return next;
     }),

@@ -51,6 +51,7 @@ const keyActions: Readonly<Record<string, InputAction>> = {
   ArrowRight: 'right',
   ShiftLeft: 'boost',
   ShiftRight: 'boost',
+  KeyE: 'interact',
   Space: 'interact',
 };
 
@@ -115,7 +116,7 @@ export class InputController {
       this.keyboardActions.add(action);
       if (action === 'backward') {
         this.disableAutoThrottle();
-        this.cancelMobileBoost();
+        this.cancelActiveMobileBoostPreservingCooldown();
       }
       if (this.keyboardActions.size !== sizeBefore) this.notify();
       event.preventDefault();
@@ -162,7 +163,7 @@ export class InputController {
     else this.pointerActions.delete(action);
     if (active && action === 'backward') {
       this.disableAutoThrottle();
-      this.cancelMobileBoost();
+      this.cancelActiveMobileBoostPreservingCooldown();
     }
     if (changed) this.notify();
   }
@@ -189,7 +190,7 @@ export class InputController {
     const next = clampAnalogInput(value);
     if (next < 0) {
       this.disableAutoThrottle();
-      this.cancelMobileBoost();
+      this.cancelActiveMobileBoostPreservingCooldown();
     }
     if (this.touchThrottle === next) return;
     this.touchThrottle = next;
@@ -251,8 +252,17 @@ export class InputController {
     return true;
   }
 
-  cancelMobileBoost(): void {
-    if (this.resetMobileBoost()) this.notify();
+  cancelActiveMobileBoostPreservingCooldown(): void {
+    this.updateMobileBoostState();
+    if (!this.mobileBoostState.active) return;
+    this.mobileBoostActiveUntil = 0;
+    this.updateMobileBoostState();
+    this.startMobileBoostTicker();
+    this.notify();
+  }
+
+  resetMobileBoostCompletely(): void {
+    if (this.clearMobileBoostState()) this.notify();
   }
 
   getMobileBoostState(): MobileBoostState {
@@ -292,13 +302,14 @@ export class InputController {
   }
 
   clearPointerActions(): void {
-    const boostChanged = this.resetMobileBoost();
+    const boostWasActive = this.mobileBoostState.active;
+    this.cancelActiveMobileBoostPreservingCooldown();
     const changed =
       this.pointerActions.size > 0 ||
       this.touchThrottle !== 0 ||
       this.joystickTurn !== 0 ||
       this.activePointerIds.size > 0 ||
-      boostChanged;
+      boostWasActive;
     for (const timer of this.pointerReleaseTimers.values()) clearTimeout(timer);
     this.pointerReleaseTimers.clear();
     this.pointerActions.clear();
@@ -309,7 +320,8 @@ export class InputController {
   }
 
   clearAllInput(): void {
-    const boostChanged = this.resetMobileBoost();
+    const boostWasActive = this.mobileBoostState.active;
+    this.cancelActiveMobileBoostPreservingCooldown();
     const changed =
       this.keyboardActions.size > 0 ||
       this.pointerActions.size > 0 ||
@@ -318,7 +330,7 @@ export class InputController {
       this.joystickTurn !== 0 ||
       this.autoThrottle.enabled ||
       this.activePointerIds.size > 0 ||
-      boostChanged;
+      boostWasActive;
     for (const timer of this.pointerReleaseTimers.values()) clearTimeout(timer);
     this.pointerReleaseTimers.clear();
     this.keyboardActions.clear();
@@ -398,7 +410,7 @@ export class InputController {
     for (const listener of this.listeners) listener();
   }
 
-  private resetMobileBoost(): boolean {
+  private clearMobileBoostState(): boolean {
     const changed =
       this.mobileBoostActiveUntil > 0 ||
       this.mobileBoostCooldownUntil > 0 ||

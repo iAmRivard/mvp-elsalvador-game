@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { gameConfig } from '../../config/game.config';
+import { chapterOneMissionIds } from '../../data/chapter1';
+import { locations } from '../../data/locations';
+import { progressCounter } from '../../game/progressCounters';
 import { loadRoadNetwork, retryRoadNetworkLoad } from '../../roads/roadNetwork';
 import { preloadRoadWorker } from '../../roads/roadWorkerClient';
 import { useGameStore } from '../../store/gameStore';
@@ -22,6 +25,8 @@ const preparationLabels: Readonly<Record<PreparationStage, string>> = {
   error: 'No se pudo preparar la red vial',
 };
 
+const locationIds = locations.map((location) => location.id);
+
 function savedAtLabel(savedAt: string | null): string {
   if (!savedAt) return 'Progreso local disponible';
   const date = new Date(savedAt);
@@ -41,10 +46,17 @@ export function StartScreen({ onContinue, onNewGame }: StartScreenProps) {
   const hasSavedGame = useGameStore((state) => state.hasSavedGame);
   const lastSavedAt = useGameStore((state) => state.lastSavedAt);
   const level = useGameStore((state) => state.level);
-  const discovered = useGameStore(
-    (state) => state.discoveredLocationIds.length,
+  const discoveredLocationIds = useGameStore(
+    (state) => state.discoveredLocationIds,
   );
-  const completed = useGameStore((state) => state.completedMissionIds.length);
+  const completedMissionIds = useGameStore(
+    (state) => state.completedMissionIds,
+  );
+  const discoveryProgress = progressCounter(locationIds, discoveredLocationIds);
+  const missionProgress = progressCounter(
+    chapterOneMissionIds,
+    completedMissionIds,
+  );
   const distance = useGameStore((state) => state.telemetry.totalDistanceMeters);
 
   useEffect(() => {
@@ -106,11 +118,15 @@ export function StartScreen({ onContinue, onNewGame }: StartScreenProps) {
               </div>
               <div>
                 <dt>Descubiertos</dt>
-                <dd>{discovered}/12</dd>
+                <dd>
+                  {discoveryProgress.completed}/{discoveryProgress.total}
+                </dd>
               </div>
               <div>
                 <dt>Misiones</dt>
-                <dd>{completed}/3</dd>
+                <dd>
+                  {missionProgress.completed}/{missionProgress.total}
+                </dd>
               </div>
               <div>
                 <dt>Recorrido</dt>
