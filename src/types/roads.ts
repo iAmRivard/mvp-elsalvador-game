@@ -10,7 +10,11 @@ export type RoadClass =
   | 'service'
   | 'track';
 
-export type RoadSurface = RoadClass | 'dirt-road' | 'offroad';
+export type RoadSurface =
+  | RoadClass
+  | 'dirt-road'
+  | 'road-unclassified'
+  | 'offroad';
 export type PlayableRoadSurface = Exclude<RoadSurface, 'offroad'>;
 
 export interface RoadNode {
@@ -52,4 +56,6 @@ export interface NearestRoadResult {
 export interface RoadContact {
   edge: RoadEdge;
   nearest: NearestRoadResult;
+  surface?: RoadSurface;
+  recovered?: boolean;
 }
