@@ -1,7 +1,6 @@
 import { fuelStationConfig } from '../../config/fuelStations.config';
 import { fuelStationById } from '../../data/fuelStations';
 import {
-  fuelAlertLevel,
   isFuelStationAvailable,
   isWithinFuelStationRange,
   nearestAvailableFuelStation,
@@ -53,12 +52,18 @@ export function FuelAssist() {
         }
       : null;
   const destination = selected ?? nearest;
-  const nearby =
-    nearest && isWithinFuelStationRange(nearest.distanceMeters)
-      ? nearest
-      : null;
-  const alertLevel = fuelAlertLevel(telemetry.fuel);
   const hasFuelRoute = navigationTarget?.kind === 'fuel-station';
+  const selectedNearby =
+    selected && isWithinFuelStationRange(selected.distanceMeters)
+      ? selected
+      : null;
+  const nearby =
+    selectedNearby ??
+    (!selected && nearest && isWithinFuelStationRange(nearest.distanceMeters)
+      ? nearest
+      : null);
+  const alertLevel =
+    telemetry.fuel < 20 ? 'critical' : telemetry.fuel <= 35 ? 'low' : null;
   const canRefuel =
     telemetry.speedKilometersPerHour <=
     fuelStationConfig.maximumRefuelSpeedKilometersPerHour;
@@ -85,7 +90,9 @@ export function FuelAssist() {
             disabled={!canRefuel}
             onClick={() => refuelAtStation(nearby.station.id)}
           >
-            {canRefuel ? 'Recargar' : 'Detente para recargar'}
+            {canRefuel
+              ? 'Recargar combustible'
+              : 'Detente para recargar combustible'}
           </button>
         </aside>
       );
@@ -105,7 +112,11 @@ export function FuelAssist() {
           onClick={() => refuelAtStation(nearby.station.id)}
         >
           <span aria-hidden="true">⛽</span>
-          <strong>{canRefuel ? 'Recargar' : 'Detente para recargar'}</strong>
+          <strong>
+            {canRefuel
+              ? 'Recargar combustible'
+              : 'Detente para recargar combustible'}
+          </strong>
           <small>· {nearby.station.name}</small>
         </button>
       </aside>
