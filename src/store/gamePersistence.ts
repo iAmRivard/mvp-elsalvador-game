@@ -19,7 +19,12 @@ import type {
 } from '../types/progression';
 
 export const GAME_SAVE_KEY = 'el-salvador-rutas-perdidas:save';
-export const GAME_SAVE_VERSION = 3;
+export const GAME_SAVE_VERSION = 4;
+
+export interface PersistedNavigationTarget {
+  kind: 'mission-start' | 'location' | 'fuel-station';
+  id: string;
+}
 
 export interface PersistedGameData {
   player: PlayerRuntime;
@@ -43,6 +48,7 @@ export interface PersistedGameData {
   currentChapterId: string;
   completedChapterIds: string[];
   roadNetworkVersion: number;
+  navigationTarget: PersistedNavigationTarget | null;
   isPaused: boolean;
   isFollowingPlayer: boolean;
 }
@@ -108,6 +114,22 @@ function validLocationIds(value: unknown): string[] {
 
 function validMissionIds(value: unknown): string[] {
   return stringArray(value).filter((id) => missionIds.has(id));
+}
+
+function sanitizedNavigationTarget(
+  value: unknown,
+): PersistedNavigationTarget | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    value.id.length === 0 ||
+    (value.kind !== 'mission-start' &&
+      value.kind !== 'location' &&
+      value.kind !== 'fuel-station')
+  ) {
+    return null;
+  }
+  return { kind: value.kind, id: value.id };
 }
 
 function validMissionChoiceSelections(value: unknown): Record<string, string> {
@@ -417,6 +439,7 @@ function sanitizeGame(value: unknown): PersistedGameData | null {
       1,
       Math.floor(finiteNumber(value.roadNetworkVersion, 1)),
     ),
+    navigationTarget: sanitizedNavigationTarget(value.navigationTarget),
     isPaused: value.isPaused === true,
     isFollowingPlayer: value.isFollowingPlayer !== false,
   };
@@ -518,7 +541,11 @@ export function parseGameSave(raw: string): LoadGameResult {
     };
   }
 
-  if (parsed.version === 1 || parsed.version === 2) {
+  if (
+    parsed.version === 1 ||
+    parsed.version === 2 ||
+    parsed.version === 3
+  ) {
     const game = sanitizeGame(
       parsed.version === 1
         ? expandVersionOneChapterProgress(parsed.game)
