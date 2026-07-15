@@ -775,6 +775,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             containerRef.current.dataset.playerSpeedKilometersPerHour = (
               Math.abs(player.speedMetersPerSecond) * 3.6
             ).toFixed(2);
+            containerRef.current.dataset.playerFuel = player.fuel.toFixed(1);
+            containerRef.current.dataset.vehicleCondition =
+              state.vehicle.condition.toFixed(1);
             containerRef.current.dataset.inputThrottle =
               inputDiagnostics.throttle.toFixed(3);
             containerRef.current.dataset.inputTurn =

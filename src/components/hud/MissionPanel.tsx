@@ -163,7 +163,7 @@ function MissionStartCard({
   );
 }
 
-export function MissionPanel() {
+function MissionPanelContent() {
   const panelRef = useRef<HTMLElement>(null);
   const panelCommitCount = useRef(0);
   const sheetCommitCount = useRef(0);
@@ -372,18 +372,8 @@ export function MissionPanel() {
         ) {
           return;
         }
-        if (state.activeMissionId) {
-          if (onboardingIsActive(state.onboardingState)) {
-            state.closeJournal();
-            autoCollapseAt.current = null;
-          } else {
-            state.openJournal('missions');
-            autoCollapseAt.current = performance.now() + 2_500;
-          }
-        } else {
-          autoCollapseAt.current = null;
-          state.closeJournal();
-        }
+        autoCollapseAt.current = null;
+        state.closeJournal();
       }),
     [compactViewport],
   );
@@ -428,6 +418,9 @@ export function MissionPanel() {
   const closeJournal = () => {
     autoCollapseAt.current = null;
     closeJournalStore();
+  };
+  const startMissionAndCloseJournal = (missionId: string) => {
+    if (startMission(missionId)) closeJournal();
   };
   const beginSheetDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!compactViewport || collapsed) return;
@@ -584,7 +577,7 @@ export function MissionPanel() {
               className="mission-button mission-button--primary"
               onClick={() => {
                 if (recommendedMission && recommendation?.canStartNow) {
-                  startMission(recommendedMission.id);
+                  startMissionAndCloseJournal(recommendedMission.id);
                 } else {
                   requestRouteRecalculation();
                 }
@@ -788,7 +781,9 @@ export function MissionPanel() {
                   mission={recommendedMission}
                   canStartNow={recommendation.canStartNow}
                   distanceToStartMeters={recommendation.distanceToStartMeters}
-                  onStart={() => startMission(recommendedMission.id)}
+                  onStart={() =>
+                    startMissionAndCloseJournal(recommendedMission.id)
+                  }
                   onNavigate={requestRouteRecalculation}
                 />
               )}
@@ -814,7 +809,9 @@ export function MissionPanel() {
                         <button
                           type="button"
                           className="mission-button"
-                          onClick={() => startMission(mission.id)}
+                          onClick={() =>
+                            startMissionAndCloseJournal(mission.id)
+                          }
                         >
                           Iniciar opcional
                         </button>
@@ -867,4 +864,25 @@ export function MissionPanel() {
       )}
     </aside>
   );
+}
+
+export function MissionPanel() {
+  const [compactViewport, setCompactViewport] = useState(isCompactViewport);
+  const isJournalOpen = useGameStore((state) => state.isJournalOpen);
+  const presentationMode = useGameStore((state) => state.presentationMode);
+
+  useEffect(() => {
+    const compactQuery = window.matchMedia(compactViewportQuery);
+    const handleCompactChange = (event: MediaQueryListEvent) =>
+      setCompactViewport(event.matches);
+    compactQuery.addEventListener('change', handleCompactChange);
+    return () =>
+      compactQuery.removeEventListener('change', handleCompactChange);
+  }, []);
+
+  if (compactViewport && !isJournalOpen && presentationMode !== 'stopped') {
+    return null;
+  }
+
+  return <MissionPanelContent />;
 }

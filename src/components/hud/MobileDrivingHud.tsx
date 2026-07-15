@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { missionById } from '../../data/missions';
 import { nearestPendingObjective } from '../../game/missions';
 import { formatNavigationInstruction } from '../../map/navigationInstructions';
@@ -31,19 +31,32 @@ function maneuverSymbol(type: NavigationInstructionType): string {
   }
 }
 
+function readHudSnapshot() {
+  const state = useGameStore.getState();
+  return {
+    presentationMode: state.presentationMode,
+    telemetry: state.telemetry,
+    vehicleCondition: state.vehicle.condition,
+    activeMissionId: state.activeMissionId,
+    completedObjectiveIds: state.activeMissionCompletedObjectiveIds,
+    route: state.missionRoute,
+    countdown: state.missionTimerCountdownSeconds,
+  };
+}
+
 function MobileDrivingHudContent() {
   const hudRef = useRef<HTMLElement>(null);
   const renderCount = useRef(0);
-  const presentationMode = useGameStore((state) => state.presentationMode);
-  const telemetry = useGameStore((state) => state.telemetry);
-  const vehicle = useGameStore((state) => state.vehicle);
-  const activeMissionId = useGameStore((state) => state.activeMissionId);
-  const completedObjectiveIds = useGameStore(
-    (state) => state.activeMissionCompletedObjectiveIds,
-  );
-  const route = useGameStore((state) => state.missionRoute);
-  const countdown = useGameStore((state) => state.missionTimerCountdownSeconds);
-  const requestStoryLog = useGameStore((state) => state.requestStoryLog);
+  const [snapshot, setSnapshot] = useState(readHudSnapshot);
+  const {
+    presentationMode,
+    telemetry,
+    vehicleCondition,
+    activeMissionId,
+    completedObjectiveIds,
+    route,
+    countdown,
+  } = snapshot;
   const mission = activeMissionId ? missionById.get(activeMissionId) : null;
   const next = mission
     ? nearestPendingObjective(mission, completedObjectiveIds, [
@@ -57,6 +70,14 @@ function MobileDrivingHudContent() {
       hudRef.current.dataset.renderCount = String(renderCount.current);
     }
   });
+
+  useEffect(() => {
+    const interval = window.setInterval(
+      () => setSnapshot(readHudSnapshot()),
+      200,
+    );
+    return () => window.clearInterval(interval);
+  }, []);
 
   const reversing = vehicleIsReversing(telemetry.speedMetersPerSecond);
 
@@ -88,7 +109,7 @@ function MobileDrivingHudContent() {
         type="button"
         className="mobile-driving-hud__navigation"
         aria-label="Abrir bitácora de la misión"
-        onClick={() => requestStoryLog('missions')}
+        onClick={() => useGameStore.getState().requestStoryLog('missions')}
       >
         <span className="mobile-driving-hud__maneuver" aria-hidden="true">
           {reversing ? '↓' : maneuverSymbol(instructionType)}
@@ -111,9 +132,9 @@ function MobileDrivingHudContent() {
           ⛽ {telemetry.fuel.toFixed(0)}%
         </span>
         <span
-          aria-label={`Condición ${vehicle.condition.toFixed(0)} por ciento`}
+          aria-label={`Condición ${vehicleCondition.toFixed(0)} por ciento`}
         >
-          🔧 {vehicle.condition.toFixed(0)}%
+          🔧 {vehicleCondition.toFixed(0)}%
         </span>
         {countdown > 0 && <span>⏱ {Math.ceil(countdown)} s</span>}
       </div>

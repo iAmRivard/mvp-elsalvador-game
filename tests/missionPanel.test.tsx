@@ -29,7 +29,7 @@ describe('CTA móvil de misión', () => {
     cleanup();
   });
 
-  it('muestra el resumen y lo colapsa al moverse tras 2.5 segundos', () => {
+  it('muestra el resumen y mantiene cerrada la bitácora al iniciar', () => {
     vi.useFakeTimers();
     render(<MissionPanel />);
 
@@ -40,34 +40,8 @@ describe('CTA móvil de misión', () => {
     act(() => {
       useGameStore.setState({ activeMissionId: 'la-transmision' });
     });
-    expect(
-      screen
-        .getByLabelText('Panel de misiones')
-        .getAttribute('data-mobile-sheet-state'),
-    ).toBe('half');
-    expect(
-      screen.getByRole('button', { name: 'Cerrar bitácora' }),
-    ).toBeTruthy();
-    expect(useGameStore.getState().isJournalOpen).toBe(true);
-    expect(screen.queryByText('Continuar misión')).toBeNull();
-
-    act(() => {
-      vi.advanceTimersByTime(2_600);
-      useGameStore.setState((state) => ({
-        telemetry: {
-          ...state.telemetry,
-          speedMetersPerSecond: 2,
-          speedKilometersPerHour: 7.2,
-        },
-      }));
-    });
-    expect(screen.getByTestId('mobile-mini-navigator')).toBeTruthy();
+    expect(screen.queryByLabelText('Panel de misiones')).toBeNull();
     expect(useGameStore.getState().isJournalOpen).toBe(false);
-    expect(
-      screen.getByRole('button', {
-        name: 'Ver objetivo de La transmisión',
-      }),
-    ).toBeTruthy();
     expect(screen.queryByText('Continuar misión')).toBeNull();
   });
 
@@ -75,11 +49,8 @@ describe('CTA móvil de misión', () => {
     useGameStore.setState({ activeMissionId: 'la-transmision' });
     render(<MissionPanel />);
 
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Ver objetivo de La transmisión',
-      }),
-    );
+    expect(screen.queryByLabelText('Panel de misiones')).toBeNull();
+    act(() => useGameStore.getState().openJournal('missions'));
     const panel = screen.getByLabelText('Panel de misiones');
     expect(panel.getAttribute('data-mobile-sheet-state')).toBe('half');
     expect(panel.classList.contains('mission-panel--journal-sheet')).toBe(true);
@@ -95,8 +66,7 @@ describe('CTA móvil de misión', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar bitácora' }));
-    expect(panel.getAttribute('data-mobile-sheet-state')).toBe('compact');
-    expect(screen.getByTestId('mobile-mini-navigator')).toBeTruthy();
+    expect(screen.queryByLabelText('Panel de misiones')).toBeNull();
     expect(useGameStore.getState().isJournalOpen).toBe(false);
   });
 
@@ -105,6 +75,8 @@ describe('CTA móvil de misión', () => {
       activeMissionId: 'la-transmision',
       telemetry: {
         ...state.telemetry,
+        longitude: -89.5,
+        latitude: 13.9,
         speedMetersPerSecond: -1,
         speedKilometersPerHour: 3.6,
       },
@@ -174,9 +146,9 @@ describe('CTA móvil de misión', () => {
         onboardingState: 'completed',
         activeMissionId: 'la-transmision',
       });
+      useGameStore.getState().openJournal('missions');
     });
     rerender(<MissionPanel />);
-    expect(screen.getByRole('button', { name: 'Escuchar señal' })).toBeTruthy();
     expect(
       screen
         .getByLabelText('Panel de misiones')

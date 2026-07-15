@@ -106,5 +106,6 @@ function RadioMessageContent() {
 
 export function RadioMessageOverlay() {
   const isJournalOpen = useGameStore((state) => state.isJournalOpen);
-  return isJournalOpen ? null : <RadioMessageContent />;
+  const activeRadioEventId = useGameStore((state) => state.activeRadioEventId);
+  return isJournalOpen || !activeRadioEventId ? null : <RadioMessageContent />;
 }

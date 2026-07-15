@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import { GAME_SAVE_KEY } from '../src/store/gamePersistence';
+import {
+  GAME_SAVE_KEY,
+  type GameSaveEnvelope,
+} from '../src/store/gamePersistence';
 import { useGameStore } from '../src/store/gameStore';
 
 describe('estado global de onboarding y diario', () => {
@@ -25,7 +28,11 @@ describe('estado global de onboarding y diario', () => {
     useGameStore.getState().openJournal('transmissions');
     expect(useGameStore.getState().saveGame()).toBe(true);
 
-    const envelope = JSON.parse(window.localStorage.getItem(GAME_SAVE_KEY)!);
+    const envelope = JSON.parse(
+      window.localStorage.getItem(GAME_SAVE_KEY)!,
+    ) as GameSaveEnvelope & {
+      game: GameSaveEnvelope['game'] & { isJournalOpen?: unknown };
+    };
     expect(envelope.game.onboardingState).toBe('interaction-basics');
     expect(envelope.game.isJournalOpen).toBeUndefined();
 

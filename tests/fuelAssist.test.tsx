@@ -30,7 +30,7 @@ describe('asistencia visible de combustible', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('muestra una estación discreta entre 20% y 35%', () => {
+  it('muestra una estación discreta entre 25% y 35%', () => {
     useGameStore.setState((state) => ({
       telemetry: { ...state.telemetry, fuel: 30 },
       vehicle: { ...state.vehicle, fuel: 30 },
@@ -46,7 +46,7 @@ describe('asistencia visible de combustible', () => {
     });
   });
 
-  it('muestra CTA prominente bajo 20% y permite usar un bidón', () => {
+  it('muestra CTA prominente bajo 25% y permite usar un bidón', () => {
     useGameStore.setState((state) => ({
       telemetry: { ...state.telemetry, fuel: 19 },
       vehicle: { ...state.vehicle, fuel: 19 },
@@ -158,10 +158,10 @@ describe('asistencia visible de combustible', () => {
     });
   });
 
-  it('mantiene 20% en la banda discreta, no en la alerta prominente', () => {
+  it('mantiene 25% en la banda discreta, no en la alerta prominente', () => {
     useGameStore.setState((state) => ({
-      telemetry: { ...state.telemetry, fuel: 20 },
-      vehicle: { ...state.vehicle, fuel: 20 },
+      telemetry: { ...state.telemetry, fuel: 25 },
+      vehicle: { ...state.vehicle, fuel: 25 },
     }));
     render(<FuelAssist />);
 

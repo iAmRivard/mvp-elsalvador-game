@@ -114,11 +114,19 @@ function rectanglesOverlap(
   );
 }
 
-test('oculta asistencia extra con 75% de combustible', async ({ page }) => {
+test('oculta asistencia extra con 75% de combustible', async ({
+  page,
+}, testInfo) => {
   await openSavedGame(page, initialPosition, 75);
 
   await expect(page.getByTestId('fuel-assist')).toHaveCount(0);
-  await expect(page.locator('.fuel-readout__header strong')).toHaveText('75.0%');
+  if (testInfo.project.name === 'chromium-desktop') {
+    await expect(page.locator('.fuel-readout__header strong')).toHaveText(
+      '75.0%',
+    );
+  } else {
+    await expect(page.getByLabel('Combustible 75 por ciento')).toBeVisible();
+  }
 });
 
 test('muestra estación discreta y distancia con 30%', async ({ page }) => {
@@ -195,7 +203,7 @@ test('marca una ruta vial real hacia la estación desde 20%', async ({
 
 test('recarga en el marcador y recupera la ruta de misión', async ({
   page,
-}) => {
+}, testInfo) => {
   await openSavedGame(page, capitalStation, 18);
   const map = page.getByTestId('game-map');
 
@@ -212,9 +220,13 @@ test('recarga en el marcador y recupera la ruta de misión', async ({
   );
 
   await page.getByRole('button', { name: 'Recargar' }).click();
-  await expect(page.locator('.fuel-readout__header strong')).toHaveText(
-    '63.0%',
-  );
+  if (testInfo.project.name === 'chromium-desktop') {
+    await expect(page.locator('.fuel-readout__header strong')).toHaveText(
+      '63.0%',
+    );
+  } else {
+    await expect(page.getByLabel('Combustible 63 por ciento')).toBeVisible();
+  }
   await expect(map).toHaveAttribute(
     'data-navigation-target-kind',
     'mission-objective',

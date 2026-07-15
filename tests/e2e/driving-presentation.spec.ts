@@ -7,6 +7,7 @@ interface ViewportCase {
 }
 
 const viewports: ViewportCase[] = [
+  { name: 'reference-392', width: 392, height: 850 },
   { name: 'portrait', width: 412, height: 850 },
   { name: 'landscape', width: 850, height: 412 },
   { name: 'tablet', width: 768, height: 1_024 },
@@ -17,6 +18,10 @@ async function enterExpedition(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
   await page.getByRole('button', { name: 'Omitir' }).click();
+  const beginMission = page.getByRole('button', {
+    name: /Comenzar investigación/,
+  });
+  if (await beginMission.isVisible()) await beginMission.click();
   await expect(page.getByTestId('game-map')).toHaveAttribute(
     'data-road-network-status',
     /ready|unavailable/,

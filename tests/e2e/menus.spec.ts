@@ -34,6 +34,7 @@ test('recorre inicio, tutorial, pausa y configuración', async ({
     page.getByText('Realiza la acción para continuar'),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Omitir' }).click();
+  await page.getByRole('button', { name: /Comenzar investigación/ }).click();
 
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,

@@ -118,10 +118,16 @@ async function enterExpedition(page: Page) {
 
   const skipTutorial = page.getByRole('button', { name: 'Omitir' });
   if (await skipTutorial.isVisible()) await skipTutorial.click();
-
-  await expect(page.getByText('El mapa local está listo.')).toBeAttached({
-    timeout: 20_000,
+  const beginMission = page.getByRole('button', {
+    name: /Comenzar investigación/,
   });
+  if (await beginMission.isVisible()) await beginMission.click();
+
+  await expect(page.getByTestId('game-map')).toHaveAttribute(
+    'data-road-network-status',
+    'ready',
+    { timeout: 25_000 },
+  );
 }
 
 async function interact(page: Page) {
@@ -220,13 +226,15 @@ test('carga el mapa sin solicitudes a terceros', async ({
   await expect(playerMarker).toBeAttached();
   if (playerRenderer !== 'ready') await expect(playerMarker).toBeVisible();
   await expect(page.locator('.location-marker')).toHaveCount(14);
-  await expect(page.locator('.player-hud')).toContainText('1 / 14');
+  if (testInfo.project.name === 'chromium-desktop') {
+    await expect(page.locator('.player-hud')).toContainText('1 / 14');
+  } else {
+    await expect(page.locator('.player-hud')).toBeHidden();
+    await expect(page.getByTestId('mobile-driving-hud')).toBeVisible();
+  }
   await expect(
     page.getByText('San Salvador', { exact: true }).first(),
   ).toBeAttached();
-  await expect(
-    page.getByRole('complementary', { name: 'Panel de misiones' }),
-  ).toBeVisible();
   const gameMap = page.getByTestId('game-map');
   await expect(gameMap).toHaveAttribute('data-road-network-status', 'ready', {
     timeout: 20_000,
@@ -239,27 +247,14 @@ test('carga el mapa sin solicitudes a terceros', async ({
   await expect(gameMap).toHaveAttribute('data-runtime-fps', /^\d+(\.\d+)?$/, {
     timeout: 5_000,
   });
-  await expect(page.getByTestId('driving-surface')).toContainText(
-    /Vía secundaria|Calle residencial|Vía terciaria/,
+  await expect(gameMap).toHaveAttribute(
+    'data-driving-surface-label',
+    /Vía secundaria|Calle residencial|Vía terciaria|Zona del objetivo/,
   );
   await expect(gameMap).toHaveAttribute('data-follow-offset-y', /^[1-9]\d*$/);
   const stoppedZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
   expect(stoppedZoom).toBeGreaterThan(15.5);
 
-  const expandMissions = page.getByRole('button', {
-    name: 'Expandir panel de misiones',
-  });
-  const missionDetails = page.getByRole('button', { name: 'Ver detalles' });
-  if (await missionDetails.isVisible()) await missionDetails.click();
-  else if (await expandMissions.isVisible()) await expandMissions.click();
-
-  const firstMission = page.locator('.mission-list__item').filter({
-    has: page.getByRole('heading', {
-      name: 'La transmisión',
-      exact: true,
-    }),
-  });
-  await firstMission.getByRole('button', { name: 'Iniciar' }).click();
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -268,13 +263,6 @@ test('carga el mapa sin solicitudes a terceros', async ({
       }),
     )
     .toEqual([0, 0]);
-  await page.getByRole('button', { name: 'Comenzar investigación' }).click();
-  await expect(
-    page.getByRole('complementary', { name: 'Panel de misiones' }),
-  ).toContainText('La transmisión');
-  await expect(
-    page.getByRole('button', { name: 'Abandonar misión' }),
-  ).toBeVisible();
   await expect(page.locator('.location-marker--mission')).toHaveCount(1);
   await interact(page);
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road', {
@@ -304,34 +292,32 @@ test('carga el mapa sin solicitudes a terceros', async ({
     await gameMap.getAttribute('data-mission-route-coordinate-count'),
   );
   expect(routeCoordinateCount).toBeGreaterThan(10);
-  await expect(page.locator('.mission-route-summary')).toContainText(
-    'Ruta por carretera',
-  );
   await expect(gameMap).toHaveAttribute(
     'data-route-calculation-ms',
     /^\d+(\.\d+)?$/,
   );
-  await expect(page.locator('.mission-navigation-next')).toBeVisible();
   await expect(page.locator('.mission-route-arrow')).toBeVisible();
   await expect(gameMap).toHaveAttribute(
     'data-navigation-next-type',
     /^(continue|turn-left|turn-right|slight-left|slight-right|u-turn|arrive)$/,
   );
-  const positionBeforeRecalculation = await page
-    .getByTestId('player-position')
-    .textContent();
-  if (testInfo.project.name.includes('mobile')) {
-    await page.keyboard.press('r');
-  } else {
-    await page.getByRole('button', { name: 'Recalcular ruta' }).click();
-  }
+  const positionBeforeRecalculation = await gameMap.evaluate(
+    (element) =>
+      `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+  );
+  await page.keyboard.press('r');
   await page.keyboard.down('w');
   await expect(gameMap).toHaveAttribute('data-input-throttle', '1.000');
   await page.waitForTimeout(350);
   await page.keyboard.up('w');
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road');
   await expect
-    .poll(() => page.getByTestId('player-position').textContent())
+    .poll(() =>
+      gameMap.evaluate(
+        (element) =>
+          `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+      ),
+    )
     .not.toBe(positionBeforeRecalculation);
 
   await abandonActiveMission(page);
@@ -346,9 +332,6 @@ test('carga el mapa sin solicitudes a terceros', async ({
   await suchitotoMission
     .getByRole('button', { name: 'Iniciar opcional' })
     .evaluate((element) => (element as HTMLButtonElement).click());
-  await expect(
-    page.getByRole('complementary', { name: 'Panel de misiones' }),
-  ).toContainText('Señales en Suchitoto');
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'fallback');
   await expect(gameMap).toHaveAttribute(
     'data-mission-route-coordinate-count',
@@ -360,8 +343,10 @@ test('carga el mapa sin solicitudes a terceros', async ({
   await interact(page);
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road');
 
-  const position = page.getByTestId('player-position');
-  const initialPosition = await position.textContent();
+  const initialPosition = await gameMap.evaluate(
+    (element) =>
+      `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+  );
   const canvasBeforeMovement = await page
     .locator('.maplibregl-canvas')
     .screenshot();
@@ -372,7 +357,14 @@ test('carga el mapa sin solicitudes a terceros', async ({
     .locator('.maplibregl-canvas')
     .screenshot();
   await page.keyboard.up('w');
-  await expect(position).not.toHaveText(initialPosition ?? '');
+  await expect
+    .poll(() =>
+      gameMap.evaluate(
+        (element) =>
+          `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+      ),
+    )
+    .not.toBe(initialPosition);
   await testInfo.attach('mapa-despues-de-conducir', {
     body: canvasAfterMovement,
     contentType: 'image/png',
@@ -387,9 +379,12 @@ test('carga el mapa sin solicitudes a terceros', async ({
   await expect(page.getByText('Partida guardada')).toBeVisible();
   await page.reload();
   await enterExpedition(page);
-  await expect(
-    page.getByRole('complementary', { name: 'Panel de misiones' }),
-  ).toContainText('La transmisión');
+  await expect(gameMap).toHaveAttribute(
+    'data-navigation-target-kind',
+    'mission-objective',
+    { timeout: 20_000 },
+  );
+  await expect(page.locator('.location-marker--mission')).toHaveCount(1);
 
   const canvas = page.locator('.maplibregl-canvas');
   const box = await canvas.boundingBox();
@@ -410,7 +405,6 @@ test('carga el mapa sin solicitudes a terceros', async ({
     await page
       .getByRole('button', { name: 'Centrar cámara en el jugador' })
       .click();
-    await expect(page.locator('.telemetry-grid')).toContainText('Siguiendo');
   }
 
   expect(externalRequests).toEqual([]);

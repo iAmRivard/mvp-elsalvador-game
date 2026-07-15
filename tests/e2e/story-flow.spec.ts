@@ -85,6 +85,11 @@ async function pressInteraction(page: Page, holdMilliseconds = 35) {
 }
 
 async function startFirstMission(page: Page) {
+  if (
+    await page.getByRole('dialog', { name: 'Una señal de auxilio' }).isVisible()
+  ) {
+    return;
+  }
   const compactStart = page.getByRole('button', { name: 'Iniciar misión' });
   if (await compactStart.isVisible()) {
     await compactStart.click();
@@ -108,7 +113,7 @@ function rectanglesOverlap(
 test('guía la historia hasta la ruta cronometrada y conserva la decisión', async ({
   page,
   baseURL,
-}) => {
+}, testInfo) => {
   test.setTimeout(90_000);
   const applicationOrigin = new URL(baseURL ?? 'http://127.0.0.1:4173').origin;
   const externalRequests: string[] = [];
@@ -159,6 +164,8 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
+  const skipTutorial = page.getByRole('button', { name: 'Omitir' });
+  if (await skipTutorial.isVisible()) await skipTutorial.click();
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,
   });
@@ -252,7 +259,11 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
   ).not.toBe(routeCountBefore);
 
   const timerBox = await timer.boundingBox();
-  const hudBox = await page.locator('.player-hud').boundingBox();
+  const hudBox = await (
+    testInfo.project.name === 'chromium-desktop'
+      ? page.locator('.player-hud')
+      : page.locator('.player-hud, [data-testid="mobile-driving-hud"]').first()
+  ).boundingBox();
   const viewport = page.viewportSize();
   expect(timerBox).not.toBeNull();
   expect(hudBox).not.toBeNull();
@@ -263,17 +274,12 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
   expect(timerBox!.x + timerBox!.width).toBeLessThanOrEqual(viewport!.width);
   expect(timerBox!.y + timerBox!.height).toBeLessThanOrEqual(viewport!.height);
 
-  const fuelReadout = page.locator('.fuel-readout__header strong');
-  const fuelBefore = Number.parseFloat(
-    (await fuelReadout.textContent()) ?? '0',
-  );
+  const fuelBefore = Number(await gameMap.getAttribute('data-player-fuel'));
   await page.keyboard.down('w');
   await page.waitForTimeout(3_000);
   await page.keyboard.up('w');
   await expect
-    .poll(async () =>
-      Number.parseFloat((await fuelReadout.textContent()) ?? '0'),
-    )
+    .poll(async () => Number(await gameMap.getAttribute('data-player-fuel')))
     .toBeLessThan(fuelBefore);
 
   await page.getByRole('button', { name: 'Partida y guardado' }).click();
@@ -304,7 +310,7 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
     };
   }, saveKey);
   expect(persisted).toMatchObject({
-    version: 4,
+    version: 5,
     activeMissionId: 'camino-hacia-santa-ana',
     selectedRoute: 'north',
   });

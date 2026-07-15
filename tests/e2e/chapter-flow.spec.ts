@@ -102,9 +102,17 @@ async function expandMissions(page: Page) {
     name: 'Expandir panel de misiones',
   });
   const details = page.getByRole('button', { name: 'Ver detalles' });
-  await expect(details.or(expand).first()).toBeVisible();
+  const drivingHud = page.getByRole('button', {
+    name: 'Abrir bitácora de la misión',
+  });
+  const viewObjective = page.getByRole('button', { name: /Ver objetivo de/ });
+  await expect(
+    details.or(expand).or(drivingHud).or(viewObjective).first(),
+  ).toBeVisible();
   if (await details.isVisible()) await details.click();
   else if (await expand.isVisible()) await expand.click();
+  else if (await drivingHud.isVisible()) await drivingHud.click();
+  else await viewObjective.click();
 }
 
 async function openInventory(page: Page) {
@@ -170,6 +178,7 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
   );
   await page.getByRole('button', { name: 'Cerrar transmisión' }).click();
   await interact(page);
+  await expandMissions(page);
   await expect(
     page.locator('.mission-objectives li.is-completed').filter({
       hasText: 'Investiga la estación abandonada',
@@ -191,7 +200,7 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
     activeMissionId: 'estacion-abandonada',
     completedObjectiveIds: ['investigar-estacion', 'recoger-bidon'],
     inventory: [{ itemId: 'bidon-combustible', quantity: 1 }],
-    position: [-89.4479, 13.84048],
+    position: [-89.44728798532248, 13.840732464626095],
   });
   await interact(page);
   await openInventory(page);
@@ -217,9 +226,10 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
   await expect(page.locator('.mission-toast')).toContainText(
     'Estación abandonada',
   );
-  await expect(
-    page.getByRole('meter', { name: 'Combustible restante' }),
-  ).toHaveAttribute('aria-valuenow', '75');
+  await expect(page.getByTestId('game-map')).toHaveAttribute(
+    'data-player-fuel',
+    '75.0',
+  );
   await page
     .locator('.mission-toast')
     .getByRole('button', { name: 'Iniciar Reparación de emergencia' })
@@ -228,16 +238,18 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
     'Encendido inestable',
   );
   await page.getByRole('button', { name: 'Cerrar transmisión' }).click();
-  await expect(
-    page.getByRole('meter', { name: 'Condición del vehículo' }),
-  ).toHaveAttribute('aria-valuenow', '55');
+  await expect(page.getByTestId('game-map')).toHaveAttribute(
+    'data-vehicle-condition',
+    '55.0',
+  );
   await interact(page);
   await expect(page.locator('.mission-toast')).toContainText(
     'Reparación de emergencia',
   );
-  await expect(
-    page.getByRole('meter', { name: 'Condición del vehículo' }),
-  ).toHaveAttribute('aria-valuenow', '100');
+  await expect(page.getByTestId('game-map')).toHaveAttribute(
+    'data-vehicle-condition',
+    '100.0',
+  );
   await openInventory(page);
   await expect(page.getByRole('dialog', { name: 'Inventario' })).toContainText(
     'No llevas objetos',

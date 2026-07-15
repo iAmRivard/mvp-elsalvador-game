@@ -4444,7 +4444,7 @@ html[data-tutorial-target='objective'] .map-canvas {
   .mission-timer,
   .mission-countdown {
     top: max(54px, calc(env(safe-area-inset-top) + 48px));
-    left: max(230px, calc(env(safe-area-inset-left) + 226px));
+    left: max(248px, calc(env(safe-area-inset-left) + 244px));
     width: 160px;
     min-height: 74px;
     padding: 6px 8px;
@@ -4799,7 +4799,8 @@ html[data-fullscreen='true'] .game-shell {
 
   .game-shell--driving .mission-panel--collapsed,
   .game-shell--fast .mission-panel--collapsed,
-  .game-shell--alert .mission-panel--collapsed {
+  .game-shell--alert .mission-panel--collapsed,
+  .game-shell--interaction .mission-panel--collapsed {
     display: none;
   }
 
@@ -6744,7 +6745,8 @@ html[data-reduced-motion='true'] *::after {
 
   .game-shell--driving .mission-panel--collapsed,
   .game-shell--fast .mission-panel--collapsed,
-  .game-shell--alert .mission-panel--collapsed {
+  .game-shell--alert .mission-panel--collapsed,
+  .game-shell--interaction .mission-panel--collapsed {
     display: none;
   }
 

@@ -55,10 +55,7 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
   await expect(
     page.getByRole('button', { name: 'Pausar partida' }).last(),
   ).toBeVisible();
-  await expect(page.locator('.mission-panel')).toHaveAttribute(
-    'data-mobile-sheet-state',
-    'compact',
-  );
+  await expect(page.locator('.mission-panel')).toHaveCount(0);
   await expect(page.getByText('Rutas Perdidas', { exact: true })).toBeVisible();
   await expect(
     page.getByText('El Salvador: Rutas Perdidas', { exact: true }),
@@ -72,7 +69,7 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
   await page.getByRole('button', { name: 'Partida y guardado' }).click();
 
   const hudBox = await page.getByTestId('mobile-driving-hud').boundingBox();
-  const missionBox = await page.locator('.mission-panel').boundingBox();
+  await expect(page.locator('.mission-panel')).toBeHidden();
   const joystickBox = await page
     .getByLabel('Joystick de velocidad objetivo')
     .boundingBox();
@@ -85,27 +82,18 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
     .locator('.maplibregl-ctrl-attrib-button')
     .boundingBox();
   expect(hudBox).not.toBeNull();
-  expect(missionBox).not.toBeNull();
   expect(joystickBox).not.toBeNull();
   expect(actionsBox).not.toBeNull();
   expect(attributionBox).not.toBeNull();
-  expect(rectanglesOverlap(hudBox!, missionBox!)).toBe(false);
   expect(rectanglesOverlap(hudBox!, joystickBox!)).toBe(false);
-  expect(rectanglesOverlap(missionBox!, actionsBox!)).toBe(false);
   expect(rectanglesOverlap(joystickBox!, actionsBox!)).toBe(false);
-  for (const box of [hudBox!, missionBox!, joystickBox!, actionsBox!]) {
+  for (const box of [hudBox!, joystickBox!, actionsBox!]) {
     expect(rectanglesOverlap(attributionBox!, box)).toBe(false);
   }
 
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
-  for (const box of [
-    hudBox!,
-    missionBox!,
-    joystickBox!,
-    actionsBox!,
-    attributionBox!,
-  ]) {
+  for (const box of [hudBox!, joystickBox!, actionsBox!, attributionBox!]) {
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.y).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(viewport!.width);
@@ -179,10 +167,7 @@ test('colapsa la misión, usa bottom sheet y pausa la guía en reversa', async (
   await page.goto('/');
   await enterExpedition(page);
   const missionPanel = page.locator('.mission-panel');
-  await expect(missionPanel).toHaveAttribute(
-    'data-mobile-sheet-state',
-    'compact',
-  );
+  await expect(missionPanel).toHaveCount(0);
   await expect(page.getByText('Continuar misión', { exact: true })).toHaveCount(
     0,
   );
@@ -256,15 +241,7 @@ test('colapsa la misión, usa bottom sheet y pausa la guía en reversa', async (
   const miniNavigator = page.getByTestId('mobile-mini-navigator');
   await expect(drivingHud).toBeVisible({ timeout: 6_000 });
   await expect(miniNavigator).toBeHidden();
-  await expect(missionPanel).toHaveAttribute(
-    'data-mobile-sheet-state',
-    'compact',
-  );
-  await expect(missionPanel).toHaveAttribute('data-render-count', /^\d+$/);
-  await expect(missionPanel).toHaveAttribute(
-    'data-sheet-render-count',
-    /^\d+$/,
-  );
+  await expect(missionPanel).toHaveCount(0);
   await expect(drivingHud).toContainText('Sigue la señal');
   await expect(drivingHud).toContainText('km/h');
 
@@ -293,6 +270,11 @@ test('colapsa la misión, usa bottom sheet y pausa la guía en reversa', async (
   );
   await drivingHud.locator('button').click();
   await expect(missionPanel).toHaveAttribute('data-mobile-sheet-state', 'half');
+  await expect(missionPanel).toHaveAttribute('data-render-count', /^\d+$/);
+  await expect(missionPanel).toHaveAttribute(
+    'data-sheet-render-count',
+    /^\d+$/,
+  );
   await expect(page.getByLabel('Joystick de velocidad objetivo')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Turbo' })).toBeHidden();
   await expect(gameMap).toHaveAttribute('data-input-throttle', '0.000');

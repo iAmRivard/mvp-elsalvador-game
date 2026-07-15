@@ -63,7 +63,11 @@ export function FuelAssist() {
       ? nearest
       : null);
   const alertLevel =
-    telemetry.fuel < 20 ? 'critical' : telemetry.fuel <= 35 ? 'low' : null;
+    telemetry.fuel < fuelStationConfig.criticalFuelThreshold
+      ? 'critical'
+      : telemetry.fuel <= 35
+        ? 'low'
+        : null;
   const canRefuel =
     telemetry.speedKilometersPerHour <=
     fuelStationConfig.maximumRefuelSpeedKilometersPerHour;
