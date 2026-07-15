@@ -1,7 +1,7 @@
 # El Salvador: Rutas Perdidas
 
 Videojuego web de conducción y exploración sobre una cartografía estilizada de El Salvador. La
-v0.2.5 incluye mapa MapLibre 2.5D autónomo, presentación dinámica de conducción, navegación sincronizada, velocidad objetivo móvil,
+v0.2.5.1 incluye mapa MapLibre 2.5D autónomo, onboarding integrado, presentación dinámica de conducción, navegación sincronizada, velocidad objetivo móvil,
 red vial local con caminos de tierra, rutas A* en Web Worker, historia guiada, estaciones de
 combustible, música local, vehículo y referencias 3D, progreso, Docker y despliegue en Dokploy.
 
@@ -36,12 +36,12 @@ Abre la dirección que muestra Vite. El mapa permite zoom, rotación, inclinaci�
   Turbo por toque, acción contextual, pausa y recentrado.
 
 Las instalaciones nuevas usan **Velocidad objetivo**: arriba eleva el objetivo hasta 90 km/h, el
-centro mantiene la marcha y el eje horizontal gira sin cambiarla. Abajo reduce el objetivo, frena
-hasta cero y sólo activa reversa tras permanecer 350 ms detenido. **Joystick único** con throttle
+centro mantiene la marcha y el eje horizontal gira sin cambiarla. Abajo reduce el objetivo y frena
+hasta cero; para activar reversa hay que soltar y volver a bajar durante 550 ms. **Joystick único** con throttle
 continuo, **Joystick + crucero**, **Joystick + pedales** y **Botones clásicos** siguen disponibles
 sin sobrescribir preferencias existentes. Turbo dura 2.5 segundos, enfría 1.8 segundos y al terminar
 vuelve al objetivo previo. Pausar, perder foco, cambiar orientación, abrir un diálogo o iniciar
-recuperación cancela el objetivo por seguridad.
+recuperación neutraliza las entradas. La bitácora conserva el objetivo elegido al cerrar.
 
 El vehículo inicia en San Salvador. La cámara se acerca al detenerse, se abre de forma progresiva
 con la velocidad y coloca el vehículo debajo del centro para mostrar más camino por delante. Una
@@ -67,7 +67,8 @@ Los dos modelos son locales, pesan menos de 40 KiB cada uno y pueden reconstruir
 ## Inicio, pausa y configuración
 
 La pantalla inicial permite continuar el progreso local o comenzar una partida nueva con
-confirmación. La primera expedición muestra un tutorial breve; luego puede repetirse desde la
+confirmación. La primera expedición inicia **La transmisión** y muestra nueve instrucciones
+contextuales que avanzan al realizar cada acción; luego puede repetirse desde la
 configuración. Al pausar con `Escape` o `Ⅱ` se puede continuar, guardar, ajustar la presentación o
 volver al inicio.
 
@@ -151,7 +152,7 @@ condición, inventario, checkpoints, progreso de objetivos, descubrimientos, mis
 El botón `▤` abre el inventario y `▣` permite guardar, cargar o reiniciar con confirmación. Si se
 agota el combustible, la condición llega a cero o falla un objetivo con tiempo, se puede reintentar,
 volver a un lugar seguro o abandonar la misión. Una condición `0` válida se conserva y abre
-recuperación; sólo un campo ausente o inválido migra a `100`. El formato v4 conserva la identidad de
+recuperación; sólo un campo ausente o inválido migra a `100`. El formato v5 conserva el onboarding y la identidad de
 la ruta temporal, valida el destino y recalcula A* al cargar; migra partidas v1–v3 sin reemplazar su
 combustible. Consulta
 `docs/architecture/save-format.md` y `docs/gameplay/progression-systems.md`.
@@ -171,7 +172,7 @@ npm run check
 ```
 
 El comando ejecuta lint, typecheck, pruebas, auditoría de recursos externos, validación del mapa,
-checksum y build de producción.
+checksum, alcance vial de objetivos y build de producción.
 
 La prueba de navegador requiere Chromium de Playwright y cubre escritorio, Pixel 7 vertical y
 Pixel 7 horizontal:
@@ -188,13 +189,13 @@ VITE_ENABLE_DIAGNOSTICS=true npm run dev
 ```
 
 La validación automática y el protocolo físico pendiente están en
-`docs/gameplay/playtest-v0.2.5.md`.
+`docs/gameplay/playtest-v0.2.5.1.md`.
 
 ## Docker
 
 ```sh
-docker build -t el-salvador-rutas-perdidas:v0.2.5 .
-docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.5
+docker build -t el-salvador-rutas-perdidas:v0.2.5.1 .
+docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.5.1
 curl http://localhost:8080/healthz
 ```
 
@@ -207,7 +208,14 @@ El navegador lee exclusivamente `/maps/el-salvador.pmtiles` y los recursos de `/
 Consulta `data/SOURCES.md`, `data/LICENSES.md` y `scripts/maps/README.md` para procedencia,
 licencias y reconstrucción.
 
-## Estado de la v0.2.5
+## Estado de la v0.2.5.1
+
+- **La transmisión** funciona como onboarding contextual persistente, sin competir con CTA o radio.
+- Reversa en dos etapas, bitácora que suspende controles y HUD detenido compacto por defecto.
+- Restauración exacta de declutter y validación vial de objetivos en `npm run check`.
+- Service worker actualizado sin cachear PMTiles/Range y E2E aislado de caches anteriores.
+
+### Base v0.2.5
 
 - Presentación central `stopped`/`driving`/`fast`/`alert`/`interaction` con histéresis.
 - Seis perfiles de cámara, seguimiento imperativo sin colas y declutter de capas a velocidad.

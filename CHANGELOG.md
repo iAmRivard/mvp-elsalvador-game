@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.2.5.1 - 2026-07-15
+
+### Onboarding y controles
+
+- Las partidas nuevas activan **La transmisión** como misión tutorial y avanzan por nueve
+  instrucciones contextuales sin CTA de siguiente misión ni confirmaciones manuales.
+- El guardado sube al esquema 5 con estado de onboarding explícito; las partidas v1–v4 migran sin
+  perder progreso y se consideran ya introducidas para no repetir el tutorial.
+- La velocidad objetivo reconoce 600 ms de marcha centrada aunque el control automático aplique
+  throttle. Frenado exige desaceleración real y Turbo sólo se enseña en un contexto seguro.
+- La reversa requiere frenar, soltar/centrar y volver a bajar durante 550 ms. Pausa, blur, cambio de
+  control, bitácora, recuperación y nueva partida limpian el estado de reversa.
+
+### HUD, bitácora y mapa
+
+- La bitácora es estado global: en móvil desmonta controles y HUD, congela el vehículo, conserva
+  la velocidad objetivo y deja avanzar el temporizador de la misión.
+- El HUD detenido permanece compacto durante tres segundos y sólo se expande manualmente. El HUD
+  pesado se desmonta durante conducción móvil y el contenido pesado de misión no se monta cerrado.
+- La ayuda de combustible desaparece en nivel normal, queda discreta entre 25–35% y pasa a CTA
+  crítico por debajo de 25%. La radio completa permanece hasta que el jugador la cierre.
+- La presentación se deriva de todos los estados bloqueantes y el declutter captura y restaura
+  exactamente los valores originales, incluidos expresiones y propiedades dinámicas.
+- Un validador comprueba todos los objetivos contra el grafo local. Los puntos narrativos separados
+  usan `interactionCoordinates` y las zonas viales válidas evitan falsos avisos offroad.
+
+### CI, PWA y verificación
+
+- Playwright bloquea service workers durante E2E para que las intercepciones de red sean
+  deterministas. Producción conserva el SW con navegación network-first, assets versionados
+  cache-first, exclusión de PMTiles/Range y activación de actualización explícita.
+- El inicio ofrece fullscreen desde el gesto del usuario y continúa normalmente cuando la API no
+  está disponible.
+- `npm run check` incorpora la validación de alcance vial de objetivos. Los resultados locales,
+  Docker, Actions y pendientes físicos se registran en `docs/gameplay/playtest-v0.2.5.1.md`.
+
 ## v0.2.5 - 2026-07-15
 
 ### Conducción y percepción de velocidad
