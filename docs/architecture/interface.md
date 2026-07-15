@@ -35,8 +35,9 @@ Estas preferencias no forman parte del guardado de la expedición. Reiniciar pro
 decisiones de accesibilidad. Cambiar calidad o movimiento recrea MapLibre para aplicar antialias,
 pixel ratio y tiempos de cámara de manera coherente; cambiar la atmósfera sólo actualiza una capa
 CSS sin interacción. La sensibilidad se lee desde el game loop y cambia sin reconstruir el mapa.
-La versión 7 agrega joystick único y un aviso opcional que no reemplaza el modo existente. La
-versión 6 agregó volumen y silencio de música, además del primer aviso para migrar controles.
+La versión 8 agrega velocidad objetivo como opción predeterminada de instalaciones nuevas y un aviso
+único que no reemplaza el modo existente. La versión 7 agregó joystick único con throttle continuo.
+La versión 6 agregó volumen y silencio de música, además del primer aviso para migrar controles.
 La versión 5 agregó controles móviles y migró documentos 1 a 4 con joystick fijo mediano, zona
 muerta `0.14`, pedales, crucero inicial desactivado y hápticos activos. La versión 4 agregó audio;
 documentos anteriores cargan volúmenes 0.7 y 0.8. La versión 3 agregó asistencia vial; versiones 1 y
@@ -44,8 +45,9 @@ documentos anteriores cargan volúmenes 0.7 y 0.8. La versión 3 agregó asisten
 
 ## Indicadores
 
-- El combustible cambia a advertencia a 25% y a estado crítico a 10%; la ayuda muestra estación,
-  distancia, autonomía, ruta temporal, bidón o recarga según contexto.
+- El combustible no crea ayuda adicional por encima de 35%; entre 25–35% muestra un chip discreto
+  con estación y distancia, y por debajo de 25% un CTA crítico. La ruta temporal muestra distancia
+  y **Volver a misión**.
 - El bloque de terreno muestra clase de vía, porcentaje de ritmo y consumo, estado offroad y una
   advertencia textual cuando agua, un bloqueo o los límites detienen el vehículo.
 - La ruta activa anuncia que el objetivo está cercano al entrar a 1,5 veces su radio de validación.
@@ -57,3 +59,14 @@ documentos anteriores cargan volúmenes 0.7 y 0.8. La versión 3 agregó asisten
 
 Los diálogos declaran nombre accesible y modalidad. Las acciones mantienen texto visible o
 `aria-label`; ninguna señal necesaria depende únicamente de color o animación.
+
+## Conducción y overlays móviles
+
+Una misión activa se resume en un mini navegador. Tras 2.5 segundos y al superar 5 km/h, el resumen
+se contrae sin volver a expandirse automáticamente. La bitácora usa estados `compact`, `half` y
+`expanded`, límites de 55dvh/85dvh, handle, scroll interno y controles sticky.
+
+`OverlayManager` ordena candidatos con prioridad `critical`, `narrative`, `radio`, `discovery` e
+`information`. Sólo monta un overlay grande. Recuperación y elección obligatoria preceden a
+narrativa; narrativa precede a radio. Una radio activa degrada descubrimientos a toast compacto.
+Radio y descubrimientos no pausan el juego; los diálogos que sí pausan lo indican.

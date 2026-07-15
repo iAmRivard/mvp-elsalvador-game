@@ -42,7 +42,7 @@ async function openPauseSettings(page: Page) {
   return { pauseMenu, settings };
 }
 
-test('conduce con joystick único, Turbo por toque y frenado progresivo', async ({
+test('mantiene velocidad objetivo, gira, frena y activa reversa', async ({
   context,
   page,
 }, testInfo) => {
@@ -52,7 +52,7 @@ test('conduce con joystick único, Turbo por toque y frenado progresivo', async 
   const gameMap = page.getByTestId('game-map');
   await expect(page.getByLabel('Controles táctiles')).toHaveAttribute(
     'data-control-mode',
-    'single-drive-joystick',
+    'target-speed-joystick',
   );
   await expect(page.getByRole('button', { name: 'Acelerar' })).toHaveCount(0);
   await expect(
@@ -61,8 +61,11 @@ test('conduce con joystick único, Turbo por toque y frenado progresivo', async 
   await expect(
     page.getByRole('button', { name: 'Activar crucero' }),
   ).toHaveCount(0);
+  await expect(page.getByTestId('mobile-cruise-target')).toContainText(
+    'OBJETIVO 0 km/h',
+  );
 
-  const joystick = page.getByLabel('Joystick de conducción');
+  const joystick = page.getByLabel('Joystick de velocidad objetivo');
   const joystickCenter = await centerOf(joystick);
   const session = await context.newCDPSession(page);
   await session.send('Input.dispatchTouchEvent', {
@@ -76,45 +79,38 @@ test('conduce con joystick único, Turbo por toque y frenado progresivo', async 
     touchPoints: [
       {
         id: 1,
-        x: joystickCenter.x + joystickCenter.width * 0.28,
-        y: joystickCenter.y - joystickCenter.width * 0.34,
-        force: 1,
-      },
-    ],
-  });
-  await expect
-    .poll(async () => Number(await gameMap.getAttribute('data-input-turn')))
-    .toBeGreaterThan(0.1);
-  await expect
-    .poll(async () => Number(await gameMap.getAttribute('data-input-throttle')))
-    .toBeGreaterThan(0.2);
-
-  await page.getByRole('button', { name: 'Turbo' }).click();
-  await expect(gameMap).toHaveAttribute('data-input-mobile-boost', 'active');
-  await expect(gameMap).toHaveAttribute('data-input-boost', 'true');
-  await expect(page.getByRole('button', { name: 'Turbo' })).toContainText(
-    /[012]\.\d s/,
-  );
-  await session.send('Input.dispatchTouchEvent', {
-    type: 'touchMove',
-    touchPoints: [
-      {
-        id: 1,
         x: joystickCenter.x,
-        y: joystickCenter.y + joystickCenter.width * 0.44,
+        y: joystickCenter.y - joystickCenter.width * 0.44,
         force: 1,
       },
     ],
   });
-  await expect(gameMap).toHaveAttribute('data-input-throttle', '-0.550');
-  await expect(gameMap).toHaveAttribute('data-input-mobile-boost', 'off');
-  await expect(gameMap).toHaveAttribute('data-input-auto-throttle', 'off');
+  await page.waitForTimeout(850);
+  await expect
+    .poll(async () =>
+      Number(await gameMap.getAttribute('data-input-target-speed')),
+    )
+    .toBeGreaterThan(25);
+  const positionWhenReleased = await page
+    .getByTestId('player-position')
+    .textContent();
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',
     touchPoints: [],
   });
-  await expect(gameMap).toHaveAttribute('data-input-turn', '0.000');
-  await expect(gameMap).toHaveAttribute('data-input-throttle', '0.000');
+
+  await page.waitForTimeout(180);
+  const targetAfterRelease = Number(
+    await gameMap.getAttribute('data-input-target-speed'),
+  );
+  await page.waitForTimeout(650);
+  const heldTarget = Number(
+    await gameMap.getAttribute('data-input-target-speed'),
+  );
+  expect(Math.abs(heldTarget - targetAfterRelease)).toBeLessThan(1);
+  await expect
+    .poll(() => page.getByTestId('player-position').textContent())
+    .not.toBe(positionWhenReleased);
 
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchStart',
@@ -127,19 +123,82 @@ test('conduce con joystick único, Turbo por toque y frenado progresivo', async 
     touchPoints: [
       {
         id: 2,
-        x: joystickCenter.x + joystickCenter.width * 0.3,
-        y: joystickCenter.y - joystickCenter.width * 0.3,
+        x: joystickCenter.x + joystickCenter.width * 0.44,
+        y: joystickCenter.y,
         force: 1,
       },
     ],
   });
-  await page.evaluate(() =>
-    window.dispatchEvent(new Event('orientationchange')),
-  );
-  await session.detach();
-  await expect(gameMap).toHaveAttribute('data-input-throttle', '0.000');
+  await expect
+    .poll(async () => Number(await gameMap.getAttribute('data-input-turn')))
+    .toBeGreaterThan(0.2);
+  await page.waitForTimeout(400);
+  expect(
+    Math.abs(
+      Number(await gameMap.getAttribute('data-input-target-speed')) -
+        heldTarget,
+    ),
+  ).toBeLessThan(1);
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+  await expect(gameMap).toHaveAttribute('data-input-turn', '0.000');
+
+  await page.getByRole('button', { name: 'Turbo' }).click();
+  await expect(gameMap).toHaveAttribute('data-input-mobile-boost', 'active');
+  await expect(gameMap).toHaveAttribute('data-input-boost', 'true');
+  await page.waitForTimeout(2_650);
+  await expect(gameMap).not.toHaveAttribute('data-input-mobile-boost', 'active');
+  expect(
+    Math.abs(
+      Number(await gameMap.getAttribute('data-input-target-speed')) -
+        heldTarget,
+    ),
+  ).toBeLessThan(1);
+
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [
+      { id: 3, x: joystickCenter.x, y: joystickCenter.y, force: 1 },
+    ],
+  });
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [
+      {
+        id: 3,
+        x: joystickCenter.x,
+        y: joystickCenter.y + joystickCenter.width * 0.44,
+        force: 1,
+      },
+    ],
+  });
+  await expect
+    .poll(
+      async () => Number(await gameMap.getAttribute('data-input-target-speed')),
+      { timeout: 5_000 },
+    )
+    .toBeLessThan(0.6);
+  await expect(gameMap).toHaveAttribute('data-input-cruise-braking', 'true');
+  await expect(gameMap).toHaveAttribute('data-input-cruise-reversing', 'true', {
+    timeout: 6_000,
+  });
+  await expect
+    .poll(async () =>
+      Number(await gameMap.getAttribute('data-input-throttle')),
+    )
+    .toBeLessThan(0);
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+
+  await page.getByRole('button', { name: 'Pausar partida' }).click();
+  await expect(gameMap).toHaveAttribute('data-input-target-speed', '0.0');
   await expect(gameMap).toHaveAttribute('data-input-turn', '0.000');
   await expect(gameMap).toHaveAttribute('data-input-pointer-active', 'false');
+  await session.detach();
 });
 
 test('persiste modos alternativos y limpia entradas al pausar', async ({
@@ -178,7 +237,7 @@ test('persiste modos alternativos y limpia entradas al pausar', async ({
     return parsed;
   }, settingsKey);
   expect(persistedSettings).toMatchObject({
-    version: 7,
+    version: 8,
     settings: {
       controlMode: 'classic-buttons',
       joystickSize: 'large',

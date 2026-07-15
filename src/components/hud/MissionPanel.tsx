@@ -160,6 +160,9 @@ function MissionStartCard({
 }
 
 export function MissionPanel() {
+  const panelRef = useRef<HTMLElement>(null);
+  const panelCommitCount = useRef(0);
+  const sheetCommitCount = useRef(0);
   const [compactViewport, setCompactViewport] = useState(isCompactViewport);
   const [collapsed, setCollapsed] = useState(isCompactViewport);
   const [sheetState, setSheetState] = useState<MobileJournalSheetState>(() =>
@@ -268,6 +271,18 @@ export function MissionPanel() {
         : 'Sigue la ruta hacia el objetivo'));
   const miniNavigationDistance =
     missionRoute.distanceMeters ?? next?.distanceMeters ?? null;
+
+  useEffect(() => {
+    panelCommitCount.current += 1;
+    if (compactViewport && !collapsed) sheetCommitCount.current += 1;
+    if (panelRef.current) {
+      panelRef.current.dataset.renderCount = String(panelCommitCount.current);
+      panelRef.current.dataset.sheetRenderCount = String(
+        sheetCommitCount.current,
+      );
+    }
+  });
+
   useEffect(
     () =>
       useGameStore.subscribe((state, previousState) => {
@@ -390,6 +405,7 @@ export function MissionPanel() {
 
   return (
     <aside
+      ref={panelRef}
       className={`mission-panel ${collapsed ? 'mission-panel--collapsed' : ''} ${compactViewport && !collapsed ? `mission-panel--journal-sheet mission-panel--sheet-${sheetState}` : ''}`}
       aria-label="Panel de misiones"
       data-mobile-sheet-state={compactViewport ? sheetState : 'closed'}

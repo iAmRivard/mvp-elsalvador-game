@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.2.4.1 - 2026-07-14
+
+### Conducción y red vial móvil
+
+- Las instalaciones nuevas usan `target-speed-joystick`: arriba ajusta un objetivo persistente de
+  0–90 km/h, centrar conserva la marcha, el eje horizontal gira sin alterar el objetivo y abajo
+  frena antes de habilitar reversa tras 350 ms detenido. Turbo conserva el objetivo previo.
+- Los cuatro controles anteriores siguen disponibles. Preferencias v1–v7 migran al esquema 8 sin
+  reemplazar una elección existente y reciben una única recomendación del modo nuevo.
+- `RoadTracker` usa radio móvil de 52 m, recuperación sobre el último edge hasta 70 m, gracia de
+  1 segundo y cuatro misses consecutivos antes de declarar offroad.
+- La recuperación temporal usa `road-unclassified` con ritmo 70%, consumo 115% y desgaste 105%.
+  Diagnósticos exponen edge actual/anterior, distancia, misses, gracia, motivo y 20 transiciones.
+
+### Navegación e interfaz
+
+- La reversa se detecta con velocidad firmada y oculta chevrón, tramo inmediato, reincorporación y
+  mensajes de avance.
+- El vehículo usa triángulo cian y el chevrón amarillo se coloca 35 m por delante sobre la ruta, con
+  offset de MapLibre como fallback y sin transformar el elemento raíz.
+- La misión activa se contrae al conducir y deja un mini navegador con maniobra, distancia,
+  objetivo y acceso **Ver objetivo**. La bitácora móvil es un bottom sheet al 55%/85%.
+- Una cola determinista muestra un solo overlay grande con prioridad crítica, narrativa, radio,
+  descubrimiento e información. La radio móvil ocupa como máximo 25% y los descubrimientos se
+  compactan cuando coincide una transmisión.
+
+### Combustible, guardado y pruebas
+
+- Con más de 35% no aparece ayuda extra; entre 25–35% se muestra una estación discreta con distancia
+  y por debajo de 25% aparece el CTA crítico. Una ruta temporal muestra **Volver a misión**.
+- El guardado sube a versión 4 y persiste sólo `kind` e `id` del destino temporal. Al cargar valida
+  disponibilidad, recalcula A* y vuelve a la misión con aviso si el destino desapareció.
+- Pruebas unitarias e integración cubren velocidad objetivo, histéresis, punto urbano del video,
+  flecha, reversa, mini navegador, bottom sheet, overlays, combustible y migraciones. Playwright
+  cubre escritorio, Pixel 7 vertical y horizontal.
+- La prueba física en el teléfono del video continúa pendiente y no se sustituye por automatización.
+
 ## v0.2.4 - 2026-07-14
 
 ### Navegación y mapa
