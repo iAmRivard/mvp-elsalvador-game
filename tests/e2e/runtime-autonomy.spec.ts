@@ -151,7 +151,16 @@ async function expandMissionJournal(page: Page) {
   });
   await expect
     .poll(async () => {
-      if ((await missionsTab.count()) > 0) return true;
+      if ((await missionsTab.count()) > 0) {
+        try {
+          await missionsTab
+            .first()
+            .evaluate((element) => (element as HTMLButtonElement).click());
+          return true;
+        } catch {
+          // El panel puede cambiar de presentación entre frames.
+        }
+      }
       for (const candidate of [
         details,
         drivingHud,
@@ -163,7 +172,7 @@ async function expandMissionJournal(page: Page) {
           await candidate
             .first()
             .evaluate((element) => (element as HTMLButtonElement).click());
-          return true;
+          return false;
         } catch {
           // La presentación móvil puede desmontar un candidato entre frames.
         }
@@ -171,7 +180,6 @@ async function expandMissionJournal(page: Page) {
       return false;
     })
     .toBe(true);
-  await missionsTab.click();
 }
 
 async function abandonActiveMission(page: Page) {
