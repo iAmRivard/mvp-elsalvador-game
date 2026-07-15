@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import {
   joystickSizeMultipliers,
   virtualJoystickConfig,
@@ -9,6 +9,7 @@ import {
   interactionLabelForObjective,
   objectiveRequiresManualInteraction,
 } from '../../game/interactions';
+import { triggerHaptic } from '../../game/haptics';
 import { nearestPendingObjective } from '../../game/missions';
 import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -20,6 +21,13 @@ import { VirtualJoystick } from './VirtualJoystick';
 interface TouchControlsProps {
   input: InputController;
 }
+
+const cruiseGearLabels = {
+  stopped: 'DETENIDO',
+  slow: 'LENTO',
+  cruise: 'CRUCERO',
+  fast: 'RÁPIDO',
+} as const;
 
 export function TouchControls({ input }: TouchControlsProps) {
   const isPaused = useGameStore((state) => state.isPaused);
@@ -55,15 +63,35 @@ export function TouchControls({ input }: TouchControlsProps) {
       : null;
   const sizeMultiplier = joystickSizeMultipliers[joystickSize];
   const singleDriveJoystick = controlMode === 'single-drive-joystick';
+  const targetSpeedJoystick = controlMode === 'target-speed-joystick';
+  const driveJoystick = singleDriveJoystick || targetSpeedJoystick;
+  const cruiseTarget = useSyncExternalStore(
+    (listener) => input.subscribe(listener),
+    () => input.getMobileCruiseTarget(),
+    () => input.getMobileCruiseTarget(),
+  );
+  const previousReversing = useRef(false);
 
   useEffect(() => {
     input.clearAllInput();
+    input.setMobileCruiseEnabled(targetSpeedJoystick);
     return () => input.clearAllInput();
-  }, [controlMode, input]);
+  }, [controlMode, input, targetSpeedJoystick]);
 
   useEffect(() => {
     input.clearPointerActions();
   }, [input, joystickDeadZone, joystickPositionMode, joystickSize]);
+
+  useEffect(() => {
+    if (isPaused) input.clearAllInput();
+  }, [input, isPaused]);
+
+  useEffect(() => {
+    if (cruiseTarget.reversing && !previousReversing.current) {
+      triggerHaptic('reverse', hapticsEnabled);
+    }
+    previousReversing.current = cruiseTarget.reversing;
+  }, [cruiseTarget.reversing, hapticsEnabled]);
 
   return (
     <div
@@ -95,10 +123,32 @@ export function TouchControls({ input }: TouchControlsProps) {
               virtualJoystickConfig.returnDurationMilliseconds
             }
             positionMode={joystickPositionMode}
-            driveMode={singleDriveJoystick}
+            driveMode={driveJoystick}
+            targetSpeedMode={targetSpeedJoystick}
             speedMetersPerSecond={telemetry.speedMetersPerSecond}
             hapticsEnabled={hapticsEnabled}
           />
+          {targetSpeedJoystick && (
+            <output
+              className={`mobile-cruise-target ${cruiseTarget.braking ? 'mobile-cruise-target--braking' : ''} ${cruiseTarget.reversing ? 'mobile-cruise-target--reversing' : ''}`}
+              aria-live="polite"
+              data-testid="mobile-cruise-target"
+            >
+              <span>
+                {cruiseTarget.reversing
+                  ? 'REVERSA'
+                  : cruiseTarget.braking
+                    ? 'FRENANDO'
+                    : cruiseGearLabels[cruiseTarget.selectedGear]}
+              </span>
+              {!cruiseTarget.reversing && (
+                <strong>
+                  OBJETIVO{' '}
+                  {Math.round(cruiseTarget.targetSpeedKilometersPerHour)} km/h
+                </strong>
+              )}
+            </output>
+          )}
           <div className="touch-actions touch-actions--analog">
             <MobileActionButtons
               input={input}
@@ -109,7 +159,7 @@ export function TouchControls({ input }: TouchControlsProps) {
               autoThrottleAvailable={controlMode === 'joystick-auto-throttle'}
               hapticsEnabled={hapticsEnabled}
             />
-            {!singleDriveJoystick && (
+            {!driveJoystick && (
               <MobilePedals
                 input={input}
                 showAccelerator={controlMode === 'joystick-pedals'}

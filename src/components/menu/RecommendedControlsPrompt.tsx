@@ -12,13 +12,13 @@ export function RecommendedControlsPrompt() {
   );
   const controlMode = useSettingsStore((state) => state.controlMode);
   const dismissed = useSettingsStore(
-    (state) => state.singleDriveJoystickPromptDismissed,
+    (state) => state.targetSpeedJoystickPromptDismissed,
   );
   const setMobileControlMode = useSettingsStore(
     (state) => state.setMobileControlMode,
   );
   const setDismissed = useSettingsStore(
-    (state) => state.setSingleDriveJoystickPromptDismissed,
+    (state) => state.setTargetSpeedJoystickPromptDismissed,
   );
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;
@@ -29,7 +29,7 @@ export function RecommendedControlsPrompt() {
     return () => mediaQuery.removeEventListener('change', update);
   }, []);
 
-  if (!mobileContext || dismissed || controlMode === 'single-drive-joystick') {
+  if (!mobileContext || dismissed || controlMode === 'target-speed-joystick') {
     return null;
   }
 
@@ -41,15 +41,18 @@ export function RecommendedControlsPrompt() {
         aria-modal="true"
         aria-labelledby="controls-migration-title"
       >
-        <span>Nuevo modo de conducción</span>
-        <h2 id="controls-migration-title">Un joystick para conducir</h2>
-        <p>Controla aceleración, freno y dirección con un solo joystick.</p>
+        <span>Nuevo control móvil</span>
+        <h2 id="controls-migration-title">Velocidad objetivo</h2>
+        <p>
+          Ajusta la velocidad con el joystick y suéltalo para mantener la
+          marcha.
+        </p>
         <div>
           <button
             type="button"
-            onClick={() => setMobileControlMode('single-drive-joystick')}
+            onClick={() => setMobileControlMode('target-speed-joystick')}
           >
-            Probar modo simple
+            Probar
           </button>
           <button type="button" onClick={() => setDismissed(true)}>
             Mantener controles actuales

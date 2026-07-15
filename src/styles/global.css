@@ -3308,8 +3308,54 @@ html[data-tutorial-target='target'] .map-canvas {
   align-items: end;
 }
 
-.touch-controls--single-drive-joystick .touch-actions--analog {
+.touch-controls--single-drive-joystick .touch-actions--analog,
+.touch-controls--target-speed-joystick .touch-actions--analog {
   grid-template-columns: auto;
+}
+
+.mobile-cruise-target {
+  position: absolute;
+  bottom: max(
+    calc(var(--joystick-radius, 72px) * 2 + 26px),
+    calc(env(safe-area-inset-bottom) + 168px)
+  );
+  left: max(18px, calc(env(safe-area-inset-left) + 8px));
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  max-width: 180px;
+  padding: 5px 8px;
+  border: 1px solid rgb(49 200 219 / 28%);
+  border-radius: 999px;
+  color: #dff8f5;
+  background: rgb(8 27 26 / 82%);
+  box-shadow: 0 7px 18px rgb(0 0 0 / 24%);
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.mobile-cruise-target span {
+  color: #72dbe3;
+  font-size: 0.5rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+}
+
+.mobile-cruise-target strong {
+  overflow: hidden;
+  font-size: 0.58rem;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-cruise-target--braking {
+  border-color: rgb(240 170 99 / 40%);
+}
+
+.mobile-cruise-target--braking span,
+.mobile-cruise-target--reversing span {
+  color: #ffc37d;
 }
 
 .mobile-actions,

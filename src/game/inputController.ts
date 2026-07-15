@@ -1,9 +1,17 @@
 import type { PlayerInput } from '../types/game';
 import {
   mobileBoostConfig,
+  mobileCruiseConfig,
   type MobileBoostState,
 } from '../config/mobileControls.config';
 import { clampAnalogInput } from './analogInput';
+import {
+  mobileCruiseGear,
+  mobileCruiseThrottle,
+  stoppedMobileCruiseTarget,
+  updateCruiseTarget,
+  type MobileCruiseTarget,
+} from './mobileCruise';
 
 export type InputAction =
   'forward' | 'backward' | 'left' | 'right' | 'boost' | 'interact';
@@ -17,6 +25,8 @@ export interface InputSources {
   joystickThrottle: number;
   joystickTurn: number;
   autoThrottle: number;
+  mobileCruiseThrottle: number;
+  mobileCruiseVerticalIntent: number;
 }
 
 export interface AutoThrottleState {
@@ -34,6 +44,7 @@ export interface InputDiagnostics extends InputSources {
   autoThrottleStatus: AutoThrottleStatus;
   pointerActive: boolean;
   mobileBoost: MobileBoostState;
+  mobileCruise: MobileCruiseTarget;
 }
 
 export interface MobileBoostAvailability {
@@ -80,6 +91,15 @@ export class InputController {
     targetThrottle: 0.72,
   };
   private autoThrottleScale = 1;
+  private mobileCruiseEnabled = false;
+  private mobileCruiseVerticalIntent = 0;
+  private mobileCruiseThrottle = 0;
+  private mobileCruiseTarget: MobileCruiseTarget = {
+    ...stoppedMobileCruiseTarget,
+  };
+  private reverseIntentMilliseconds = 0;
+  private lastCruiseNotificationAt = 0;
+  private lastNotifiedCruiseTarget = 0;
   private readonly activePointerIds = new Set<number>();
   private mobileBoostActiveUntil = 0;
   private mobileBoostCooldownUntil = 0;
@@ -224,6 +244,112 @@ export class InputController {
     this.notify();
   }
 
+  setMobileCruiseEnabled(enabled: boolean): void {
+    if (this.mobileCruiseEnabled === enabled) return;
+    this.mobileCruiseEnabled = enabled;
+    this.joystickThrottle = 0;
+    this.mobileCruiseVerticalIntent = 0;
+    this.mobileCruiseThrottle = 0;
+    this.reverseIntentMilliseconds = 0;
+    this.mobileCruiseTarget = { ...stoppedMobileCruiseTarget };
+    if (enabled) this.disableAutoThrottle();
+    this.notify();
+  }
+
+  setTargetSpeedJoystick(verticalIntent: number, turn: number): void {
+    const nextIntent = clampAnalogInput(verticalIntent);
+    const nextTurn = clampAnalogInput(turn);
+    if (
+      this.mobileCruiseVerticalIntent === nextIntent &&
+      this.joystickTurn === nextTurn
+    ) {
+      return;
+    }
+    this.mobileCruiseVerticalIntent = nextIntent;
+    this.joystickTurn = nextTurn;
+    if (nextIntent >= 0 && this.mobileCruiseTarget.reversing) {
+      this.reverseIntentMilliseconds = 0;
+      this.mobileCruiseTarget = {
+        ...this.mobileCruiseTarget,
+        braking: false,
+        reversing: false,
+      };
+    }
+    this.notify();
+  }
+
+  advanceMobileCruise(
+    currentSpeedMetersPerSecond: number,
+    deltaTimeSeconds: number,
+  ): void {
+    if (!this.mobileCruiseEnabled) return;
+    const previous = this.mobileCruiseTarget;
+    const intent = this.mobileCruiseVerticalIntent;
+    const deltaTime = Math.max(
+      0,
+      Number.isFinite(deltaTimeSeconds) ? deltaTimeSeconds : 0,
+    );
+    let targetSpeedKilometersPerHour = previous.reversing
+      ? 0
+      : updateCruiseTarget(
+          previous.targetSpeedKilometersPerHour,
+          intent,
+          deltaTime,
+        );
+    let reversing = previous.reversing;
+
+    if (intent >= 0) {
+      reversing = false;
+      this.reverseIntentMilliseconds = 0;
+    } else if (
+      targetSpeedKilometersPerHour <= 0.5 &&
+      Math.abs(currentSpeedMetersPerSecond) <=
+        mobileCruiseConfig.stoppedSpeedMetersPerSecond
+    ) {
+      targetSpeedKilometersPerHour = 0;
+      this.reverseIntentMilliseconds += deltaTime * 1_000;
+      reversing =
+        this.reverseIntentMilliseconds >=
+        mobileCruiseConfig.reverseActivationDelayMilliseconds;
+    } else if (!reversing) {
+      this.reverseIntentMilliseconds = 0;
+    }
+
+    const next: MobileCruiseTarget = {
+      targetSpeedKilometersPerHour,
+      selectedGear: mobileCruiseGear(targetSpeedKilometersPerHour),
+      braking: intent < 0 && !reversing,
+      reversing,
+    };
+    this.mobileCruiseTarget = next;
+    this.mobileCruiseThrottle = mobileCruiseThrottle(
+      next,
+      currentSpeedMetersPerSecond,
+      intent,
+    );
+
+    const now = performance.now();
+    const immediateStateChange =
+      previous.selectedGear !== next.selectedGear ||
+      previous.braking !== next.braking ||
+      previous.reversing !== next.reversing;
+    const roundedTarget = Math.round(next.targetSpeedKilometersPerHour);
+    if (
+      immediateStateChange ||
+      (roundedTarget !== this.lastNotifiedCruiseTarget &&
+        now - this.lastCruiseNotificationAt >=
+          mobileCruiseConfig.diagnosticsUpdateIntervalMilliseconds)
+    ) {
+      this.lastCruiseNotificationAt = now;
+      this.lastNotifiedCruiseTarget = roundedTarget;
+      this.notify();
+    }
+  }
+
+  getMobileCruiseTarget(): MobileCruiseTarget {
+    return this.mobileCruiseTarget;
+  }
+
   setAutoThrottle(enabled: boolean, targetThrottle = 0.72): void {
     const next = {
       enabled,
@@ -329,6 +455,9 @@ export class InputController {
       this.touchThrottle !== 0 ||
       this.joystickThrottle !== 0 ||
       this.joystickTurn !== 0 ||
+      this.mobileCruiseVerticalIntent !== 0 ||
+      this.mobileCruiseTarget.braking ||
+      this.mobileCruiseTarget.reversing ||
       this.activePointerIds.size > 0 ||
       boostWasActive;
     for (const timer of this.pointerReleaseTimers.values()) clearTimeout(timer);
@@ -337,6 +466,13 @@ export class InputController {
     this.touchThrottle = 0;
     this.joystickThrottle = 0;
     this.joystickTurn = 0;
+    this.mobileCruiseVerticalIntent = 0;
+    this.reverseIntentMilliseconds = 0;
+    this.mobileCruiseTarget = {
+      ...this.mobileCruiseTarget,
+      braking: false,
+      reversing: false,
+    };
     this.activePointerIds.clear();
     if (changed) this.notify();
   }
@@ -351,6 +487,9 @@ export class InputController {
       this.touchThrottle !== 0 ||
       this.joystickThrottle !== 0 ||
       this.joystickTurn !== 0 ||
+      this.mobileCruiseVerticalIntent !== 0 ||
+      this.mobileCruiseThrottle !== 0 ||
+      this.mobileCruiseTarget.targetSpeedKilometersPerHour !== 0 ||
       this.autoThrottle.enabled ||
       this.activePointerIds.size > 0 ||
       boostWasActive;
@@ -361,6 +500,11 @@ export class InputController {
     this.touchThrottle = 0;
     this.joystickThrottle = 0;
     this.joystickTurn = 0;
+    this.mobileCruiseVerticalIntent = 0;
+    this.mobileCruiseThrottle = 0;
+    this.mobileCruiseTarget = { ...stoppedMobileCruiseTarget };
+    this.reverseIntentMilliseconds = 0;
+    this.lastNotifiedCruiseTarget = 0;
     this.autoThrottle = { ...this.autoThrottle, enabled: false };
     this.autoThrottleScale = 1;
     this.activePointerIds.clear();
@@ -382,6 +526,12 @@ export class InputController {
       joystickTurn: this.joystickTurn,
       autoThrottle: this.autoThrottle.enabled
         ? this.autoThrottle.targetThrottle * this.autoThrottleScale
+        : 0,
+      mobileCruiseThrottle: this.mobileCruiseEnabled
+        ? this.mobileCruiseThrottle
+        : 0,
+      mobileCruiseVerticalIntent: this.mobileCruiseEnabled
+        ? this.mobileCruiseVerticalIntent
         : 0,
     };
   }
@@ -405,6 +555,7 @@ export class InputController {
       autoThrottleStatus: this.getAutoThrottleStatus(),
       pointerActive: this.activePointerIds.size > 0,
       mobileBoost: this.getMobileBoostState(),
+      mobileCruise: this.getMobileCruiseTarget(),
     };
   }
 
@@ -421,7 +572,12 @@ export class InputController {
     );
 
     return {
-      throttle: manualThrottle === 0 ? sources.autoThrottle : manualThrottle,
+      throttle:
+        manualThrottle === 0
+          ? this.mobileCruiseEnabled
+            ? sources.mobileCruiseThrottle
+            : sources.autoThrottle
+          : manualThrottle,
       turn: manualTurn,
       boost:
         this.keyboardActions.has('boost') ||

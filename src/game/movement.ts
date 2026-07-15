@@ -257,9 +257,9 @@ function stepPlayerOnce(
   const maximumReverseSpeed = handling.maximumReverseSpeed * speedMultiplier;
   const targetSpeed =
     throttle > 0
-      ? maximumForwardSpeed
+      ? maximumForwardSpeed * throttle
       : throttle < 0
-        ? -maximumReverseSpeed
+        ? maximumReverseSpeed * throttle
         : 0;
   const isChangingDirection =
     (player.speedMetersPerSecond > 0 && targetSpeed < 0) ||
