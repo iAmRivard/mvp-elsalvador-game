@@ -145,11 +145,33 @@ async function expandMissionJournal(page: Page) {
   const drivingHud = page.getByRole('button', {
     name: 'Abrir bitácora de la misión',
   });
-  if (await details.isVisible()) await details.click();
-  else if (await drivingHud.isVisible()) await drivingHud.click();
-  else if (await viewObjective.isVisible()) await viewObjective.click();
-  else if (await expandMissions.isVisible()) await expandMissions.click();
-  await page.getByRole('button', { name: 'Misiones', exact: true }).click();
+  const missionsTab = page.getByRole('button', {
+    name: 'Misiones',
+    exact: true,
+  });
+  await expect
+    .poll(async () => {
+      if ((await missionsTab.count()) > 0) return true;
+      for (const candidate of [
+        details,
+        drivingHud,
+        viewObjective,
+        expandMissions,
+      ]) {
+        if ((await candidate.count()) === 0) continue;
+        try {
+          await candidate
+            .first()
+            .evaluate((element) => (element as HTMLButtonElement).click());
+          return true;
+        } catch {
+          // La presentación móvil puede desmontar un candidato entre frames.
+        }
+      }
+      return false;
+    })
+    .toBe(true);
+  await missionsTab.click();
 }
 
 async function abandonActiveMission(page: Page) {
