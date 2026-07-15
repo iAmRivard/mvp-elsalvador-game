@@ -15,8 +15,10 @@ import { PauseMenu } from '../components/menu/PauseMenu';
 import { RecommendedControlsPrompt } from '../components/menu/RecommendedControlsPrompt';
 import { StartScreen } from '../components/menu/StartScreen';
 import { TutorialOverlay } from '../components/menu/TutorialOverlay';
+import { ServiceWorkerUpdatePrompt } from '../components/pwa/ServiceWorkerUpdatePrompt';
 import { OverlayManager } from '../components/ui/OverlayManager';
 import { gameConfig } from '../config/game.config';
+import { requestGameFullscreen } from '../game/fullscreen';
 import { InputController } from '../game/inputController';
 import { startGameAutosave, useGameStore } from '../store/gameStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -36,6 +38,7 @@ export function App() {
   const isPaused = useGameStore((state) => state.isPaused);
   const presentationMode = useGameStore((state) => state.presentationMode);
   const recoveryReason = useGameStore((state) => state.recoveryReason);
+  const activeMissionId = useGameStore((state) => state.activeMissionId);
   const activeNarrativeEventId = useGameStore(
     (state) => state.activeNarrativeEventId,
   );
@@ -55,12 +58,19 @@ export function App() {
     setPaused(false);
     setSessionStarted(true);
   };
+  const enterFullscreenExpedition = async (loadSavedGame: boolean) => {
+    await requestGameFullscreen();
+    enterGame(loadSavedGame);
+  };
 
   if (!sessionStarted) {
     return (
       <main className="game-shell game-shell--title">
         <StartScreen
           onContinue={() => enterGame(hasSavedGame)}
+          onContinueFullscreen={() =>
+            void enterFullscreenExpedition(hasSavedGame)
+          }
           onNewGame={() => {
             inputController.clearAllInput();
             inputController.resetMobileBoostCompletely();
@@ -68,6 +78,7 @@ export function App() {
             enterGame(false);
           }}
         />
+        <ServiceWorkerUpdatePrompt deferUpdate={Boolean(activeMissionId)} />
       </main>
     );
   }
@@ -144,6 +155,7 @@ export function App() {
           />
         )}
       <RecommendedControlsPrompt />
+      <ServiceWorkerUpdatePrompt deferUpdate={Boolean(activeMissionId)} />
     </main>
   );
 }

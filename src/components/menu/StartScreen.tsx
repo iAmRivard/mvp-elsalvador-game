@@ -6,12 +6,13 @@ import { progressCounter } from '../../game/progressCounters';
 import { loadRoadNetwork, retryRoadNetworkLoad } from '../../roads/roadNetwork';
 import { preloadRoadWorker } from '../../roads/roadWorkerClient';
 import { useGameStore } from '../../store/gameStore';
+import { fullscreenSupported } from '../../game/fullscreen';
 import { SettingsDialog } from './SettingsDialog';
-import { FullscreenButton } from '../pwa/FullscreenButton';
 import { InstallExperienceHint } from '../pwa/InstallExperienceHint';
 
 interface StartScreenProps {
   onContinue: () => void;
+  onContinueFullscreen?: () => void;
   onNewGame: () => void;
 }
 
@@ -39,12 +40,22 @@ function savedAtLabel(savedAt: string | null): string {
   }).format(date)}`;
 }
 
-export function StartScreen({ onContinue, onNewGame }: StartScreenProps) {
+export function StartScreen({
+  onContinue,
+  onContinueFullscreen,
+  onNewGame,
+}: StartScreenProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmingNewGame, setConfirmingNewGame] = useState(false);
   const [preparationStage, setPreparationStage] =
     useState<PreparationStage>('map');
   const [preparationAttempt, setPreparationAttempt] = useState(0);
+  const [canStartFullscreen] = useState(
+    () =>
+      fullscreenSupported() &&
+      !window.matchMedia('(display-mode: standalone)').matches &&
+      !window.matchMedia('(display-mode: fullscreen)').matches,
+  );
   const hasSavedGame = useGameStore((state) => state.hasSavedGame);
   const lastSavedAt = useGameStore((state) => state.lastSavedAt);
   const level = useGameStore((state) => state.level);
@@ -146,6 +157,17 @@ export function StartScreen({ onContinue, onNewGame }: StartScreenProps) {
           >
             {hasSavedGame ? 'Continuar expedición' : 'Comenzar expedición'}
           </button>
+          {canStartFullscreen && onContinueFullscreen && (
+            <button
+              type="button"
+              className="start-button"
+              onClick={onContinueFullscreen}
+            >
+              {hasSavedGame
+                ? 'Continuar en pantalla completa'
+                : 'Comenzar en pantalla completa'}
+            </button>
+          )}
           {hasSavedGame && (
             <button
               type="button"
@@ -162,7 +184,6 @@ export function StartScreen({ onContinue, onNewGame }: StartScreenProps) {
           >
             Configuración
           </button>
-          <FullscreenButton />
         </div>
 
         <InstallExperienceHint />
