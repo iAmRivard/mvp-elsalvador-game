@@ -1,49 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { followCameraConfig } from '../src/config/followCamera.config';
-import { travelConfig } from '../src/config/travel.config';
+import { drivingCameraProfiles } from '../src/config/followCamera.config';
 import {
+  drivingCameraProfile,
   followCameraOffset,
   followCameraTarget,
+  smoothFollowBearing,
 } from '../src/game/followCamera';
 
-describe('camara de seguimiento', () => {
-  it('acerca la camara al detenerse y la abre progresivamente con velocidad', () => {
-    const stopped = followCameraTarget(0);
-    const cruising = followCameraTarget(
-      travelConfig.normalMaximumSpeedMetersPerSecond,
-    );
-    const boosted = followCameraTarget(
-      travelConfig.boostMaximumSpeedMetersPerSecond,
-    );
-
-    expect(stopped).toEqual({
-      zoom: followCameraConfig.stoppedZoom,
-      pitch: followCameraConfig.minimumPitch,
+describe('cámara de seguimiento', () => {
+  it('selecciona perfiles cercanos por estado y dispositivo', () => {
+    expect(followCameraTarget('stopped')).toEqual({
+      zoom: drivingCameraProfiles.stopped.zoom,
+      pitch: drivingCameraProfiles.stopped.pitch,
     });
-    expect(cruising.zoom).toBeLessThan(stopped.zoom);
-    expect(cruising.pitch).toBeGreaterThan(stopped.pitch);
-    expect(boosted).toEqual({
-      zoom: followCameraConfig.maximumSpeedZoom,
-      pitch: followCameraConfig.maximumPitch,
+    expect(followCameraTarget('driving').zoom).toBeLessThan(
+      drivingCameraProfiles.stopped.zoom,
+    );
+    expect(followCameraTarget('fast')).toEqual({
+      zoom: drivingCameraProfiles.fast.zoom,
+      pitch: drivingCameraProfiles.fast.pitch,
     });
+    expect(drivingCameraProfile('driving', true)).toBe(
+      drivingCameraProfiles.mobileDriving,
+    );
+    expect(drivingCameraProfiles.mobileFast.zoom).toBeGreaterThanOrEqual(15);
   });
 
-  it('usa la magnitud de velocidad y limita valores fuera del perfil', () => {
-    expect(followCameraTarget(-20)).toEqual(followCameraTarget(20));
-    expect(followCameraTarget(Number.NaN)).toEqual(followCameraTarget(0));
-    expect(followCameraTarget(500)).toEqual(
-      followCameraTarget(travelConfig.boostMaximumSpeedMetersPerSecond),
-    );
+  it('coloca el jugador debajo del centro mediante el ratio del perfil', () => {
+    expect(followCameraOffset(1440, 900, 0.21)).toEqual([0, 189]);
+    expect(followCameraOffset(390, 844, 0.24)).toEqual([0, 203]);
+    expect(followCameraOffset(844, 390, 0.26)).toEqual([0, 101]);
   });
 
-  it('coloca el jugador debajo del centro en escritorio y movil', () => {
-    const desktop = followCameraOffset(1440, 900);
-    const mobilePortrait = followCameraOffset(390, 844);
-    const mobileLandscape = followCameraOffset(844, 390);
-
-    expect(desktop[0]).toBe(0);
-    expect(desktop[1]).toBe(112);
-    expect(mobilePortrait[1]).toBe(68);
-    expect(mobileLandscape[1]).toBe(39);
+  it('limita el cambio de rumbo y cruza correctamente el norte', () => {
+    expect(smoothFollowBearing(20, 90, 12)).toBe(32);
+    expect(smoothFollowBearing(355, 5, 12)).toBe(5);
+    expect(smoothFollowBearing(Number.NaN, 180, 12)).toBe(180);
   });
 });

@@ -39,11 +39,14 @@ import type { RouteNavigationInstruction } from '../types/navigation';
 const ROUTE_SOURCE_ID = 'active-mission-route';
 const ROAD_CASING_LAYER_ID = 'active-mission-route-casing';
 const ROAD_LAYER_ID = 'active-mission-route-road';
+const ROAD_CHEVRON_LAYER_ID = 'active-mission-route-chevrons';
 const FALLBACK_LAYER_ID = 'active-mission-route-fallback';
 const REJOIN_SOURCE_ID = 'active-mission-route-rejoin';
 const REJOIN_LAYER_ID = 'active-mission-route-rejoin-line';
 const IMMEDIATE_SOURCE_ID = 'active-mission-route-immediate';
 const IMMEDIATE_LAYER_ID = 'active-mission-route-immediate-line';
+const IMMEDIATE_CHEVRON_LAYER_ID = 'active-mission-route-immediate-chevrons';
+const NAVIGATION_ARROW_LOOKAHEAD_METERS = 42;
 const TARGETS_SOURCE_ID = 'active-mission-targets';
 const TARGETS_LAYER_ID = 'active-mission-targets-circles';
 
@@ -276,6 +279,7 @@ function fallbackDurationSeconds(distanceMeters: number): number {
 export function addMissionRoute(
   map: MapLibreMap,
   minimumUpdateIntervalMilliseconds = 100,
+  reducedMotion = false,
 ): () => void {
   const mapContainer = map.getContainer();
   mapContainer.dataset.missionRouteCasingColor = missionRouteColors.casing;
@@ -308,6 +312,29 @@ export function addMissionRoute(
       'line-color': missionRouteColors.road,
       'line-width': missionRouteStyle.roadWidth,
       'line-opacity': missionRouteStyle.roadOpacity,
+    },
+  });
+  map.addLayer({
+    id: ROAD_CHEVRON_LAYER_ID,
+    type: 'symbol',
+    source: ROUTE_SOURCE_ID,
+    filter: ['==', ['get', 'mode'], 'road'],
+    layout: {
+      visibility: reducedMotion ? 'none' : 'visible',
+      'symbol-placement': 'line',
+      'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 12, 100, 16, 58],
+      'text-field': '›',
+      'text-font': ['Noto Sans Regular'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 12, 13, 16, 18],
+      'text-rotation-alignment': 'map',
+      'text-keep-upright': false,
+      'text-allow-overlap': true,
+    },
+    paint: {
+      'text-color': missionRouteColors.immediate,
+      'text-opacity': 0.38,
+      'text-halo-color': missionRouteColors.casing,
+      'text-halo-width': 1,
     },
   });
   map.addLayer({
@@ -348,6 +375,28 @@ export function addMissionRoute(
       'line-color': missionRouteColors.immediate,
       'line-width': missionRouteStyle.immediateWidth,
       'line-opacity': missionRouteStyle.immediateOpacity,
+    },
+  });
+  map.addLayer({
+    id: IMMEDIATE_CHEVRON_LAYER_ID,
+    type: 'symbol',
+    source: IMMEDIATE_SOURCE_ID,
+    layout: {
+      visibility: reducedMotion ? 'none' : 'visible',
+      'symbol-placement': 'line',
+      'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 12, 78, 16, 44],
+      'text-field': '›',
+      'text-font': ['Noto Sans Regular'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 12, 15, 16, 21],
+      'text-rotation-alignment': 'map',
+      'text-keep-upright': false,
+      'text-allow-overlap': true,
+    },
+    paint: {
+      'text-color': '#fff4cd',
+      'text-opacity': 0.9,
+      'text-halo-color': missionRouteColors.casing,
+      'text-halo-width': 1.5,
     },
   });
 
@@ -503,7 +552,7 @@ export function addMissionRoute(
       const arrowPosition = navigationArrowPosition(
         progress.immediateCoordinates,
         0,
-        35,
+        NAVIGATION_ARROW_LOOKAHEAD_METERS,
       );
       maneuverMarker
         .setLngLat(arrowPosition ?? position)
@@ -782,12 +831,16 @@ export function addMissionRoute(
     maneuverMarker.remove();
     if (map.getLayer(TARGETS_LAYER_ID)) map.removeLayer(TARGETS_LAYER_ID);
     if (map.getSource(TARGETS_SOURCE_ID)) map.removeSource(TARGETS_SOURCE_ID);
+    if (map.getLayer(IMMEDIATE_CHEVRON_LAYER_ID))
+      map.removeLayer(IMMEDIATE_CHEVRON_LAYER_ID);
     if (map.getLayer(IMMEDIATE_LAYER_ID)) map.removeLayer(IMMEDIATE_LAYER_ID);
     if (map.getSource(IMMEDIATE_SOURCE_ID))
       map.removeSource(IMMEDIATE_SOURCE_ID);
     if (map.getLayer(REJOIN_LAYER_ID)) map.removeLayer(REJOIN_LAYER_ID);
     if (map.getSource(REJOIN_SOURCE_ID)) map.removeSource(REJOIN_SOURCE_ID);
     if (map.getLayer(FALLBACK_LAYER_ID)) map.removeLayer(FALLBACK_LAYER_ID);
+    if (map.getLayer(ROAD_CHEVRON_LAYER_ID))
+      map.removeLayer(ROAD_CHEVRON_LAYER_ID);
     if (map.getLayer(ROAD_LAYER_ID)) map.removeLayer(ROAD_LAYER_ID);
     if (map.getLayer(ROAD_CASING_LAYER_ID))
       map.removeLayer(ROAD_CASING_LAYER_ID);

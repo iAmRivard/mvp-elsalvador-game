@@ -11,9 +11,12 @@ import { missionById } from '../../data/missions';
 import { restrictedAreaTypeAt } from '../../data/restrictedAreas';
 import { detectDeviceProfile } from '../../game/deviceProfile';
 import {
+  drivingCameraProfile,
   followCameraOffset,
   followCameraTarget,
+  smoothFollowBearing,
 } from '../../game/followCamera';
+import type { DrivingPresentationMode } from '../../game/drivingPresentation';
 import { startPlayerGameLoop, type PlayerGameLoop } from '../../game/gameLoop';
 import {
   findDiscoverableLocations,
@@ -42,6 +45,10 @@ import { registerPmtilesProtocol } from '../../map/pmtilesProtocol';
 import { addRoadDebugLayer } from '../../map/roadDebugLayer';
 import { addPlayableRoadSurfaceLayer } from '../../map/roadSurfaceLayer';
 import { createStyleResourceTransform } from '../../map/styleResources';
+import {
+  createMapDeclutterController,
+  type MapDeclutterController,
+} from '../../map/mapDeclutter';
 import type { ThreeGameLayerController } from '../../map/threeLayer';
 import { shouldUseThreePlayer } from '../../map/threeTransforms';
 import { loadRoadNetwork } from '../../roads/roadNetwork';
@@ -224,6 +231,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let removeRoadSurfaceLayer: (() => void) | null = null;
     let unsubscribeRuntime: (() => void) | null = null;
     let unsubscribeSettings: (() => void) | null = null;
+    let unsubscribePresentation: (() => void) | null = null;
+    let mapDeclutter: MapDeclutterController | null = null;
     let lastCameraUpdate = 0;
     let lastFollowedLongitude = Number.NaN;
     let lastFollowedLatitude = Number.NaN;
@@ -231,6 +240,11 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let lastFollowedSpeed = Number.NaN;
     let wasFollowing = false;
     let recenterUntil = 0;
+    let lastCameraBearing = Number.NaN;
+    let cameraUpdateCount = 0;
+    let cameraUpdateDurationTotal = 0;
+    let cameraMetricsStartedAt = performance.now();
+    let cameraInterruptedTransitions = 0;
     let effectActive = true;
     let roadTracker: RoadTracker | null = null;
     let roadContact: RoadContact | null = null;
@@ -269,22 +283,53 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     });
 
     const cameraForPlayer = (player: PlayerRuntime) => {
-      const camera = followCameraTarget(player.speedMetersPerSecond);
+      const presentationMode = useGameStore.getState().presentationMode;
+      const speedKilometersPerHour =
+        Math.abs(player.speedMetersPerSecond) * 3.6;
+      const cameraMode: DrivingPresentationMode =
+        presentationMode === 'alert' || presentationMode === 'interaction'
+          ? speedKilometersPerHour > 55
+            ? 'fast'
+            : speedKilometersPerHour >= 5
+              ? 'driving'
+              : 'stopped'
+          : presentationMode;
+      const profile = drivingCameraProfile(cameraMode, deviceProfile.isTouch);
+      const camera = followCameraTarget(cameraMode, deviceProfile.isTouch);
       const canvas = map.getCanvas();
       return {
-        center: [player.longitude, player.latitude] as [number, number],
-        bearing: player.heading,
-        zoom: Math.min(camera.zoom, mapSourceConfig.maxZoom),
-        pitch: Math.min(camera.pitch, deviceProfile.maximumInitialPitch),
-        offset: followCameraOffset(canvas.clientWidth, canvas.clientHeight),
+        options: {
+          center: [player.longitude, player.latitude] as [number, number],
+          bearing: player.heading,
+          zoom: Math.min(camera.zoom, mapSourceConfig.maxZoom),
+          pitch: Math.min(camera.pitch, deviceProfile.maximumInitialPitch),
+          offset: followCameraOffset(
+            canvas.clientWidth,
+            canvas.clientHeight,
+            profile.offsetYRatio,
+          ),
+        },
+        profile,
+        profileName: deviceProfile.isTouch
+          ? cameraMode === 'fast'
+            ? 'mobileFast'
+            : cameraMode === 'driving'
+              ? 'mobileDriving'
+              : 'mobileStopped'
+          : cameraMode === 'fast'
+            ? 'fast'
+            : cameraMode === 'driving'
+              ? 'urban'
+              : 'stopped',
       };
     };
     const exposeCameraTarget = (camera: ReturnType<typeof cameraForPlayer>) => {
       const container = containerRef.current;
       if (!container) return;
-      container.dataset.followZoom = camera.zoom.toFixed(2);
-      container.dataset.followPitch = camera.pitch.toFixed(1);
-      container.dataset.followOffsetY = String(camera.offset[1]);
+      container.dataset.followZoom = camera.options.zoom.toFixed(2);
+      container.dataset.followPitch = camera.options.pitch.toFixed(1);
+      container.dataset.followOffsetY = String(camera.options.offset[1]);
+      container.dataset.currentCameraProfile = camera.profileName;
     };
     const unbindKeyboard = inputController.bindKeyboard(
       window,
@@ -408,6 +453,18 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       removeMissionRoute = addMissionRoute(
         map,
         deviceProfile.mapDataUpdateIntervalMilliseconds,
+        deviceProfile.reducedMotion,
+      );
+      mapDeclutter = createMapDeclutterController(map);
+      map.getContainer().dataset.presentationMode =
+        useGameStore.getState().presentationMode;
+      mapDeclutter.apply(useGameStore.getState().presentationMode, true);
+      unsubscribePresentation = useGameStore.subscribe(
+        (state, previousState) => {
+          if (state.presentationMode === previousState.presentationMode) return;
+          map.getContainer().dataset.presentationMode = state.presentationMode;
+          mapDeclutter?.apply(state.presentationMode);
+        },
       );
       void addRoadDebugLayer(map)
         .then((removeLayer) => {
@@ -462,8 +519,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       }
 
       const initialCamera = cameraForPlayer(initialPlayer);
-      map.jumpTo(initialCamera);
+      map.jumpTo(initialCamera.options);
       exposeCameraTarget(initialCamera);
+      lastCameraBearing = initialPlayer.heading;
       lastCameraUpdate = performance.now();
       lastFollowedLongitude = initialPlayer.longitude;
       lastFollowedLatitude = initialPlayer.latitude;
@@ -525,6 +583,20 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 1024
               ).toFixed(1);
             }
+            const symbolLayers = mapDeclutter?.inventory
+              .filter(
+                (layer) => layer.type === 'symbol' && map.getLayer(layer.id),
+              )
+              .map((layer) => layer.id);
+            if (symbolLayers?.length) {
+              try {
+                containerRef.current.dataset.renderedSymbolCount = String(
+                  map.queryRenderedFeatures({ layers: symbolLayers }).length,
+                );
+              } catch {
+                containerRef.current.dataset.renderedSymbolCount = '0';
+              }
+            }
             visualFrameCount = 0;
             lastFrameSampleTimestamp = timestamp;
           }
@@ -557,24 +629,34 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           if (
             (!wasFollowing || positionChanged || speedChanged) &&
             timestamp - lastCameraUpdate >=
-              deviceProfile.cameraUpdateIntervalMilliseconds
+              Math.max(
+                deviceProfile.cameraUpdateIntervalMilliseconds,
+                cameraForPlayer(player).profile.updateIntervalMilliseconds,
+              )
           ) {
+            const cameraStartedAt = performance.now();
             const camera = cameraForPlayer(player);
             const isRecentering = !wasFollowing;
             const duration = deviceProfile.reducedMotion
               ? 0
               : isRecentering
                 ? followCameraConfig.recenterDurationMilliseconds
-                : deviceProfile.cameraDurationMilliseconds;
-            if (duration === 0) {
-              map.jumpTo(camera);
+                : camera.profile.transitionDurationMilliseconds;
+            camera.options.bearing = smoothFollowBearing(
+              lastCameraBearing,
+              player.heading,
+              deviceProfile.reducedMotion
+                ? 360
+                : followCameraConfig.maximumBearingChangeDegrees,
+            );
+            if (!isRecentering || duration === 0) {
+              if (map.isEasing()) cameraInterruptedTransitions += 1;
+              map.jumpTo(camera.options);
             } else {
               map.easeTo({
-                ...camera,
+                ...camera.options,
                 duration,
-                easing: isRecentering
-                  ? (progress) => 1 - (1 - progress) ** 3
-                  : (progress) => progress,
+                easing: (progress) => 1 - (1 - progress) ** 3,
                 essential: false,
               });
             }
@@ -585,6 +667,29 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             lastFollowedLatitude = player.latitude;
             lastFollowedHeading = player.heading;
             lastFollowedSpeed = player.speedMetersPerSecond;
+            lastCameraBearing = camera.options.bearing;
+            const cameraUpdateDuration = performance.now() - cameraStartedAt;
+            cameraUpdateCount += 1;
+            cameraUpdateDurationTotal += cameraUpdateDuration;
+            if (containerRef.current) {
+              containerRef.current.dataset.cameraUpdateMs =
+                cameraUpdateDuration.toFixed(3);
+              containerRef.current.dataset.cameraAverageUpdateMs = (
+                cameraUpdateDurationTotal / cameraUpdateCount
+              ).toFixed(3);
+              containerRef.current.dataset.cameraInterruptedTransitions =
+                String(cameraInterruptedTransitions);
+              const cameraMetricsDuration = timestamp - cameraMetricsStartedAt;
+              if (cameraMetricsDuration >= 1_000) {
+                containerRef.current.dataset.cameraUpdatesPerSecond = (
+                  (cameraUpdateCount * 1_000) /
+                  cameraMetricsDuration
+                ).toFixed(1);
+                cameraUpdateCount = 0;
+                cameraUpdateDurationTotal = 0;
+                cameraMetricsStartedAt = timestamp;
+              }
+            }
           }
           wasFollowing = true;
         },
@@ -657,9 +762,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 roadDiagnostics.consecutiveMisses,
               );
               containerRef.current.dataset.roadGraceRemainingMs = String(
-                Math.round(
-                  roadDiagnostics.gracePeriodRemainingMilliseconds,
-                ),
+                Math.round(roadDiagnostics.gracePeriodRemainingMilliseconds),
               );
               containerRef.current.dataset.roadOffroadReason =
                 roadDiagnostics.offroadReason ?? '';
@@ -832,8 +935,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           ?.setLngLat([restoredPlayer.longitude, restoredPlayer.latitude])
           .setRotation(restoredPlayer.heading);
         const restoredCamera = cameraForPlayer(restoredPlayer);
-        map.jumpTo(restoredCamera);
+        map.jumpTo(restoredCamera.options);
         exposeCameraTarget(restoredCamera);
+        lastCameraBearing = restoredPlayer.heading;
         lastFollowedLongitude = restoredPlayer.longitude;
         lastFollowedLatitude = restoredPlayer.latitude;
         lastFollowedHeading = restoredPlayer.heading;
@@ -851,7 +955,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       const player = gameLoop?.getPlayer();
       if (!player || !useGameStore.getState().isFollowingPlayer) return;
       const camera = cameraForPlayer(player);
-      map.jumpTo(camera);
+      map.jumpTo(camera.options);
       exposeCameraTarget(camera);
     };
     const handleError = (event: ErrorEvent) => {
@@ -886,6 +990,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       gameLoop?.stop();
       unsubscribeRuntime?.();
       unsubscribeSettings?.();
+      unsubscribePresentation?.();
+      mapDeclutter?.dispose();
       removeLocationMarkers?.();
       removeFuelStationMarkers?.();
       removeMissionRoute?.();

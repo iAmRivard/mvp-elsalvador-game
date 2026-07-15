@@ -26,10 +26,16 @@ import {
   advanceMissionObjectives,
   initialMissionObjectiveProgress,
   missionStartBlockReason,
+  nearestPendingObjective,
   objectiveCoordinates,
   objectiveIsAvailable,
   summarizeMissionRewards,
 } from '../game/missions';
+import { objectiveRequiresManualInteraction } from '../game/interactions';
+import {
+  DrivingPresentationController,
+  type DrivingPresentationMode,
+} from '../game/drivingPresentation';
 import {
   missionChoiceConsequence,
   missionChoiceOption,
@@ -160,6 +166,7 @@ interface GameData {
 }
 
 interface GameStore extends GameData {
+  presentationMode: DrivingPresentationMode;
   driving: DrivingRuntimeState;
   missionRoute: MissionRouteRuntimeState;
   temporarilyClosedRoadEdgeIds: number[];
@@ -252,6 +259,56 @@ interface GameStore extends GameData {
   resetGame: () => void;
   dismissSaveMessage: () => void;
   dismissConditionWarning: () => void;
+}
+
+const presentationController = new DrivingPresentationController();
+
+function hasNearbyInteraction(
+  state: GameStore,
+  telemetry: PlayerTelemetry,
+): boolean {
+  const mission = state.activeMissionId
+    ? missionById.get(state.activeMissionId)
+    : null;
+  if (!mission) return false;
+  const next = nearestPendingObjective(
+    mission,
+    state.activeMissionCompletedObjectiveIds,
+    [telemetry.longitude, telemetry.latitude],
+  );
+  return Boolean(
+    next &&
+    objectiveRequiresManualInteraction(next.objective) &&
+    next.distanceMeters <= next.objective.radiusMeters,
+  );
+}
+
+function presentationModeFor(
+  state: GameStore,
+  telemetry: PlayerTelemetry,
+  isPaused: boolean,
+  recoveryReason: RecoveryReason | null,
+): DrivingPresentationMode {
+  return presentationController.update(
+    {
+      speedKilometersPerHour: telemetry.speedKilometersPerHour,
+      hasCriticalFuelAlert:
+        telemetry.fuel <= fuelStationConfig.criticalFuelThreshold,
+      hasCriticalConditionAlert: state.vehicle.condition <= 25,
+      hasCriticalTimerAlert:
+        state.missionTimerCountdownSeconds > 0 &&
+        state.missionTimerCountdownSeconds <= 10,
+      hasInteraction: hasNearbyInteraction(state, telemetry),
+      isPaused,
+      isJournalOpen: false,
+      activeBlockingOverlay: Boolean(
+        recoveryReason ||
+        state.activeNarrativeEventId ||
+        state.activeMissionChoiceObjectiveId,
+      ),
+    },
+    typeof performance === 'undefined' ? Date.now() : performance.now(),
+  );
 }
 
 function appendUnique(
@@ -601,6 +658,7 @@ const defaultMissionRouteState: MissionRouteRuntimeState = {
 
 export const useGameStore = create<GameStore>((set, get) => ({
   ...initialGameData,
+  presentationMode: 'stopped',
   isPaused: initialRecoveryReason ? true : initialGameData.isPaused,
   driving: defaultDrivingState,
   missionRoute: defaultMissionRouteState,
@@ -629,11 +687,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
       );
       const recoveryReason =
         fuel <= 0 ? (state.recoveryReason ?? 'fuel') : state.recoveryReason;
+      const telemetry = telemetryFromPlayer({ ...player, fuel });
+      const isPaused = recoveryReason ? true : state.isPaused;
       return {
-        telemetry: telemetryFromPlayer({ ...player, fuel }),
+        telemetry,
         vehicle: { ...state.vehicle, fuel },
         recoveryReason,
-        isPaused: recoveryReason ? true : state.isPaused,
+        isPaused,
+        presentationMode: presentationModeFor(
+          state,
+          telemetry,
+          isPaused,
+          recoveryReason,
+        ),
       };
     }),
   addInventoryItem: (itemId, quantity = 1) =>
@@ -925,17 +991,34 @@ export const useGameStore = create<GameStore>((set, get) => ({
       state.activeNarrativeEventId ||
       state.activeMissionChoiceObjectiveId
         ? state
-        : { isPaused: !state.isPaused },
+        : {
+            isPaused: !state.isPaused,
+            presentationMode: presentationModeFor(
+              state,
+              state.telemetry,
+              !state.isPaused,
+              state.recoveryReason,
+            ),
+          },
     ),
   setPaused: (isPaused) =>
-    set((state) => ({
-      isPaused:
+    set((state) => {
+      const nextPaused =
         state.recoveryReason ||
         state.activeNarrativeEventId ||
         state.activeMissionChoiceObjectiveId
           ? true
-          : isPaused,
-    })),
+          : isPaused;
+      return {
+        isPaused: nextPaused,
+        presentationMode: presentationModeFor(
+          state,
+          state.telemetry,
+          nextPaused,
+          state.recoveryReason,
+        ),
+      };
+    }),
   setFollowingPlayer: (isFollowingPlayer) => set({ isFollowingPlayer }),
   setCurrentLocationId: (currentLocationId) =>
     set((state) => {

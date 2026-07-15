@@ -37,6 +37,19 @@ interface RuntimeDiagnosticsSnapshot {
   roadIndexMilliseconds: string;
   roadMemoryMegabytes: string;
   heapMemoryMegabytes: string;
+  presentationMode: string;
+  cameraProfile: string;
+  cameraUpdateMilliseconds: string;
+  cameraUpdatesPerSecond: string;
+  cameraInterruptedTransitions: string;
+  followOffsetY: string;
+  declutterProfile: string;
+  declutterMilliseconds: string;
+  visibleLayers: string;
+  renderedSymbols: string;
+  playerHudRenders: string;
+  mobileHudRenders: string;
+  radioRenders: string;
   missionPanelRenders: string;
   journalSheetRenders: string;
   activeOverlays: string;
@@ -56,6 +69,13 @@ function readRuntimeDiagnostics(
     document.querySelector<HTMLElement>('.virtual-joystick')?.dataset;
   const missionDataset =
     document.querySelector<HTMLElement>('.mission-panel')?.dataset;
+  const playerHudDataset =
+    document.querySelector<HTMLElement>('.player-hud')?.dataset;
+  const mobileHudDataset = document.querySelector<HTMLElement>(
+    '.mobile-driving-hud',
+  )?.dataset;
+  const radioDataset =
+    document.querySelector<HTMLElement>('.radio-message')?.dataset;
   const overlayDataset =
     document.querySelector<HTMLElement>('.overlay-manager')?.dataset;
   const fps = Number(dataset?.runtimeFps);
@@ -99,6 +119,22 @@ function readRuntimeDiagnostics(
     roadIndexMilliseconds: value(dataset?.roadIndexMs, ' ms'),
     roadMemoryMegabytes: value(dataset?.roadMemoryMb, ' MiB'),
     heapMemoryMegabytes: value(dataset?.memoryMb, ' MiB'),
+    presentationMode: value(dataset?.presentationMode),
+    cameraProfile: value(dataset?.currentCameraProfile),
+    cameraUpdateMilliseconds: value(dataset?.cameraAverageUpdateMs, ' ms'),
+    cameraUpdatesPerSecond: value(dataset?.cameraUpdatesPerSecond, '/s'),
+    cameraInterruptedTransitions: value(dataset?.cameraInterruptedTransitions),
+    followOffsetY: value(dataset?.followOffsetY, ' px'),
+    declutterProfile: value(dataset?.mapDeclutterProfile),
+    declutterMilliseconds: value(dataset?.mapDeclutterChangeMs, ' ms'),
+    visibleLayers:
+      dataset?.mapVisibleLayerCount && dataset?.mapLayerCount
+        ? `${dataset.mapVisibleLayerCount}/${dataset.mapLayerCount}`
+        : unavailable,
+    renderedSymbols: value(dataset?.renderedSymbolCount),
+    playerHudRenders: value(playerHudDataset?.renderCount),
+    mobileHudRenders: value(mobileHudDataset?.renderCount),
+    radioRenders: value(radioDataset?.renderCount),
     missionPanelRenders: value(missionDataset?.renderCount),
     journalSheetRenders: value(missionDataset?.sheetRenderCount),
     activeOverlays: overlayDataset?.activeOverlay
@@ -199,6 +235,32 @@ export function DiagnosticsPanel({ input }: DiagnosticsPanelProps) {
         <dt>Memoria vial / JS</dt>
         <dd>
           {snapshot.roadMemoryMegabytes} / {snapshot.heapMemoryMegabytes}
+        </dd>
+        <dt>Presentación / cámara</dt>
+        <dd>
+          {snapshot.presentationMode} / {snapshot.cameraProfile}
+        </dd>
+        <dt>Cámara promedio / frecuencia</dt>
+        <dd>
+          {snapshot.cameraUpdateMilliseconds} /{' '}
+          {snapshot.cameraUpdatesPerSecond}
+        </dd>
+        <dt>Offset / interrupciones</dt>
+        <dd>
+          {snapshot.followOffsetY} / {snapshot.cameraInterruptedTransitions}
+        </dd>
+        <dt>Declutter / cambio</dt>
+        <dd>
+          {snapshot.declutterProfile} / {snapshot.declutterMilliseconds}
+        </dd>
+        <dt>Capas / símbolos</dt>
+        <dd>
+          {snapshot.visibleLayers} / {snapshot.renderedSymbols}
+        </dd>
+        <dt>Renders HUD / móvil / radio</dt>
+        <dd>
+          {snapshot.playerHudRenders} / {snapshot.mobileHudRenders} /{' '}
+          {snapshot.radioRenders}
         </dd>
         <dt>Renders misión / sheet</dt>
         <dd>
