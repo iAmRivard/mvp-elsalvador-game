@@ -18,7 +18,10 @@ import {
   nearestPendingObjective,
 } from '../../game/missions';
 import { formatNavigationInstruction } from '../../map/navigationInstructions';
-import { navigationGuidanceMessage } from '../../map/navigationGuidance';
+import {
+  navigationGuidanceMessage,
+  vehicleIsReversing,
+} from '../../map/navigationGuidance';
 import { useGameStore, type StoryLogSection } from '../../store/gameStore';
 import type { NavigationInstructionType } from '../../types/navigation';
 import type { StoryLogEntry } from '../../types/progression';
@@ -206,12 +209,13 @@ export function MissionPanel() {
           fuelMultiplier: selectedChoice?.fuelMultiplier ?? 1,
         });
   const rangeMeters = estimateFuelRange(telemetry.fuel, driving.surface);
+  const reversing = vehicleIsReversing(telemetry.speedMetersPerSecond);
   const navigationGuidance = navigationGuidanceMessage(
     missionRoute.activeNavigation,
     missionRoute.orientation,
     telemetry.speedKilometersPerHour,
     driving.roadDistanceMeters,
-    telemetry.speedKilometersPerHour < -0.5,
+    reversing,
   );
   const optionalMissions = missions.filter(
     (mission) => mission.optional && !completedMissionIds.includes(mission.id),
@@ -228,6 +232,18 @@ export function MissionPanel() {
     completedMissionIds.includes(mission.id),
   );
   const compactMission = active ?? recommendedMission;
+  const miniNavigationText = reversing
+    ? 'Reversa · guía pausada'
+    : (navigationGuidance ??
+      (missionRoute.nextInstruction &&
+      missionRoute.distanceToNextInstructionMeters !== null
+        ? formatNavigationInstruction(
+            missionRoute.nextInstruction,
+            missionRoute.distanceToNextInstructionMeters,
+          )
+        : 'Sigue la ruta hacia el objetivo'));
+  const miniNavigationDistance =
+    missionRoute.distanceMeters ?? next?.distanceMeters ?? null;
   useEffect(
     () =>
       useGameStore.subscribe((state, previousState) => {
@@ -282,13 +298,55 @@ export function MissionPanel() {
         </button>
       </header>
 
-      {collapsed && compactMission && (
+      {collapsed && active && (
+        <section
+          className="mobile-mini-navigator"
+          aria-label="Navegación de misión activa"
+          data-reversing={reversing}
+          data-testid="mobile-mini-navigator"
+        >
+          <button
+            type="button"
+            aria-label={`Ver objetivo de ${active.title}`}
+            onClick={() => {
+              setSection('missions');
+              setCollapsed(false);
+            }}
+          >
+            <span
+              className="mobile-mini-navigator__maneuver"
+              aria-hidden="true"
+            >
+              {reversing
+                ? '↓'
+                : maneuverSymbol(
+                    missionRoute.activeNavigation?.maneuverType ??
+                      missionRoute.nextInstruction?.type ??
+                      'continue',
+                  )}
+            </span>
+            <span className="mobile-mini-navigator__copy">
+              <strong>{miniNavigationText}</strong>
+              <span>{next?.objective.label ?? 'Objetivo registrado'}</span>
+              <small>
+                {active.title}
+                {miniNavigationDistance === null
+                  ? ''
+                  : ` · ${formatDistance(miniNavigationDistance)}`}
+              </small>
+            </span>
+            <span className="mobile-mini-navigator__action">Ver objetivo</span>
+          </button>
+        </section>
+      )}
+
+      {collapsed && !active && compactMission && (
         <section
           className="mission-panel__collapsed-cta"
-          aria-label={active ? 'Misión activa' : 'Siguiente misión'}
+          aria-label="Siguiente misión"
           data-testid="mobile-mission-cta"
         >
-          <span>{active ? 'Misión activa' : 'Siguiente misión'}</span>
+          <span>Siguiente misión</span>
           <strong>{compactMission.title}</strong>
           <p>{compactMission.description}</p>
           <div>
@@ -296,21 +354,14 @@ export function MissionPanel() {
               type="button"
               className="mission-button mission-button--primary"
               onClick={() => {
-                if (active) {
-                  setSection('missions');
-                  setCollapsed(false);
-                } else if (recommendedMission && recommendation?.canStartNow) {
+                if (recommendedMission && recommendation?.canStartNow) {
                   startMission(recommendedMission.id);
                 } else {
                   requestRouteRecalculation();
                 }
               }}
             >
-              {active
-                ? 'Continuar misión'
-                : recommendation?.canStartNow
-                  ? 'Iniciar misión'
-                  : 'Ir al inicio'}
+              {recommendation?.canStartNow ? 'Iniciar misión' : 'Ir al inicio'}
             </button>
             <button
               type="button"
@@ -358,11 +409,13 @@ export function MissionPanel() {
               >
                 <div className="mission-route-summary__header">
                   <span>
-                    {missionRoute.status === 'fallback'
-                      ? 'Ruta vial no disponible'
-                      : missionRoute.activeNavigation?.requiresRejoin
-                        ? 'Reincorporación'
-                        : 'Ruta por carretera'}
+                    {reversing
+                      ? 'Guía pausada en reversa'
+                      : missionRoute.status === 'fallback'
+                        ? 'Ruta vial no disponible'
+                        : missionRoute.activeNavigation?.requiresRejoin
+                          ? 'Reincorporación'
+                          : 'Ruta por carretera'}
                   </span>
                   <button
                     type="button"
@@ -374,36 +427,39 @@ export function MissionPanel() {
                     <span aria-hidden="true">↻</span>
                   </button>
                 </div>
-                {(navigationGuidance ||
-                  (missionRoute.nextInstruction &&
-                    missionRoute.distanceToNextInstructionMeters !== null)) && (
-                  <div className="mission-navigation-next">
-                    <span aria-hidden="true">
-                      {maneuverSymbol(
-                        missionRoute.activeNavigation?.maneuverType ??
-                          missionRoute.nextInstruction?.type ??
-                          'continue',
-                      )}
-                    </span>
-                    <div>
-                      <small>
-                        {missionRoute.activeNavigation?.requiresRejoin
-                          ? 'Vuelve al camino'
-                          : 'Próxima maniobra'}
-                      </small>
-                      <strong>
-                        {navigationGuidance ??
-                          (missionRoute.nextInstruction &&
-                          missionRoute.distanceToNextInstructionMeters !== null
-                            ? formatNavigationInstruction(
-                                missionRoute.nextInstruction,
-                                missionRoute.distanceToNextInstructionMeters,
-                              )
-                            : '')}
-                      </strong>
+                {!reversing &&
+                  (navigationGuidance ||
+                    (missionRoute.nextInstruction &&
+                      missionRoute.distanceToNextInstructionMeters !==
+                        null)) && (
+                    <div className="mission-navigation-next">
+                      <span aria-hidden="true">
+                        {maneuverSymbol(
+                          missionRoute.activeNavigation?.maneuverType ??
+                            missionRoute.nextInstruction?.type ??
+                            'continue',
+                        )}
+                      </span>
+                      <div>
+                        <small>
+                          {missionRoute.activeNavigation?.requiresRejoin
+                            ? 'Vuelve al camino'
+                            : 'Próxima maniobra'}
+                        </small>
+                        <strong>
+                          {navigationGuidance ??
+                            (missionRoute.nextInstruction &&
+                            missionRoute.distanceToNextInstructionMeters !==
+                              null
+                              ? formatNavigationInstruction(
+                                  missionRoute.nextInstruction,
+                                  missionRoute.distanceToNextInstructionMeters,
+                                )
+                              : '')}
+                        </strong>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
                 <strong>
                   {next?.objective.label ?? 'Objetivo registrado'}
                 </strong>
