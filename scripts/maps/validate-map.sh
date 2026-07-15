@@ -34,7 +34,7 @@ dd if="$MAP" bs=1 count=7 2>/dev/null | grep -q '^PMTiles$' || {
 }
 
 if test -s "$ROOT/data/checksums.txt"; then
-  (cd "$ROOT" && sha256sum -c data/checksums.txt)
+  (cd "$ROOT" && tr -d '\r' < data/checksums.txt | sha256sum -c -)
 fi
 
 if command -v pmtiles >/dev/null 2>&1; then
