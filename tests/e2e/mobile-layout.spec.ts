@@ -177,9 +177,7 @@ test('colapsa la misión, usa bottom sheet y pausa la guía en reversa', async (
     .getByRole('dialog', { name: 'Una señal de auxilio' })
     .getByRole('button', { name: 'Comenzar investigación' })
     .click();
-  const missionPanel = page.getByRole('complementary', {
-    name: 'Panel de misiones',
-  });
+  const missionPanel = page.locator('.mission-panel');
   await expect(missionPanel).toHaveAttribute('data-mobile-sheet-state', 'half');
   await expect(page.getByText('Continuar misión', { exact: true })).toHaveCount(
     0,
@@ -236,7 +234,9 @@ test('colapsa la misión, usa bottom sheet y pausa la guía en reversa', async (
     ],
   });
   await expect
-    .poll(async () => Number(await page.getByTestId('player-speed').textContent()))
+    .poll(async () =>
+      Number(await page.getByTestId('player-speed').textContent()),
+    )
     .toBeGreaterThan(5);
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',
@@ -244,8 +244,10 @@ test('colapsa la misión, usa bottom sheet y pausa la guía en reversa', async (
   });
   await expect(joystick).toHaveAttribute('data-processing-ms', /^\d+\.\d{3}$/);
 
+  const drivingHud = page.getByTestId('mobile-driving-hud');
   const miniNavigator = page.getByTestId('mobile-mini-navigator');
-  await expect(miniNavigator).toBeVisible({ timeout: 6_000 });
+  await expect(drivingHud).toBeVisible({ timeout: 6_000 });
+  await expect(miniNavigator).toBeHidden();
   await expect(missionPanel).toHaveAttribute(
     'data-mobile-sheet-state',
     'compact',
@@ -255,22 +257,29 @@ test('colapsa la misión, usa bottom sheet y pausa la guía en reversa', async (
     'data-sheet-render-count',
     /^\d+$/,
   );
-  await expect(miniNavigator).toContainText('La transmisión');
-  await expect(miniNavigator).toContainText('Ver objetivo');
+  await expect(drivingHud).toContainText('Sigue la señal');
+  await expect(drivingHud).toContainText('km/h');
 
-  const playerBox = await page.locator('.player-marker').boundingBox();
-  const arrowBox = await page.locator('.mission-route-arrow').boundingBox();
-  expect(playerBox).not.toBeNull();
-  expect(arrowBox).not.toBeNull();
-  const markerSeparation = Math.hypot(
-    playerBox!.x + playerBox!.width / 2 - (arrowBox!.x + arrowBox!.width / 2),
-    playerBox!.y + playerBox!.height / 2 - (arrowBox!.y + arrowBox!.height / 2),
-  );
-  expect(markerSeparation).toBeGreaterThan(12);
+  await expect
+    .poll(
+      async () => {
+        const playerBox = await page.locator('.player-marker').boundingBox();
+        const arrowBox = await page
+          .locator('.mission-route-arrow')
+          .boundingBox();
+        if (!playerBox || !arrowBox) return 0;
+        return Math.hypot(
+          playerBox.x + playerBox.width / 2 - (arrowBox.x + arrowBox.width / 2),
+          playerBox.y +
+            playerBox.height / 2 -
+            (arrowBox.y + arrowBox.height / 2),
+        );
+      },
+      { timeout: 5_000 },
+    )
+    .toBeGreaterThan(12);
 
-  await miniNavigator
-    .getByRole('button', { name: 'Ver objetivo de La transmisión' })
-    .click();
+  await drivingHud.locator('button').click();
   await expect(missionPanel).toHaveAttribute('data-mobile-sheet-state', 'half');
   const halfSheetBox = await missionPanel.boundingBox();
   expect(halfSheetBox).not.toBeNull();
@@ -281,7 +290,7 @@ test('colapsa la misión, usa bottom sheet y pausa la guía en reversa', async (
     'expanded',
   );
   await page.getByRole('button', { name: 'Cerrar bitácora' }).click();
-  await expect(miniNavigator).toBeVisible();
+  await expect(drivingHud).toBeVisible();
 
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchStart',
@@ -303,8 +312,8 @@ test('colapsa la misión, usa bottom sheet y pausa la guía en reversa', async (
     timeout: 8_000,
   });
   await expect(gameMap).toHaveAttribute('data-navigation-reversing', 'true');
-  await expect(miniNavigator).toHaveAttribute('data-reversing', 'true');
-  await expect(miniNavigator).toContainText('Reversa · guía pausada');
+  await expect(drivingHud).toHaveAttribute('data-reversing', 'true');
+  await expect(drivingHud).toContainText('Reversa · guía pausada');
   await expect(page.locator('.mission-route-arrow')).toBeHidden();
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',

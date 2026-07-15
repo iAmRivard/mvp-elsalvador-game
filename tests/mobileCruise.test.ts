@@ -76,8 +76,35 @@ describe('velocidad objetivo móvil', () => {
     expect(input.snapshot()).toMatchObject({ boost: true });
     expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(35);
 
-    vi.advanceTimersByTime(mobileCruiseConfig.reverseActivationDelayMilliseconds);
+    vi.advanceTimersByTime(
+      mobileCruiseConfig.reverseActivationDelayMilliseconds,
+    );
     expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(35);
+    input.clearAllInput();
+  });
+
+  it('usa un objetivo efectivo durante 2.5 s y recupera el crucero sin frenazo', () => {
+    vi.useFakeTimers();
+    const input = new InputController();
+    input.setMobileCruiseEnabled(true);
+    input.setTargetSpeedJoystick(1, 0);
+    input.advanceMobileCruise(0, 0.5);
+    input.setTargetSpeedJoystick(0, 0);
+    expect(input.activateMobileBoost()).toBe(true);
+
+    for (let step = 0; step < 24; step += 1) {
+      vi.advanceTimersByTime(100);
+      input.advanceMobileCruise(100 / 3.6, 0.1);
+      expect(input.snapshot().throttle).toBeGreaterThanOrEqual(0);
+    }
+    vi.advanceTimersByTime(100);
+    input.advanceMobileCruise(110 / 3.6, 0.1);
+
+    expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(35);
+    expect(input.snapshot().boost).toBe(false);
+    expect(input.snapshot().throttle).toBeGreaterThanOrEqual(
+      -mobileCruiseConfig.boostRecoveryMaximumBrake,
+    );
     input.clearAllInput();
   });
 

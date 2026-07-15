@@ -103,6 +103,7 @@ export class InputController {
   private readonly activePointerIds = new Set<number>();
   private mobileBoostActiveUntil = 0;
   private mobileBoostCooldownUntil = 0;
+  private mobileBoostRecoveryUntil = 0;
   private mobileBoostTimer: ReturnType<typeof setTimeout> | null = null;
   private mobileBoostState: MobileBoostState = {
     active: false,
@@ -283,6 +284,7 @@ export class InputController {
     deltaTimeSeconds: number,
   ): void {
     if (!this.mobileCruiseEnabled) return;
+    this.updateMobileBoostState();
     const previous = this.mobileCruiseTarget;
     const intent = this.mobileCruiseVerticalIntent;
     const deltaTime = Math.max(
@@ -322,11 +324,28 @@ export class InputController {
       reversing,
     };
     this.mobileCruiseTarget = next;
-    this.mobileCruiseThrottle = mobileCruiseThrottle(
-      next,
+    const effectiveTarget = this.mobileBoostState.active
+      ? {
+          ...next,
+          targetSpeedKilometersPerHour:
+            mobileCruiseConfig.boostTargetSpeedKilometersPerHour,
+        }
+      : next;
+    const requestedThrottle = mobileCruiseThrottle(
+      effectiveTarget,
       currentSpeedMetersPerSecond,
       intent,
     );
+    this.mobileCruiseThrottle =
+      !this.mobileBoostState.active &&
+      Date.now() < this.mobileBoostRecoveryUntil &&
+      intent >= 0 &&
+      requestedThrottle < 0
+        ? Math.max(
+            requestedThrottle,
+            -mobileCruiseConfig.boostRecoveryMaximumBrake,
+          )
+        : requestedThrottle;
 
     const now = performance.now();
     const immediateStateChange =
@@ -417,6 +436,7 @@ export class InputController {
 
   private updateMobileBoostState(): void {
     const now = Date.now();
+    const wasActive = this.mobileBoostState.active;
     const remainingMilliseconds = Math.max(
       0,
       this.mobileBoostActiveUntil - now,
@@ -429,6 +449,10 @@ export class InputController {
         ? 0
         : Math.max(0, this.mobileBoostCooldownUntil - now),
     };
+    if (wasActive && !active) {
+      this.mobileBoostRecoveryUntil =
+        now + mobileCruiseConfig.boostRecoveryMilliseconds;
+    }
   }
 
   setAutoThrottleScale(value: number): void {
@@ -602,6 +626,7 @@ export class InputController {
     this.mobileBoostTimer = null;
     this.mobileBoostActiveUntil = 0;
     this.mobileBoostCooldownUntil = 0;
+    this.mobileBoostRecoveryUntil = 0;
     this.mobileBoostState = {
       active: false,
       remainingMilliseconds: 0,

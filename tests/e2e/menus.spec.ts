@@ -27,26 +27,13 @@ test('recorre inicio, tutorial, pausa y configuración', async ({
   await settings.getByRole('button', { name: 'Listo' }).click();
 
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
-  const tutorialTitles = [
-    'Tu vehículo',
-    'Tu ruta',
-    'Tu objetivo',
-    'Conduce',
-    'Frena y retrocede',
-    'Usa el turbo',
-    'Interactúa',
-    'Puntos de combustible',
-    'Vuelve a la ruta',
-  ];
-  for (const [index, title] of tutorialTitles.entries()) {
-    await expect(page.getByRole('heading', { name: title })).toBeVisible();
-    if (index < tutorialTitles.length - 1) {
-      await page
-        .getByRole('button', { name: 'Siguiente', exact: true })
-        .click();
-    }
-  }
-  await page.getByRole('button', { name: 'Finalizar' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Gira el vehículo' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Realiza la acción para continuar'),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Omitir' }).click();
 
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,
@@ -81,7 +68,7 @@ test('recorre inicio, tutorial, pausa y configuración', async ({
   await page.keyboard.press('Escape');
   await pauseMenu.getByRole('button', { name: 'Ver tutorial' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Tu vehículo' }),
+    page.getByRole('heading', { name: 'Gira el vehículo' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Omitir' }).click();
 });

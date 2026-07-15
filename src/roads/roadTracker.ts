@@ -192,11 +192,7 @@ export class RoadTracker {
       const edge = this.edgesById.get(nearest.edgeId);
       if (!edge) return [];
       const distanceScore =
-        40 *
-        Math.max(
-          0,
-          1 - nearest.distanceMeters / detectionRadiusMeters,
-        );
+        40 * Math.max(0, 1 - nearest.distanceMeters / detectionRadiusMeters);
       const headingScore = scoreHeading(
         context.heading,
         nearest.heading,
@@ -270,7 +266,7 @@ export class RoadTracker {
         lastValidContactAt: now,
         consecutiveMisses: 0,
       };
-      this.lastMissTimestamp = null;
+      this.lastMissTimestamp = now;
       this.recordSurfaceTransition(surface, now, position, 'direct-contact');
       this.diagnostics = {
         selectedEdgeId: selected.edge.id,
@@ -294,7 +290,11 @@ export class RoadTracker {
       };
     }
 
-    if (this.lastMissTimestamp !== now) {
+    if (
+      this.lastMissTimestamp === null ||
+      now - this.lastMissTimestamp >=
+        mobileRoadContactConfig.missSampleIntervalMilliseconds
+    ) {
       this.contactMemory = {
         ...this.contactMemory,
         consecutiveMisses: this.contactMemory.consecutiveMisses + 1,
@@ -360,8 +360,7 @@ export class RoadTracker {
     }
 
     const offroadReason: RoadOffroadReason =
-      elapsedSinceValidContact >
-      mobileRoadContactConfig.gracePeriodMilliseconds
+      elapsedSinceValidContact > mobileRoadContactConfig.gracePeriodMilliseconds
         ? 'contact-timeout'
         : this.contactMemory.consecutiveMisses >=
             mobileRoadContactConfig.maximumConsecutiveMisses

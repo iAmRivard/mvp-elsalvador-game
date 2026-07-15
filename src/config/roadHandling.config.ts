@@ -28,6 +28,7 @@ export const mobileRoadContactConfig = {
   lastEdgeSearchRadiusMeters: 70,
   gracePeriodMilliseconds: 1_000,
   maximumConsecutiveMisses: 4,
+  missSampleIntervalMilliseconds: 250,
   surfaceHistoryLimit: 20,
 } as const;
 

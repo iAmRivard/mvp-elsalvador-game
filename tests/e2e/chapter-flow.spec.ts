@@ -91,10 +91,18 @@ async function interact(page: Page) {
 }
 
 async function expandMissions(page: Page) {
+  if (
+    await page
+      .getByRole('button', { name: 'Misiones', exact: true })
+      .isVisible()
+  ) {
+    return;
+  }
   const expand = page.getByRole('button', {
     name: 'Expandir panel de misiones',
   });
   const details = page.getByRole('button', { name: 'Ver detalles' });
+  await expect(details.or(expand).first()).toBeVisible();
   if (await details.isVisible()) await details.click();
   else if (await expand.isVisible()) await expand.click();
 }

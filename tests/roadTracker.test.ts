@@ -173,10 +173,15 @@ describe('road tracker', () => {
       recovered: true,
     });
     expect(tracker.getDiagnostics()).toMatchObject({
-      consecutiveMisses: 1,
+      consecutiveMisses: 0,
       contactSource: 'grace',
       offroadReason: null,
     });
+    tracker.update([-89.31, 13.71], {
+      mobile: true,
+      timestampMilliseconds: 250,
+    });
+    expect(tracker.getDiagnostics().consecutiveMisses).toBe(1);
   });
 
   it('allows the fourth consecutive miss to become offroad', () => {
@@ -188,7 +193,7 @@ describe('road tracker', () => {
       timestampMilliseconds: 0,
     });
 
-    for (const timestampMilliseconds of [100, 200, 300]) {
+    for (const timestampMilliseconds of [250, 500, 750]) {
       expect(
         tracker.update([-89.31, 13.71], {
           mobile: true,
@@ -199,7 +204,7 @@ describe('road tracker', () => {
     expect(
       tracker.update([-89.31, 13.71], {
         mobile: true,
-        timestampMilliseconds: 400,
+        timestampMilliseconds: 1_000,
       }),
     ).toBeNull();
     expect(tracker.getDiagnostics()).toMatchObject({
@@ -208,6 +213,53 @@ describe('road tracker', () => {
       offroadReason: 'maximum-misses',
     });
   });
+
+  it.each([
+    [
+      '60 FPS',
+      Array.from({ length: 62 }, (_, index) =>
+        Math.round(((index + 1) * 1_000) / 60),
+      ),
+    ],
+    [
+      '30 FPS',
+      Array.from({ length: 32 }, (_, index) =>
+        Math.round(((index + 1) * 1_000) / 30),
+      ),
+    ],
+    [
+      '20 FPS',
+      Array.from({ length: 21 }, (_, index) =>
+        Math.round(((index + 1) * 1_000) / 20),
+      ),
+    ],
+    [
+      'frames irregulares',
+      [16, 70, 249, 250, 400, 510, 749, 750, 920, 1_000, 1_050],
+    ],
+  ])(
+    'conserva aproximadamente un segundo de gracia a %s',
+    (_label, timestamps) => {
+      const tracker = new RoadTracker(
+        new RoadSpatialIndex(createRoadTestNetwork()),
+      );
+      tracker.update([-89.2995, 13.7], {
+        mobile: true,
+        timestampMilliseconds: 0,
+      });
+      for (const timestampMilliseconds of timestamps) {
+        tracker.update([-89.31, 13.71], {
+          mobile: true,
+          timestampMilliseconds,
+        });
+      }
+      expect(tracker.getDiagnostics().consecutiveMisses).toBeGreaterThanOrEqual(
+        3,
+      );
+      expect(tracker.getDiagnostics().consecutiveMisses).toBeLessThanOrEqual(4);
+      expect(tracker.getDiagnostics().surface).toBe('offroad');
+    },
+  );
 
   it('expires recovery after the grace period', () => {
     const tracker = new RoadTracker(

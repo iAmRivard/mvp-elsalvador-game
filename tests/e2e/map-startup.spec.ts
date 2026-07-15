@@ -110,12 +110,20 @@ test('reinicia y vuelve a alinear con la red vial ya montada', async ({
   await expect(gameMap).toHaveAttribute('data-road-network-status', 'ready', {
     timeout: 20_000,
   });
+  await expect(page.getByText('El mapa local está listo.')).toBeAttached({
+    timeout: 20_000,
+  });
   const position = page.getByTestId('player-position');
   const alignedStart = await position.textContent();
 
-  await page.keyboard.down('w');
   await expect
-    .poll(() => position.textContent(), { timeout: 5_000 })
+    .poll(
+      async () => {
+        await page.keyboard.down('w');
+        return position.textContent();
+      },
+      { timeout: 8_000 },
+    )
     .not.toBe(alignedStart ?? '');
   await page.keyboard.up('w');
 

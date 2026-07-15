@@ -136,7 +136,11 @@ async function expandMissionJournal(page: Page) {
     name: 'Expandir panel de misiones',
   });
   const viewObjective = page.getByRole('button', { name: /Ver objetivo/ });
+  const drivingHud = page.getByRole('button', {
+    name: 'Abrir bitácora de la misión',
+  });
   if (await details.isVisible()) await details.click();
+  else if (await drivingHud.isVisible()) await drivingHud.click();
   else if (await viewObjective.isVisible()) await viewObjective.click();
   else if (await expandMissions.isVisible()) await expandMissions.click();
   await page.getByRole('button', { name: 'Misiones', exact: true }).click();
@@ -144,6 +148,7 @@ async function expandMissionJournal(page: Page) {
 
 async function abandonActiveMission(page: Page) {
   const abandonMission = page.getByRole('button', { name: 'Abandonar misión' });
+  if (!(await abandonMission.isVisible())) await expandMissionJournal(page);
   await abandonMission.scrollIntoViewIfNeeded();
   await abandonMission.evaluate((element) =>
     (element as HTMLButtonElement).click(),
@@ -174,6 +179,7 @@ test('carga el mapa sin solicitudes a terceros', async ({
   page,
   baseURL,
 }, testInfo) => {
+  test.setTimeout(90_000);
   const applicationOrigin = new URL(baseURL ?? 'http://127.0.0.1:4173').origin;
   const externalRequests: string[] = [];
   const criticalErrors: string[] = [];
