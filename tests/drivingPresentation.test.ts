@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   deriveDrivingPresentationMode,
+  derivePresentationFromState,
   DrivingPresentationController,
+  effectiveDrivingSurfaceLabel,
   type DrivingPresentationInput,
+  type PresentationRelevantState,
 } from '../src/game/drivingPresentation';
 
 const baseInput: DrivingPresentationInput = {
@@ -65,5 +68,69 @@ describe('presentación de conducción', () => {
     expect(controller.update(baseInput, 100)).toBe('driving');
     expect(controller.update(baseInput, 1_349)).toBe('driving');
     expect(controller.update(baseInput, 1_350)).toBe('stopped');
+  });
+});
+
+describe('derivaciÃ³n central de presentaciÃ³n', () => {
+  const moving: PresentationRelevantState = {
+    speedKilometersPerHour: 72,
+    isPaused: false,
+    isJournalOpen: false,
+    recoveryReason: null,
+    activeNarrativeEventId: null,
+    activeMissionChoiceObjectiveId: null,
+    hasCriticalFuelAlert: false,
+    hasCriticalConditionAlert: false,
+    hasCriticalTimerAlert: false,
+    hasInteraction: false,
+  };
+
+  it('reacciona a cada estado bloqueante sin esperar telemetrÃ­a', () => {
+    const derive = (override: Partial<PresentationRelevantState>) =>
+      derivePresentationFromState({ ...moving, ...override }, 'fast', 100);
+
+    expect(derive({ isJournalOpen: true })).toBe('alert');
+    expect(derive({ activeNarrativeEventId: 'radio-1' })).toBe('alert');
+    expect(derive({ activeMissionChoiceObjectiveId: 'choice-1' })).toBe(
+      'alert',
+    );
+    expect(derive({ recoveryReason: 'fuel' })).toBe('alert');
+    expect(derive({ hasCriticalFuelAlert: true })).toBe('alert');
+    expect(derive({ hasCriticalConditionAlert: true })).toBe('alert');
+    expect(derive({ hasCriticalTimerAlert: true })).toBe('alert');
+    expect(derive({ isPaused: true, speedKilometersPerHour: 0 })).toBe(
+      'stopped',
+    );
+  });
+
+  it('sale de alertas, interacciones, bitÃ¡cora y pausa con el estado actual', () => {
+    const cruising = { ...moving, speedKilometersPerHour: 30 };
+    expect(derivePresentationFromState(cruising, 'alert', 200)).toBe('driving');
+    expect(
+      derivePresentationFromState(
+        { ...cruising, speedKilometersPerHour: 0, hasInteraction: true },
+        'alert',
+        200,
+      ),
+    ).toBe('interaction');
+    expect(
+      derivePresentationFromState(
+        { ...cruising, speedKilometersPerHour: 0 },
+        'interaction',
+        200,
+      ),
+    ).toBe('stopped');
+  });
+
+  it('sustituye solo la etiqueta visual dentro de una zona de objetivo', () => {
+    expect(effectiveDrivingSurfaceLabel('offroad', true)).toBe(
+      'Zona del objetivo',
+    );
+    expect(effectiveDrivingSurfaceLabel('offroad', false)).toBe(
+      'Fuera de carretera',
+    );
+    expect(effectiveDrivingSurfaceLabel('primary', false)).toBe(
+      'V\u00eda primaria',
+    );
   });
 });

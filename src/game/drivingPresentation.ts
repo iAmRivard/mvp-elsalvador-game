@@ -1,6 +1,28 @@
+import { roadSurfaceLabels } from '../config/roadHandling.config';
+import type { RecoveryReason } from '../types/progression';
+import type { RoadSurface } from '../types/roads';
+
 export type DrivingPresentationMode =
   'stopped' | 'driving' | 'fast' | 'alert' | 'interaction';
 
+/**
+ * Complete store state that can change the driving presentation. Keeping this
+ * contract explicit prevents blocking overlays from waiting for telemetry.
+ */
+export interface PresentationRelevantState {
+  speedKilometersPerHour: number;
+  isPaused: boolean;
+  isJournalOpen: boolean;
+  recoveryReason: RecoveryReason | null;
+  activeNarrativeEventId: string | null;
+  activeMissionChoiceObjectiveId: string | null;
+  hasCriticalFuelAlert: boolean;
+  hasCriticalConditionAlert: boolean;
+  hasCriticalTimerAlert: boolean;
+  hasInteraction: boolean;
+}
+
+/** Backward-compatible input accepted by existing callers and focused tests. */
 export interface DrivingPresentationInput {
   speedKilometersPerHour: number;
   hasCriticalFuelAlert: boolean;
@@ -9,7 +31,10 @@ export interface DrivingPresentationInput {
   hasInteraction: boolean;
   isPaused: boolean;
   isJournalOpen: boolean;
-  activeBlockingOverlay: boolean;
+  recoveryReason?: RecoveryReason | null;
+  activeNarrativeEventId?: string | null;
+  activeMissionChoiceObjectiveId?: string | null;
+  activeBlockingOverlay?: boolean;
   previousMode?: DrivingPresentationMode;
   stoppedForMilliseconds?: number;
 }
@@ -29,46 +54,103 @@ function normalizedSpeed(speedKilometersPerHour: number): number {
     : 0;
 }
 
-export function deriveDrivingPresentationMode(
-  input: DrivingPresentationInput,
-): DrivingPresentationMode {
-  const speed = normalizedSpeed(input.speedKilometersPerHour);
+function relevantStateFromInput(
+  input: DrivingPresentationInput | PresentationRelevantState,
+): PresentationRelevantState {
+  return {
+    speedKilometersPerHour: input.speedKilometersPerHour,
+    isPaused: input.isPaused,
+    isJournalOpen: input.isJournalOpen,
+    recoveryReason: input.recoveryReason ?? null,
+    activeNarrativeEventId: input.activeNarrativeEventId ?? null,
+    activeMissionChoiceObjectiveId:
+      input.activeMissionChoiceObjectiveId ?? null,
+    hasCriticalFuelAlert: input.hasCriticalFuelAlert,
+    hasCriticalConditionAlert: input.hasCriticalConditionAlert,
+    hasCriticalTimerAlert: input.hasCriticalTimerAlert ?? false,
+    hasInteraction: input.hasInteraction,
+  };
+}
+
+function blockingPresentation(
+  state: PresentationRelevantState,
+  legacyBlockingOverlay = false,
+): DrivingPresentationMode | null {
   if (
-    input.hasCriticalFuelAlert ||
-    input.hasCriticalConditionAlert ||
-    input.hasCriticalTimerAlert ||
-    input.activeBlockingOverlay
+    state.hasCriticalFuelAlert ||
+    state.hasCriticalConditionAlert ||
+    state.hasCriticalTimerAlert ||
+    state.isJournalOpen ||
+    state.recoveryReason !== null ||
+    state.activeNarrativeEventId !== null ||
+    state.activeMissionChoiceObjectiveId !== null ||
+    legacyBlockingOverlay
   ) {
     return 'alert';
   }
+  if (state.isPaused) return 'stopped';
   if (
-    input.hasInteraction &&
-    speed <= drivingPresentationThresholds.interactionMaximumKilometersPerHour
+    state.hasInteraction &&
+    normalizedSpeed(state.speedKilometersPerHour) <=
+      drivingPresentationThresholds.interactionMaximumKilometersPerHour
   ) {
     return 'interaction';
   }
-  if (input.isPaused) return 'stopped';
+  return null;
+}
 
-  const previous = input.previousMode ?? 'stopped';
-  const stoppedFor = input.stoppedForMilliseconds ?? Number.POSITIVE_INFINITY;
+function movingPresentation(
+  state: PresentationRelevantState,
+  previousMode: DrivingPresentationMode,
+  canEnterStopped: boolean,
+  legacyBlockingOverlay = false,
+): DrivingPresentationMode {
+  const blocking = blockingPresentation(state, legacyBlockingOverlay);
+  if (blocking) return blocking;
+
+  const speed = normalizedSpeed(state.speedKilometersPerHour);
   if (
-    previous === 'stopped' &&
+    previousMode === 'stopped' &&
     speed < drivingPresentationThresholds.stoppedExitKilometersPerHour
   ) {
     return 'stopped';
   }
   if (
-    speed < drivingPresentationThresholds.stoppedEnterKilometersPerHour &&
-    stoppedFor >= drivingPresentationThresholds.stoppedDelayMilliseconds
+    canEnterStopped &&
+    speed < drivingPresentationThresholds.stoppedEnterKilometersPerHour
   ) {
     return 'stopped';
   }
 
   const fastThreshold =
-    previous === 'fast'
+    previousMode === 'fast'
       ? drivingPresentationThresholds.fastExitKilometersPerHour
       : drivingPresentationThresholds.fastEnterKilometersPerHour;
   return speed > fastThreshold ? 'fast' : 'driving';
+}
+
+export function derivePresentationFromState(
+  state: PresentationRelevantState,
+  previousMode: DrivingPresentationMode,
+  timestampMilliseconds: number,
+): DrivingPresentationMode {
+  // The timestamp is part of the public contract so stateful controllers can
+  // apply their stopped-delay clock without changing the derivation inputs.
+  void timestampMilliseconds;
+  return movingPresentation(state, previousMode, true);
+}
+
+export function deriveDrivingPresentationMode(
+  input: DrivingPresentationInput,
+): DrivingPresentationMode {
+  const previousMode = input.previousMode ?? 'stopped';
+  return movingPresentation(
+    relevantStateFromInput(input),
+    previousMode,
+    (input.stoppedForMilliseconds ?? Number.POSITIVE_INFINITY) >=
+      drivingPresentationThresholds.stoppedDelayMilliseconds,
+    input.activeBlockingOverlay ?? false,
+  );
 }
 
 export class DrivingPresentationController {
@@ -76,13 +158,14 @@ export class DrivingPresentationController {
   private belowStoppedThresholdSince: number | null = null;
 
   update(
-    input: DrivingPresentationInput,
+    input: DrivingPresentationInput | PresentationRelevantState,
     timestampMilliseconds: number,
   ): DrivingPresentationMode {
     const now = Number.isFinite(timestampMilliseconds)
       ? timestampMilliseconds
       : 0;
-    const speed = normalizedSpeed(input.speedKilometersPerHour);
+    const state = relevantStateFromInput(input);
+    const speed = normalizedSpeed(state.speedKilometersPerHour);
     if (speed < drivingPresentationThresholds.stoppedEnterKilometersPerHour) {
       this.belowStoppedThresholdSince ??= now;
     } else if (
@@ -94,11 +177,15 @@ export class DrivingPresentationController {
       this.belowStoppedThresholdSince === null
         ? 0
         : Math.max(0, now - this.belowStoppedThresholdSince);
-    this.mode = deriveDrivingPresentationMode({
-      ...input,
-      previousMode: this.mode,
-      stoppedForMilliseconds,
-    });
+    this.mode = movingPresentation(
+      state,
+      this.mode,
+      stoppedForMilliseconds >=
+        drivingPresentationThresholds.stoppedDelayMilliseconds,
+      'activeBlockingOverlay' in input
+        ? (input.activeBlockingOverlay ?? false)
+        : false,
+    );
     return this.mode;
   }
 
@@ -118,4 +205,13 @@ export function drivingDeclutterMode(
   if (mode === 'fast') return 'fast';
   if (mode === 'driving' || mode === 'alert') return 'driving';
   return 'stopped';
+}
+
+export function effectiveDrivingSurfaceLabel(
+  surface: RoadSurface,
+  insideValidObjectiveZone: boolean,
+): string {
+  return insideValidObjectiveZone
+    ? 'Zona del objetivo'
+    : roadSurfaceLabels[surface];
 }

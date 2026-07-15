@@ -170,6 +170,7 @@ interface GameData {
 interface GameStore extends GameData {
   isJournalOpen: boolean;
   journalSection: StoryLogSection;
+  insideValidObjectiveZone: boolean;
   presentationMode: DrivingPresentationMode;
   driving: DrivingRuntimeState;
   missionRoute: MissionRouteRuntimeState;
@@ -258,6 +259,7 @@ interface GameStore extends GameData {
   setOnboardingState: (state: OnboardingState) => void;
   openJournal: (section?: StoryLogSection) => void;
   closeJournal: () => void;
+  setInsideValidObjectiveZone: (inside: boolean) => void;
   requestStoryLog: (section?: StoryLogSection) => void;
   dismissGameplayFeedback: () => void;
   dismissLevelUp: () => void;
@@ -300,7 +302,7 @@ function presentationModeFor(
     {
       speedKilometersPerHour: telemetry.speedKilometersPerHour,
       hasCriticalFuelAlert:
-        telemetry.fuel <= fuelStationConfig.criticalFuelThreshold,
+        telemetry.fuel < fuelStationConfig.criticalFuelThreshold,
       hasCriticalConditionAlert: state.vehicle.condition <= 25,
       hasCriticalTimerAlert:
         state.missionTimerCountdownSeconds > 0 &&
@@ -308,13 +310,9 @@ function presentationModeFor(
       hasInteraction: hasNearbyInteraction(state, telemetry),
       isPaused,
       isJournalOpen: state.isJournalOpen,
-      activeBlockingOverlay: Boolean(
-        recoveryReason ||
-        state.activeNarrativeEventId ||
-        state.activeRadioEventId ||
-        state.activeMissionChoiceObjectiveId ||
-        state.lastLevelUp,
-      ),
+      recoveryReason,
+      activeNarrativeEventId: state.activeNarrativeEventId,
+      activeMissionChoiceObjectiveId: state.activeMissionChoiceObjectiveId,
     },
     typeof performance === 'undefined' ? Date.now() : performance.now(),
   );
@@ -672,6 +670,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   ...initialGameData,
   isJournalOpen: false,
   journalSection: 'missions',
+  insideValidObjectiveZone: false,
   presentationMode: 'stopped',
   isPaused: initialRecoveryReason ? true : initialGameData.isPaused,
   driving: defaultDrivingState,
@@ -708,12 +707,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
         vehicle: { ...state.vehicle, fuel },
         recoveryReason,
         isPaused,
-        presentationMode: presentationModeFor(
-          state,
-          telemetry,
-          isPaused,
-          recoveryReason,
-        ),
       };
     }),
   addInventoryItem: (itemId, quantity = 1) =>
@@ -1005,15 +998,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       state.activeNarrativeEventId ||
       state.activeMissionChoiceObjectiveId
         ? state
-        : {
-            isPaused: !state.isPaused,
-            presentationMode: presentationModeFor(
-              state,
-              state.telemetry,
-              !state.isPaused,
-              state.recoveryReason,
-            ),
-          },
+        : { isPaused: !state.isPaused },
     ),
   setPaused: (isPaused) =>
     set((state) => {
@@ -1023,15 +1008,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         state.activeMissionChoiceObjectiveId
           ? true
           : isPaused;
-      return {
-        isPaused: nextPaused,
-        presentationMode: presentationModeFor(
-          state,
-          state.telemetry,
-          nextPaused,
-          state.recoveryReason,
-        ),
-      };
+      return { isPaused: nextPaused };
     }),
   setFollowingPlayer: (isFollowingPlayer) => set({ isFollowingPlayer }),
   setCurrentLocationId: (currentLocationId) =>
@@ -1828,6 +1805,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       },
     })),
   closeJournal: () => set({ isJournalOpen: false }),
+  setInsideValidObjectiveZone: (insideValidObjectiveZone) =>
+    set((state) =>
+      state.insideValidObjectiveZone === insideValidObjectiveZone
+        ? state
+        : { insideValidObjectiveZone },
+    ),
   requestStoryLog: (section = 'history') =>
     set((state) => ({
       isJournalOpen: true,
@@ -1879,6 +1862,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeMissionChoiceObjectiveId: null,
         isJournalOpen: false,
         journalSection: 'missions',
+        insideValidObjectiveZone: false,
         missionTimerCountdownSeconds: 0,
         gameplayFeedback: navigationRestoreFailed
           ? feedback(
@@ -1915,6 +1899,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       activeMissionChoiceObjectiveId: null,
       isJournalOpen: false,
       journalSection: 'missions',
+      insideValidObjectiveZone: false,
       missionTimerCountdownSeconds: 0,
       gameplayFeedback: null,
       storyLogRequest: { section: 'missions', revision: 0 },
