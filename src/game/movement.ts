@@ -221,13 +221,14 @@ function roadState(
   );
   if (
     !nearest ||
-    nearest.distanceMeters > roadAssistConfig.detectionRadiusMeters
+    (nearest.distanceMeters > roadAssistConfig.detectionRadiusMeters &&
+      !roadContact.recovered)
   ) {
     return { surface: 'offroad', contact: null };
   }
   return {
-    surface: roadSurfaceForEdge(roadContact.edge),
-    contact: { edge: roadContact.edge, nearest },
+    surface: roadContact.surface ?? roadSurfaceForEdge(roadContact.edge),
+    contact: { ...roadContact, nearest },
   };
 }
 
