@@ -98,7 +98,9 @@ invariant(
 const expectedChecksum = (await readFile(CHECKSUM_PATH, 'utf8'))
   .trim()
   .split(/\s+/)[0];
-const actualChecksum = createHash('sha256').update(serialized).digest('hex');
+const actualChecksum = createHash('sha256')
+  .update(serialized.replace(/\r\n/g, '\n'))
+  .digest('hex');
 invariant(
   actualChecksum === expectedChecksum,
   'El checksum de la red vial no coincide.',
