@@ -28,6 +28,7 @@ class MemoryStorage implements GameStorage {
 }
 
 const game: PersistedGameData = {
+  onboardingState: 'completed',
   player: {
     longitude: -89.3,
     latitude: 13.8,
@@ -360,6 +361,25 @@ describe('guardado versionado', () => {
       expect(result.save.game.lastCheckpoint.activeMissionId).toBe(
         game.activeMissionId,
       );
+    }
+  });
+
+  it('migra una partida v4 como onboarding ya resuelto', () => {
+    const legacyGame = { ...game } as Record<string, unknown>;
+    delete legacyGame.onboardingState;
+    const result = parseGameSave(
+      JSON.stringify({
+        version: 4,
+        savedAt: '2026-07-14T00:00:00.000Z',
+        game: legacyGame,
+      }),
+    );
+
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.migrated).toBe(true);
+      expect(result.save.version).toBe(GAME_SAVE_VERSION);
+      expect(result.save.game.onboardingState).toBe('completed');
     }
   });
 

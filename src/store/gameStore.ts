@@ -54,6 +54,7 @@ import {
 } from '../game/progression';
 import type { PlayerStepEnvironment } from '../game/movement';
 import type { PlayerRuntime, PlayerTelemetry } from '../types/game';
+import type { OnboardingState } from '../types/onboarding';
 import type {
   ActiveNavigationState,
   NavigationTarget,
@@ -134,6 +135,7 @@ export interface MissionRouteRuntimeState {
 }
 
 interface GameData {
+  onboardingState: OnboardingState;
   telemetry: PlayerTelemetry;
   isPaused: boolean;
   isFollowingPlayer: boolean;
@@ -166,6 +168,8 @@ interface GameData {
 }
 
 interface GameStore extends GameData {
+  isJournalOpen: boolean;
+  journalSection: StoryLogSection;
   presentationMode: DrivingPresentationMode;
   driving: DrivingRuntimeState;
   missionRoute: MissionRouteRuntimeState;
@@ -251,6 +255,9 @@ interface GameStore extends GameData {
   dismissRadioEvent: () => void;
   selectMissionChoice: (optionId: string) => boolean;
   cancelMissionChoice: () => void;
+  setOnboardingState: (state: OnboardingState) => void;
+  openJournal: (section?: StoryLogSection) => void;
+  closeJournal: () => void;
   requestStoryLog: (section?: StoryLogSection) => void;
   dismissGameplayFeedback: () => void;
   dismissLevelUp: () => void;
@@ -300,11 +307,13 @@ function presentationModeFor(
         state.missionTimerCountdownSeconds <= 10,
       hasInteraction: hasNearbyInteraction(state, telemetry),
       isPaused,
-      isJournalOpen: false,
+      isJournalOpen: state.isJournalOpen,
       activeBlockingOverlay: Boolean(
         recoveryReason ||
         state.activeNarrativeEventId ||
-        state.activeMissionChoiceObjectiveId,
+        state.activeRadioEventId ||
+        state.activeMissionChoiceObjectiveId ||
+        state.lastLevelUp,
       ),
     },
     typeof performance === 'undefined' ? Date.now() : performance.now(),
@@ -456,6 +465,7 @@ function defaultGameData(): GameData {
     new Date(0).toISOString(),
   );
   return {
+    onboardingState: 'not-started',
     telemetry,
     isPaused: false,
     isFollowingPlayer: true,
@@ -530,6 +540,7 @@ function gameDataFromPersistence(game: PersistedGameData): GameData {
     game.unlockedLocationIds,
   );
   return {
+    onboardingState: game.onboardingState,
     telemetry: telemetryFromPlayer(game.player),
     isPaused: game.isPaused,
     isFollowingPlayer: game.isFollowingPlayer,
@@ -568,6 +579,7 @@ function gameDataFromPersistence(game: PersistedGameData): GameData {
 
 function persistableGame(state: GameData): PersistedGameData {
   return {
+    onboardingState: state.onboardingState,
     player: {
       longitude: state.telemetry.longitude,
       latitude: state.telemetry.latitude,
@@ -658,6 +670,8 @@ const defaultMissionRouteState: MissionRouteRuntimeState = {
 
 export const useGameStore = create<GameStore>((set, get) => ({
   ...initialGameData,
+  isJournalOpen: false,
+  journalSection: 'missions',
   presentationMode: 'stopped',
   isPaused: initialRecoveryReason ? true : initialGameData.isPaused,
   driving: defaultDrivingState,
@@ -1803,8 +1817,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
       activeMissionChoiceObjectiveId: null,
       isPaused: Boolean(state.recoveryReason || state.activeNarrativeEventId),
     })),
+  setOnboardingState: (onboardingState) => set({ onboardingState }),
+  openJournal: (journalSection = 'history') =>
+    set((state) => ({
+      isJournalOpen: true,
+      journalSection,
+      storyLogRequest: {
+        section: journalSection,
+        revision: state.storyLogRequest.revision + 1,
+      },
+    })),
+  closeJournal: () => set({ isJournalOpen: false }),
   requestStoryLog: (section = 'history') =>
     set((state) => ({
+      isJournalOpen: true,
+      journalSection: section,
       storyLogRequest: {
         section,
         revision: state.storyLogRequest.revision + 1,
@@ -1850,6 +1877,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeNarrativeEventId: null,
         activeRadioEventId: null,
         activeMissionChoiceObjectiveId: null,
+        isJournalOpen: false,
+        journalSection: 'missions',
         missionTimerCountdownSeconds: 0,
         gameplayFeedback: navigationRestoreFailed
           ? feedback(
@@ -1884,6 +1913,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       activeNarrativeEventId: null,
       activeRadioEventId: null,
       activeMissionChoiceObjectiveId: null,
+      isJournalOpen: false,
+      journalSection: 'missions',
       missionTimerCountdownSeconds: 0,
       gameplayFeedback: null,
       storyLogRequest: { section: 'missions', revision: 0 },
@@ -1897,6 +1928,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
   dismissSaveMessage: () => set({ saveMessage: null }),
   dismissConditionWarning: () => set({ conditionWarning: null }),
 }));
+
+let synchronizingPresentation = false;
+useGameStore.subscribe((state) => {
+  if (synchronizingPresentation) return;
+  const presentationMode = presentationModeFor(
+    state,
+    state.telemetry,
+    state.isPaused,
+    state.recoveryReason,
+  );
+  if (presentationMode === state.presentationMode) return;
+  synchronizingPresentation = true;
+  useGameStore.setState({ presentationMode });
+  synchronizingPresentation = false;
+});
 
 if (initialLoad.status === 'loaded' && initialLoad.migrated) {
   writeGameSave(initialLoad.save.game);

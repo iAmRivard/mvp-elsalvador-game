@@ -9,6 +9,10 @@ import {
   normalizeHeading,
 } from '../game/movement';
 import type { PlayerRuntime } from '../types/game';
+import {
+  isOnboardingState,
+  type OnboardingState,
+} from '../types/onboarding';
 import type {
   CheckpointReason,
   CheckpointSnapshot,
@@ -19,7 +23,7 @@ import type {
 } from '../types/progression';
 
 export const GAME_SAVE_KEY = 'el-salvador-rutas-perdidas:save';
-export const GAME_SAVE_VERSION = 4;
+export const GAME_SAVE_VERSION = 5;
 
 export interface PersistedNavigationTarget {
   kind: 'mission-start' | 'location' | 'fuel-station';
@@ -27,6 +31,7 @@ export interface PersistedNavigationTarget {
 }
 
 export interface PersistedGameData {
+  onboardingState: OnboardingState;
   player: PlayerRuntime;
   energy: number;
   maxEnergy: number;
@@ -406,6 +411,9 @@ function sanitizeGame(value: unknown): PersistedGameData | null {
     sanitizedCheckpoint(value.lastSafeCheckpoint) ?? lastCheckpoint;
 
   return {
+    onboardingState: isOnboardingState(value.onboardingState)
+      ? value.onboardingState
+      : 'completed',
     player,
     energy: clamp(requestedEnergy, 0, maxEnergy),
     maxEnergy,
@@ -544,7 +552,8 @@ export function parseGameSave(raw: string): LoadGameResult {
   if (
     parsed.version === 1 ||
     parsed.version === 2 ||
-    parsed.version === 3
+    parsed.version === 3 ||
+    parsed.version === 4
   ) {
     const game = sanitizeGame(
       parsed.version === 1
