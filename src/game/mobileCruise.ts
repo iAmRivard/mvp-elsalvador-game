@@ -3,11 +3,19 @@ import { clampAnalogInput } from './analogInput';
 
 export type MobileCruiseGear = 'stopped' | 'slow' | 'cruise' | 'fast';
 
+export type MobileReverseState =
+  | 'forward'
+  | 'braking-to-stop'
+  | 'awaiting-release'
+  | 'reverse-armed'
+  | 'reversing';
+
 export interface MobileCruiseTarget {
   targetSpeedKilometersPerHour: number;
   selectedGear: MobileCruiseGear;
   braking: boolean;
   reversing: boolean;
+  reverseState: MobileReverseState;
 }
 
 export function updateCruiseTarget(
@@ -52,10 +60,7 @@ export function mobileCruiseThrottle(
   const intent = clampAnalogInput(verticalIntent);
 
   if (target.reversing) {
-    return -Math.max(
-      0.28,
-      Math.min(1, Math.abs(intent)),
-    );
+    return -Math.max(0.28, Math.min(1, Math.abs(intent)));
   }
   if (
     target.targetSpeedKilometersPerHour <= 0.5 &&
@@ -63,7 +68,10 @@ export function mobileCruiseThrottle(
   ) {
     return -1;
   }
-  if (currentSpeedMetersPerSecond < -mobileCruiseConfig.stoppedSpeedMetersPerSecond) {
+  if (
+    currentSpeedMetersPerSecond <
+    -mobileCruiseConfig.stoppedSpeedMetersPerSecond
+  ) {
     return 1;
   }
   if (intent < 0) {
@@ -91,8 +99,10 @@ export function mobileCruiseThrottle(
     Math.abs(speedError) <=
     mobileCruiseConfig.targetSpeedToleranceKilometersPerHour
   ) {
-    return target.targetSpeedKilometersPerHour /
-      mobileCruiseConfig.maximumTargetSpeedKilometersPerHour;
+    return (
+      target.targetSpeedKilometersPerHour /
+      mobileCruiseConfig.maximumTargetSpeedKilometersPerHour
+    );
   }
   if (speedError < 0) {
     return -Math.min(
@@ -120,4 +130,5 @@ export const stoppedMobileCruiseTarget: MobileCruiseTarget = {
   selectedGear: 'stopped',
   braking: false,
   reversing: false,
+  reverseState: 'forward',
 };

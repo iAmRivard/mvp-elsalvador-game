@@ -11,6 +11,7 @@ import {
   stoppedMobileCruiseTarget,
   updateCruiseTarget,
   type MobileCruiseTarget,
+  type MobileReverseState,
 } from './mobileCruise';
 
 export type InputAction =
@@ -98,6 +99,7 @@ export class InputController {
     ...stoppedMobileCruiseTarget,
   };
   private reverseIntentMilliseconds = 0;
+  private mobileReverseState: MobileReverseState = 'forward';
   private lastCruiseNotificationAt = 0;
   private lastNotifiedCruiseTarget = 0;
   private readonly activePointerIds = new Set<number>();
@@ -252,6 +254,7 @@ export class InputController {
     this.mobileCruiseVerticalIntent = 0;
     this.mobileCruiseThrottle = 0;
     this.reverseIntentMilliseconds = 0;
+    this.mobileReverseState = 'forward';
     this.mobileCruiseTarget = { ...stoppedMobileCruiseTarget };
     if (enabled) this.disableAutoThrottle();
     this.notify();
@@ -268,14 +271,6 @@ export class InputController {
     }
     this.mobileCruiseVerticalIntent = nextIntent;
     this.joystickTurn = nextTurn;
-    if (nextIntent >= 0 && this.mobileCruiseTarget.reversing) {
-      this.reverseIntentMilliseconds = 0;
-      this.mobileCruiseTarget = {
-        ...this.mobileCruiseTarget,
-        braking: false,
-        reversing: false,
-      };
-    }
     this.notify();
   }
 
@@ -298,30 +293,73 @@ export class InputController {
           intent,
           deltaTime,
         );
-    let reversing = previous.reversing;
-
-    if (intent >= 0) {
-      reversing = false;
-      this.reverseIntentMilliseconds = 0;
-    } else if (
-      targetSpeedKilometersPerHour <= 0.5 &&
+    const stopped =
       Math.abs(currentSpeedMetersPerSecond) <=
-        mobileCruiseConfig.stoppedSpeedMetersPerSecond
-    ) {
-      targetSpeedKilometersPerHour = 0;
-      this.reverseIntentMilliseconds += deltaTime * 1_000;
-      reversing =
-        this.reverseIntentMilliseconds >=
-        mobileCruiseConfig.reverseActivationDelayMilliseconds;
-    } else if (!reversing) {
-      this.reverseIntentMilliseconds = 0;
+      mobileCruiseConfig.stoppedSpeedMetersPerSecond;
+    const downIntent = intent < -mobileCruiseConfig.reverseIntentThreshold;
+    const releasedIntent =
+      Math.abs(intent) <= mobileCruiseConfig.reverseReleaseDeadZone;
+    let reverseState = this.mobileReverseState;
+
+    switch (reverseState) {
+      case 'forward':
+        this.reverseIntentMilliseconds = 0;
+        if (downIntent) reverseState = 'braking-to-stop';
+        break;
+      case 'braking-to-stop':
+        targetSpeedKilometersPerHour = 0;
+        this.reverseIntentMilliseconds = 0;
+        if (stopped) {
+          reverseState = releasedIntent ? 'reverse-armed' : 'awaiting-release';
+        }
+        break;
+      case 'awaiting-release':
+        targetSpeedKilometersPerHour = 0;
+        this.reverseIntentMilliseconds = 0;
+        if (releasedIntent) reverseState = 'reverse-armed';
+        break;
+      case 'reverse-armed':
+        targetSpeedKilometersPerHour = 0;
+        if (intent > mobileCruiseConfig.reverseReleaseDeadZone) {
+          reverseState = 'forward';
+          this.reverseIntentMilliseconds = 0;
+          targetSpeedKilometersPerHour = updateCruiseTarget(
+            0,
+            intent,
+            deltaTime,
+          );
+        } else if (downIntent) {
+          this.reverseIntentMilliseconds += deltaTime * 1_000;
+          if (
+            this.reverseIntentMilliseconds >=
+            mobileCruiseConfig.reverseActivationDelayMilliseconds
+          ) {
+            reverseState = 'reversing';
+          }
+        } else {
+          this.reverseIntentMilliseconds = 0;
+        }
+        break;
+      case 'reversing':
+        targetSpeedKilometersPerHour = 0;
+        if (!downIntent) {
+          reverseState = 'forward';
+          this.reverseIntentMilliseconds = 0;
+        }
+        break;
     }
+
+    this.mobileReverseState = reverseState;
+    const reversing = reverseState === 'reversing';
 
     const next: MobileCruiseTarget = {
       targetSpeedKilometersPerHour,
       selectedGear: mobileCruiseGear(targetSpeedKilometersPerHour),
-      braking: intent < 0 && !reversing,
+      braking:
+        reverseState === 'braking-to-stop' ||
+        (reverseState === 'forward' && intent < 0 && !stopped),
       reversing,
+      reverseState,
     };
     this.mobileCruiseTarget = next;
     const effectiveTarget = this.mobileBoostState.active
@@ -351,7 +389,8 @@ export class InputController {
     const immediateStateChange =
       previous.selectedGear !== next.selectedGear ||
       previous.braking !== next.braking ||
-      previous.reversing !== next.reversing;
+      previous.reversing !== next.reversing ||
+      previous.reverseState !== next.reverseState;
     const roundedTarget = Math.round(next.targetSpeedKilometersPerHour);
     if (
       immediateStateChange ||
@@ -482,6 +521,7 @@ export class InputController {
       this.mobileCruiseVerticalIntent !== 0 ||
       this.mobileCruiseTarget.braking ||
       this.mobileCruiseTarget.reversing ||
+      this.mobileReverseState !== 'forward' ||
       this.activePointerIds.size > 0 ||
       boostWasActive;
     for (const timer of this.pointerReleaseTimers.values()) clearTimeout(timer);
@@ -492,10 +532,12 @@ export class InputController {
     this.joystickTurn = 0;
     this.mobileCruiseVerticalIntent = 0;
     this.reverseIntentMilliseconds = 0;
+    this.mobileReverseState = 'forward';
     this.mobileCruiseTarget = {
       ...this.mobileCruiseTarget,
       braking: false,
       reversing: false,
+      reverseState: 'forward',
     };
     this.activePointerIds.clear();
     if (changed) this.notify();
@@ -528,7 +570,67 @@ export class InputController {
     this.mobileCruiseThrottle = 0;
     this.mobileCruiseTarget = { ...stoppedMobileCruiseTarget };
     this.reverseIntentMilliseconds = 0;
+    this.mobileReverseState = 'forward';
     this.lastNotifiedCruiseTarget = 0;
+    this.autoThrottle = { ...this.autoThrottle, enabled: false };
+    this.autoThrottleScale = 1;
+    this.activePointerIds.clear();
+    if (changed) this.notify();
+  }
+
+  /**
+   * Suspends momentary driving input for a blocking overlay without discarding
+   * the speed the player selected. The next simulation tick resumes cruise;
+   * reverse always has to be armed again after the overlay closes.
+   */
+  suspendForOverlay(): void {
+    const preservedTarget =
+      this.mobileCruiseTarget.targetSpeedKilometersPerHour;
+    this.clearTransientInput(true);
+    this.mobileCruiseTarget = {
+      targetSpeedKilometersPerHour: preservedTarget,
+      selectedGear: mobileCruiseGear(preservedTarget),
+      braking: false,
+      reversing: false,
+      reverseState: 'forward',
+    };
+  }
+
+  private clearTransientInput(preserveCruiseTarget: boolean): void {
+    const boostWasActive = this.mobileBoostState.active;
+    this.cancelActiveMobileBoostPreservingCooldown();
+    const changed =
+      this.keyboardActions.size > 0 ||
+      this.pointerActions.size > 0 ||
+      this.pointerReleaseTimers.size > 0 ||
+      this.touchThrottle !== 0 ||
+      this.joystickThrottle !== 0 ||
+      this.joystickTurn !== 0 ||
+      this.mobileCruiseVerticalIntent !== 0 ||
+      this.mobileCruiseThrottle !== 0 ||
+      this.mobileReverseState !== 'forward' ||
+      this.autoThrottle.enabled ||
+      this.activePointerIds.size > 0 ||
+      boostWasActive;
+    for (const timer of this.pointerReleaseTimers.values()) clearTimeout(timer);
+    this.pointerReleaseTimers.clear();
+    this.keyboardActions.clear();
+    this.pointerActions.clear();
+    this.touchThrottle = 0;
+    this.joystickThrottle = 0;
+    this.joystickTurn = 0;
+    this.mobileCruiseVerticalIntent = 0;
+    this.mobileCruiseThrottle = 0;
+    this.mobileReverseState = 'forward';
+    this.reverseIntentMilliseconds = 0;
+    this.mobileCruiseTarget = preserveCruiseTarget
+      ? {
+          ...this.mobileCruiseTarget,
+          braking: false,
+          reversing: false,
+          reverseState: 'forward',
+        }
+      : { ...stoppedMobileCruiseTarget };
     this.autoThrottle = { ...this.autoThrottle, enabled: false };
     this.autoThrottleScale = 1;
     this.activePointerIds.clear();

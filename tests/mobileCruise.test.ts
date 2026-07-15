@@ -41,7 +41,7 @@ describe('velocidad objetivo móvil', () => {
     expect(input.snapshot().throttle).toBeGreaterThan(0);
   });
 
-  it('frena a cero y solo activa reversa tras detenerse y esperar', () => {
+  it('exige frenar, soltar y un segundo gesto sostenido para reversa', () => {
     const input = new InputController();
     input.setMobileCruiseEnabled(true);
     input.setTargetSpeedJoystick(1, 0);
@@ -52,17 +52,52 @@ describe('velocidad objetivo móvil', () => {
       targetSpeedKilometersPerHour: 0,
       braking: true,
       reversing: false,
+      reverseState: 'braking-to-stop',
     });
     expect(input.snapshot().throttle).toBeLessThan(0);
 
-    input.advanceMobileCruise(0, 0.2);
-    expect(input.getMobileCruiseTarget().reversing).toBe(false);
-    input.advanceMobileCruise(0, 0.15);
+    input.advanceMobileCruise(0, 1);
+    expect(input.getMobileCruiseTarget()).toMatchObject({
+      braking: false,
+      reversing: false,
+      reverseState: 'awaiting-release',
+    });
+    expect(input.snapshot().throttle).toBe(0);
+
+    input.setTargetSpeedJoystick(0, 0);
+    input.advanceMobileCruise(0, 0.01);
+    expect(input.getMobileCruiseTarget().reverseState).toBe('reverse-armed');
+
+    input.setTargetSpeedJoystick(-1, 0);
+    input.advanceMobileCruise(
+      0,
+      (mobileCruiseConfig.reverseActivationDelayMilliseconds - 1) / 1_000,
+    );
+    expect(input.getMobileCruiseTarget()).toMatchObject({
+      reversing: false,
+      reverseState: 'reverse-armed',
+    });
+    input.advanceMobileCruise(0, 0.001);
     expect(input.getMobileCruiseTarget()).toMatchObject({
       braking: false,
       reversing: true,
+      reverseState: 'reversing',
     });
     expect(input.snapshot().throttle).toBeLessThan(0);
+  });
+
+  it('no interpreta un primer gesto abajo sostenido como reversa', () => {
+    const input = new InputController();
+    input.setMobileCruiseEnabled(true);
+    input.setTargetSpeedJoystick(-1, 0);
+    input.advanceMobileCruise(0, 0.1);
+    input.advanceMobileCruise(0, 2);
+
+    expect(input.getMobileCruiseTarget()).toMatchObject({
+      reversing: false,
+      reverseState: 'awaiting-release',
+    });
+    expect(input.snapshot().throttle).toBe(0);
   });
 
   it('Turbo no reemplaza el objetivo y vuelve a él al terminar', () => {
@@ -108,7 +143,7 @@ describe('velocidad objetivo móvil', () => {
     input.clearAllInput();
   });
 
-  it('cancela el objetivo por pérdida de foco y por pausa segura', () => {
+  it('cancela objetivo y reversa por pérdida de foco o pausa segura', () => {
     const input = new InputController();
     const unbind = input.bindKeyboard(window, vi.fn());
     input.setMobileCruiseEnabled(true);
@@ -116,18 +151,47 @@ describe('velocidad objetivo móvil', () => {
     input.advanceMobileCruise(0, 0.5);
 
     window.dispatchEvent(new Event('blur'));
-    expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(0);
+    expect(input.getMobileCruiseTarget()).toMatchObject({
+      targetSpeedKilometersPerHour: 0,
+      reverseState: 'forward',
+    });
     expect(input.snapshot().throttle).toBe(0);
 
-    input.setTargetSpeedJoystick(1, 0);
-    input.advanceMobileCruise(0, 0.5);
+    input.setTargetSpeedJoystick(-1, 0);
+    input.advanceMobileCruise(0, 1);
     input.clearAllInput();
     expect(input.getMobileCruiseTarget()).toMatchObject({
       targetSpeedKilometersPerHour: 0,
       selectedGear: 'stopped',
       braking: false,
       reversing: false,
+      reverseState: 'forward',
     });
     unbind();
+  });
+
+  it('suspende overlays conservando el objetivo pero desarma reversa', () => {
+    const input = new InputController();
+    input.setMobileCruiseEnabled(true);
+    input.setTargetSpeedJoystick(1, 0.4);
+    input.advanceMobileCruise(0, 0.5);
+    input.setTargetSpeedJoystick(-1, 0);
+    input.advanceMobileCruise(10, 0.1);
+
+    input.suspendForOverlay();
+
+    expect(input.getMobileCruiseTarget()).toMatchObject({
+      targetSpeedKilometersPerHour: 25,
+      selectedGear: 'slow',
+      braking: false,
+      reversing: false,
+      reverseState: 'forward',
+    });
+    expect(input.snapshot()).toEqual({
+      throttle: 0,
+      turn: 0,
+      boost: false,
+      interact: false,
+    });
   });
 });

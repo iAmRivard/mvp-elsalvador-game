@@ -140,6 +140,29 @@ describe('keyboard route controls', () => {
     unbind();
   });
 
+  it('el overlay elimina interacción y Turbo sin perder velocidad elegida', () => {
+    vi.useFakeTimers();
+    const input = new InputController();
+    input.setMobileCruiseEnabled(true);
+    input.setTargetSpeedJoystick(1, 0.5);
+    input.advanceMobileCruise(0, 0.5);
+    input.setPointerAction('interact', true);
+    input.activateMobileBoost();
+
+    input.suspendForOverlay();
+
+    expect(input.getMobileCruiseTarget()).toMatchObject({
+      targetSpeedKilometersPerHour: 35,
+      reverseState: 'forward',
+    });
+    expect(input.snapshot()).toEqual({
+      throttle: 0,
+      turn: 0,
+      boost: false,
+      interact: false,
+    });
+  });
+
   it('activa Turbo móvil por toque, termina y respeta el enfriamiento', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-14T12:00:00.000Z'));
