@@ -54,8 +54,20 @@ El fallo anterior corresponde a Docker run `29445894302`, job `image` (`87456146
 **Probar mapa y autonomía en navegador**. `npm run test:e2e` terminó con código 1 porque el caso
 esperaba `.map-message--error > strong` y el elemento no apareció. La causa fue el service worker
 interceptando el request antes de Playwright. La corrección bloquea service workers sólo en E2E y
-endurece la estrategia del SW de producción. Los resultados CI y Docker finales quedan pendientes
-hasta subir el commit validado; no se crea tag mientras alguno siga pendiente.
+endurece la estrategia del SW de producción.
+
+El código candidato `b77a6c4` quedó aprobado sin retries:
+
+- CI run `29458690002`: **success**, job `quality` (`87497437697`) en 58 s. Checkout LFS,
+  verificación del artefacto, instalación y `npm run check` terminaron correctamente.
+- Docker run `29458690004`: **success**, job `image` (`87497437680`) en 6 min 57 s. Build,
+  health/CSP/Range, Playwright (48 aprobadas, 30 omitidas, 0 fallidas en 4.9 min), limpieza del
+  contenedor, login y publicación por SHA en GHCR terminaron correctamente.
+- La advertencia no bloqueante de Actions indica que `docker/login-action@v3` aún declara Node 20
+  y el runner la fuerza a Node 24; no afectó el resultado ni se ocultó con `continue-on-error`.
+
+El tag continúa bloqueado hasta que el commit documental que contiene este registro vuelva a pasar
+CI y Docker sobre el mismo SHA.
 
 ## Validación física
 
