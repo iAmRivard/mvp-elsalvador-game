@@ -1,6 +1,6 @@
 # Audio local
 
-El audio usa Web Audio y catorce archivos WAV del mismo origen. `GameAudioBridge` traduce cambios
+El audio usa Web Audio y dieciséis archivos WAV del mismo origen. `GameAudioBridge` traduce cambios
 limitados del store y la telemetría en una API imperativa; el motor no vive en React ni reinicia
 fuentes durante cada frame.
 
@@ -8,7 +8,7 @@ fuentes durante cada frame.
 
 1. La aplicación registra una interacción de teclado o puntero antes de llamar `unlock()`.
 2. Se crea un único `AudioContext`, se decodifican los WAV locales y se inician bucles silenciosos
-   de motor, terreno y tres pistas musicales.
+   de motor, rodadura, viento, terreno y tres pistas musicales.
 3. Ganancia y velocidad de reproducción cambian con `setTargetAtTime`, con una transición de 120 ms.
 4. Turbo, frenado, misión, objetivo, combustible, descubrimiento e interferencia usan fuentes
    breves con un enfriamiento de 600 ms.
@@ -24,8 +24,9 @@ impide incorporar un dominio externo.
 
 Las preferencias incluyen volumen general, efectos, música, silencios separados y reducción de
 efectos. El volumen general controla toda la mezcla; el de efectos controla señales de una sola
-reproducción. Reducir efectos atenúa turbo, frenado e interferencia, y omite el bucle de terreno. El
-motor se silencia mientras el juego está pausado.
+reproducción. Reducir efectos atenúa turbo, frenado e interferencia, y omite el bucle de terreno.
+Motor, rodadura y viento ajustan pitch/ganancia con velocidad, aceleración y Turbo; offroad agrega
+textura de superficie. Los loops se atenúan mientras el juego está pausado.
 
 El perfil predeterminado usa 70 % de volumen general y 80 % de efectos. Los valores cargados se
 limitan al intervalo `0..1`; documentos de preferencias v1 a v3 reciben estos valores sin perder sus
@@ -33,7 +34,7 @@ ajustes visuales.
 
 ## Recursos
 
-Los catorce archivos de `public/audio` ocupan 1,987,322 bytes en total. Son PCM mono a 22.05 kHz,
+Los dieciséis archivos de `public/audio` son PCM mono a 22.05 kHz,
 originales y generados de forma determinista por `npm run generate:audio`. El script no descarga
 material ni requiere una biblioteca adicional. `tests/audioAssets.test.ts` valida cabecera, tamaño y
 URL local de los efectos; `tests/musicSystem.test.ts` valida estados y pistas. Consulta también

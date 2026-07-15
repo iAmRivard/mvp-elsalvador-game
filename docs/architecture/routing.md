@@ -61,7 +61,7 @@ lejana sólo porque esté cerca geográficamente.
 
 `ActiveNavigationState` es la única fuente para chevrón, texto, tramo inmediato, maniobra y
 distancia. El triángulo cian y Three.js mantienen `physicalHeading`; el chevrón amarillo usa
-`recommendedHeading` y `navigationArrowPosition()` lo coloca 35 m por delante en la geometría
+`recommendedHeading` y `navigationArrowPosition()` lo coloca 42 m por delante en la geometría
 inmediata. Si no existe punto válido, el Marker queda en la posición del jugador con offset
 `[0, -40]`; no se transforma el elemento raíz administrado por MapLibre.
 

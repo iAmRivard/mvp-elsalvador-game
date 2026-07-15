@@ -1,7 +1,7 @@
 # El Salvador: Rutas Perdidas
 
 Videojuego web de conducción y exploración sobre una cartografía estilizada de El Salvador. La
-v0.2.4.1 incluye mapa MapLibre 2.5D autónomo, navegación sincronizada, velocidad objetivo móvil,
+v0.2.5 incluye mapa MapLibre 2.5D autónomo, presentación dinámica de conducción, navegación sincronizada, velocidad objetivo móvil,
 red vial local con caminos de tierra, rutas A* en Web Worker, historia guiada, estaciones de
 combustible, música local, vehículo y referencias 3D, progreso, Docker y despliegue en Dokploy.
 
@@ -105,16 +105,16 @@ una cuenta `3-2-1` y un temporizador de 4:30. Consulta `docs/gameplay/story-flow
 
 El botón `↻` o la tecla `R` recalculan en un Web Worker; una desviación de 250 m también lo hace con
 enfriamiento. Triángulo cian y vehículo 3D conservan el heading físico, mientras un chevrón amarillo
-se coloca 35 m por delante sobre la ruta; texto y tramo inmediato comparten su heading recomendado.
+se coloca 42 m por delante sobre la ruta; texto y tramo inmediato comparten su heading recomendado.
 Durante reversa desaparecen chevrón, tramo y mensajes de avance. Fuera de ruta aparece un conector
 celeste discontinuo de reincorporación. La ruta principal usa cian con borde oscuro y el fallback
-naranja discontinuo. En móvil, la misión activa se convierte en mini navegador y **Ver objetivo**
-abre una bitácora bottom sheet al 55%, expandible al 85%. Consulta `docs/gameplay/chapter-1.md` y
+naranja discontinuo. En móvil, un HUD de conducción reúne maniobra, distancia, objetivo, velocidad,
+combustible y condición; al tocarlo abre una bitácora bottom sheet al 55%, expandible al 85%. Consulta `docs/gameplay/chapter-1.md` y
 `docs/architecture/routing.md`.
 
 ## Red vial local
 
-La v0.2.4.1 incluye un corredor transitable derivado de OpenStreetMap entre San Salvador, Santa Tecla,
+La v0.2.5 incluye un corredor transitable derivado de OpenStreetMap entre San Salvador, Santa Tecla,
 Santa Ana, Coatepeque y Cerro Verde. El grafo de 6.02 MiB, 17,083 nodos y 23,054 aristas se sirve
 desde el mismo origen, se precarga una vez durante la pantalla inicial y usa una cuadrícula para
 detectar tramos cercanos sin recorrer la red completa. No consulta servicios de rutas externos.
@@ -158,7 +158,7 @@ combustible. Consulta
 
 ## Audio local
 
-Catorce WAV originales cubren motor, turbo, frenado, terreno, señales y tres estados musicales:
+Dieciséis WAV originales cubren motor, rodadura, viento, turbo, frenado, terreno, señales y tres estados musicales:
 exploración, misión y objetivo cronometrado. Web Audio se desbloquea después de una interacción;
 la música cruza pistas en 1.5 s, baja durante la radio y no se reinicia por actualización.
 `npm run generate:audio` reconstruye todo de forma determinista. No hay streaming ni solicitudes a
@@ -188,13 +188,13 @@ VITE_ENABLE_DIAGNOSTICS=true npm run dev
 ```
 
 La validación automática y el protocolo físico pendiente están en
-`docs/gameplay/playtest-v0.2.4.1.md`.
+`docs/gameplay/playtest-v0.2.5.md`.
 
 ## Docker
 
 ```sh
-docker build -t el-salvador-rutas-perdidas:v0.2.4.1 .
-docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.4.1
+docker build -t el-salvador-rutas-perdidas:v0.2.5 .
+docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.5
 curl http://localhost:8080/healthz
 ```
 
@@ -207,7 +207,15 @@ El navegador lee exclusivamente `/maps/el-salvador.pmtiles` y los recursos de `/
 Consulta `data/SOURCES.md`, `data/LICENSES.md` y `scripts/maps/README.md` para procedencia,
 licencias y reconstrucción.
 
-## Estado de la v0.2.4.1
+## Estado de la v0.2.5
+
+- Presentación central `stopped`/`driving`/`fast`/`alert`/`interaction` con histéresis.
+- Seis perfiles de cámara, seguimiento imperativo sin colas y declutter de capas a velocidad.
+- HUD dedicado al conducir, radio y tutorial contextuales, y presupuesto responsive medido.
+- Chevrones de ruta, motor/rodadura/viento por velocidad y PWA instalable con fullscreen opcional.
+- E2E en escritorio, portrait, landscape, tablet táctil y 360×640; prueba física pendiente.
+
+### Base v0.2.4.1
 
 - Velocidad objetivo persistente, dirección independiente, frenado, reversa retardada y Turbo.
 - Histéresis móvil, último edge, gracia, `road-unclassified` y diagnóstico exportable.

@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.2.5 - 2026-07-15
+
+### Conducción y percepción de velocidad
+
+- Un controlador central con histéresis deriva `stopped`, `driving`, `fast`, `alert` e `interaction`
+  desde velocidad, alertas, overlays y pausa; cámara, HUD y mapa consumen el mismo estado.
+- Seis perfiles de seguimiento para escritorio y tacto ajustan zoom, pitch y offset. El seguimiento
+  usa actualizaciones imperativas y reserva `easeTo` para recentrar, sin acumular transiciones.
+- Declutter dinámico clasifica capas por prioridad, reduce opacidad al conducir y oculta calles,
+  POI y edificios secundarios en `fast`; la ruta, el objetivo y las vías principales permanecen.
+- La ruta suma chevrones lineales locales, con tramo inmediato más fuerte y respeto a movimiento
+  reducido. Motor, rodadura, viento y superficie responden a velocidad, aceleración y Turbo.
+
+### HUD, tutorial y experiencia móvil
+
+- El HUD móvil de conducción muestra sólo maniobra, objetivo, distancia, velocidad, combustible,
+  condición y timer; tocarlo abre la bitácora y la reversa pausa la guía visual.
+- El HUD de escritorio se compacta al moverse y permite expansión manual. La radio en marcha usa
+  tres líneas, no bloquea y abre transmisiones desde un toque.
+- Tutorial contextual de nueve pasos detecta acciones automáticas sin botón Siguiente ni pausa.
+  Landscape coloca acciones en fila y portrait/tablet/360×640 respetan safe areas y presupuestos.
+
+### Plataforma, estabilidad y pruebas
+
+- Manifest, icono, service worker, pista de instalación y fullscreen progresivo habilitan una
+  experiencia PWA sin romper navegadores que no exponen esas APIs.
+- El contacto vial móvil muestrea misses cada 250 ms, conserva la gracia de un segundo y recupera
+  de inmediato. Turbo conserva el objetivo seleccionado y usa objetivo efectivo de 137 km/h.
+- 301 pruebas unitarias cubren presentación, cámara, declutter, HUD, audio, contacto vial y Turbo.
+  Playwright mide cajas y perfiles en escritorio, Pixel portrait/landscape, tablet y 360×640.
+- La prueba física en el teléfono de referencia y el playtest de cinco personas siguen pendientes;
+  no se sustituyen con automatización.
+
 ## v0.2.4.1 - 2026-07-14
 
 ### Conducción y red vial móvil

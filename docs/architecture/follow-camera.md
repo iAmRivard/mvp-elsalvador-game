@@ -6,35 +6,38 @@ telemetria a 10 Hz.
 
 ## Perfil dinamico
 
-`src/config/followCamera.config.ts` define tres puntos de referencia:
+`src/config/followCamera.config.ts` define seis perfiles seleccionados por el estado central:
 
-| Estado                     | Zoom |     Pitch |
-| -------------------------- | ---: | --------: |
-| Detenido                   | 15.8 | 52 grados |
-| Crucero                    | 15.3 | 56 grados |
-| Velocidad maxima con turbo | 14.8 | 60 grados |
+| Perfil        |  Zoom | Pitch | Offset alto |
+| ------------- | ----: | ----: | ----------: |
+| stopped       | 15.55 |    56 |         17% |
+| urban         | 15.30 |    60 |         21% |
+| fast          | 15.05 |    62 |         23% |
+| mobileStopped | 15.65 |    55 |         19% |
+| mobileDriving | 15.40 |    59 |         24% |
+| mobileFast    | 15.15 |    61 |         26% |
 
-`followCameraTarget` interpola con `smoothstep` usando la magnitud de la velocidad representada. La
-transicion evita saltos al acelerar o frenar y trata la reversa con la misma distancia de camara.
-Calidad baja limita el pitch a 50 grados; pantallas compactas lo limitan a 56 grados.
+La histéresis de presentación evita saltos al acelerar o frenar y trata la reversa con la misma
+distancia de cámara. Calidad baja limita el pitch a 58 grados, pantallas compactas a 61 y escritorio
+a 62.
 
 ## Frecuencia y encuadre
 
-- Escritorio: actualizacion cada 33 ms y transicion de 40 ms.
-- Dispositivo tactil: actualizacion cada 50 ms y transicion de 60 ms.
-- Calidad baja: actualizacion cada 66 ms y transicion de 50 ms.
+- Escritorio: actualizacion cada 33–45 ms y transicion de 40–60 ms segun perfil.
+- Dispositivo tactil: actualizacion cada 40–50 ms y transicion de 45–60 ms.
 - Movimiento reducido: actualizacion directa sin animacion.
 
-El objetivo se desplaza verticalmente entre 28 y 112 pixeles segun el viewport. El vehiculo queda
-debajo del centro y deja mas mapa visible por delante. Un cambio de tamano recalcula el offset sin
-recrear MapLibre.
+El offset usa un porcentaje del alto y se limita segun perfil. El vehiculo queda debajo del centro
+y deja mas mapa visible por delante. El bearing visual se suaviza y limita a ±12 grados. Un cambio
+de tamano recalcula el offset sin recrear MapLibre.
 
 ## Control manual
 
 Una interaccion original de arrastre, zoom, rotacion o inclinacion desactiva el seguimiento. El
-boton de centrar lo reactiva con una transicion de 260 ms; durante esa transicion no se encadenan
-animaciones cortas. Cargar o reiniciar la partida reposiciona la camara de inmediato sobre el
-runtime restaurado.
+boton de centrar lo reactiva con una transicion de 260 ms. El seguimiento normal usa `jumpTo`; solo
+el recentrado usa `easeTo`, por lo que no se encadenan animaciones cortas. Cargar o reiniciar la
+partida reposiciona la camara de inmediato sobre el runtime restaurado.
 
-Los atributos `data-follow-zoom`, `data-follow-pitch` y `data-follow-offset-y` se actualizan de forma
-imperativa para las pruebas E2E y no provocan renders de React.
+Los atributos `data-follow-*`, `data-current-camera-profile`, coste actual/promedio,
+actualizaciones por segundo e interrupciones se actualizan de forma imperativa para E2E y no
+provocan renders de React.

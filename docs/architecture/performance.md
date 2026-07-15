@@ -14,6 +14,8 @@ Con `VITE_ENABLE_DIAGNOSTICS=true npm run dev`, el panel muestra:
 - búsqueda espacial, tiempo total de ruta, tiempo del worker y nodos expandidos;
 - aciertos/entradas de caché, carga, índice, memoria vial y heap cuando está disponible;
 - commits de `MissionPanel`/bottom sheet y overlay activo con cantidad en espera.
+- modo de presentación, perfil y coste de cámara, interrupciones, perfil de declutter, capas
+  visibles, símbolos renderizados y commits de HUD/radio.
 
 Los mismos valores relevantes se exponen como atributos `data-*` para Playwright. El panel requiere
 `import.meta.env.DEV`, por lo que no aparece en el build de producción aunque la variable se defina.
@@ -53,18 +55,19 @@ solicitud pendiente se cuentan como antiguas y no se aplican. El timeout es 4 s.
 sin Worker usa A* local como fallback, mientras una respuesta obsoleta se descarta para no reemplazar
 la ruta vigente. El router y su caché LRU de 32 entradas permanecen dentro del worker.
 
-## Tamaños del build v0.2.4.1
+## Tamaños del build v0.2.5
 
 - Grafo vial: 6,317,168 bytes; 17,083 nodos y 23,054 aristas.
 - Worker vial: 23.12 KiB sin comprimir.
-- CSS: 166.39 KiB, 29.33 KiB gzip.
-- Chunk inicial: 372.48 KiB, 108.37 KiB gzip.
-- `GameMap`: 85.96 KiB, 28.03 KiB gzip.
+- CSS: 174.93 KiB, 30.58 KiB gzip.
+- Chunk inicial: 383.41 KiB, 110.89 KiB gzip.
+- `GameMap`: 91.77 KiB, 29.73 KiB gzip.
 - Capa Three.js: 608.77 KiB, 154.48 KiB gzip.
 - Motor cartográfico diferido: 1,028.13 KiB, 273.19 KiB gzip.
 
-La ampliación incluye velocidad objetivo sin estado React por movimiento, memoria vial encapsulada,
-un único Marker de guía, mini navegador, sheet condicional y cola de overlays. La validación de
+La ampliación incluye presentación/cámara/declutter imperativos, velocidad objetivo sin estado React
+por movimiento, memoria vial encapsulada, un único Marker de guía, HUD dinámico, sheet condicional
+y cola de overlays. La validación de
 producción conserva una sola solicitud del grafo y A* dentro del worker; los valores de tiempo de la
 tabla v0.2.1 permanecen como referencia histórica hasta repetir una medición dedicada sin carga
 concurrente de Playwright.
