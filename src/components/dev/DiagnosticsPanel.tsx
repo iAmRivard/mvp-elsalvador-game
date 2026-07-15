@@ -18,7 +18,13 @@ interface RuntimeDiagnosticsSnapshot {
   roadStatus: string;
   roadSurface: string;
   roadEdge: string;
+  roadPreviousEdge: string;
   roadDistance: string;
+  roadContactSurface: string;
+  roadMisses: string;
+  roadGrace: string;
+  roadReason: string;
+  roadDiagnosticExport: string;
   roadScore: string;
   candidateScores: string;
   roadSearchMilliseconds: string;
@@ -59,7 +65,13 @@ function readRuntimeDiagnostics(
     roadStatus: value(dataset?.roadNetworkStatus),
     roadSurface: value(dataset?.roadSurface),
     roadEdge: value(dataset?.roadSelectedEdge),
+    roadPreviousEdge: value(dataset?.roadPreviousEdge),
     roadDistance: value(dataset?.roadDistanceMeters, ' m'),
+    roadContactSurface: value(dataset?.roadContactSurface),
+    roadMisses: value(dataset?.roadConsecutiveMisses),
+    roadGrace: value(dataset?.roadGraceRemainingMs, ' ms'),
+    roadReason: value(dataset?.roadOffroadReason),
+    roadDiagnosticExport: dataset?.roadDiagnosticExport ?? '',
     roadScore: value(dataset?.roadSelectedScore),
     candidateScores:
       dataset?.roadCandidateScores?.split(',').slice(0, 4).join(' · ') ||
@@ -118,9 +130,35 @@ export function DiagnosticsPanel({ input }: DiagnosticsPanelProps) {
         <dd>
           {snapshot.roadStatus} / {snapshot.roadSurface}
         </dd>
-        <dt>Edge / distancia</dt>
+        <dt>Edge actual / anterior</dt>
         <dd>
-          {snapshot.roadEdge} / {snapshot.roadDistance}
+          {snapshot.roadEdge} / {snapshot.roadPreviousEdge}
+        </dd>
+        <dt>Distancia / superficie</dt>
+        <dd>
+          {snapshot.roadDistance} / {snapshot.roadContactSurface}
+        </dd>
+        <dt>Misses / gracia</dt>
+        <dd>
+          {snapshot.roadMisses} / {snapshot.roadGrace}
+        </dd>
+        <dt>Motivo offroad</dt>
+        <dd>{snapshot.roadReason}</dd>
+        <dt>Exportar</dt>
+        <dd>
+          <button
+            type="button"
+            disabled={!snapshot.roadDiagnosticExport}
+            onClick={() => {
+              if (snapshot.roadDiagnosticExport) {
+                void navigator.clipboard?.writeText(
+                  snapshot.roadDiagnosticExport,
+                );
+              }
+            }}
+          >
+            Copiar diagnóstico vial
+          </button>
         </dd>
         <dt>Score / búsqueda</dt>
         <dd>
