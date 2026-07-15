@@ -7,6 +7,7 @@ import type {
 } from '../../config/mobileControls.config';
 import type { RoadAssistMode } from '../../config/roadHandling.config';
 import type { SteeringSensitivity } from '../../config/travel.config';
+import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
 
 interface SettingsDialogProps {
@@ -173,7 +174,10 @@ export function SettingsDialog({
   const setHapticsEnabled = useSettingsStore(
     (state) => state.setHapticsEnabled,
   );
-  const setTutorialSeen = useSettingsStore((state) => state.setTutorialSeen);
+  const setOnboardingState = useGameStore(
+    (state) => state.setOnboardingState,
+  );
+  const setPaused = useGameStore((state) => state.setPaused);
   useEffect(() => {
     if (!open || initialSection !== 'mobile-controls') return;
     window.requestAnimationFrame(() => {
@@ -477,7 +481,8 @@ export function SettingsDialog({
               type="button"
               className="settings-dialog__tutorial"
               onClick={() => {
-                setTutorialSeen(false);
+                setOnboardingState('introducing');
+                setPaused(false);
                 onClose();
               }}
             >

@@ -20,8 +20,8 @@ import { OverlayManager } from '../components/ui/OverlayManager';
 import { gameConfig } from '../config/game.config';
 import { requestGameFullscreen } from '../game/fullscreen';
 import { InputController } from '../game/inputController';
+import { onboardingIsActive } from '../types/onboarding';
 import { startGameAutosave, useGameStore } from '../store/gameStore';
-import { useSettingsStore } from '../store/settingsStore';
 
 const GameMap = lazy(async () => {
   const module = await import('../components/map/GameMap');
@@ -39,6 +39,8 @@ export function App() {
   const presentationMode = useGameStore((state) => state.presentationMode);
   const recoveryReason = useGameStore((state) => state.recoveryReason);
   const activeMissionId = useGameStore((state) => state.activeMissionId);
+  const onboardingState = useGameStore((state) => state.onboardingState);
+  const isJournalOpen = useGameStore((state) => state.isJournalOpen);
   const activeNarrativeEventId = useGameStore(
     (state) => state.activeNarrativeEventId,
   );
@@ -48,13 +50,23 @@ export function App() {
   const setPaused = useGameStore((state) => state.setPaused);
   const loadGame = useGameStore((state) => state.loadGame);
   const resetGame = useGameStore((state) => state.resetGame);
-  const tutorialSeen = useSettingsStore((state) => state.tutorialSeen);
-  const setTutorialSeen = useSettingsStore((state) => state.setTutorialSeen);
-  const showTutorial = sessionStarted && !tutorialSeen;
+  const setOnboardingState = useGameStore(
+    (state) => state.setOnboardingState,
+  );
+  const startMission = useGameStore((state) => state.startMission);
+  const showTutorial =
+    sessionStarted && onboardingIsActive(onboardingState);
 
   useEffect(() => startGameAutosave(), []);
+  useEffect(() => {
+    if (isJournalOpen) inputController.suspendForOverlay();
+  }, [inputController, isJournalOpen]);
   const enterGame = (loadSavedGame: boolean) => {
-    if (loadSavedGame && hasSavedGame) loadGame();
+    const loaded = loadSavedGame && hasSavedGame && loadGame();
+    if (!loaded) {
+      setOnboardingState('introducing');
+      startMission('la-transmision');
+    }
     setPaused(false);
     setSessionStarted(true);
   };
@@ -121,14 +133,17 @@ export function App() {
           />
         </Suspense>
 
-        <PlayerHud />
-        <MobileDrivingHud />
-        {!showTutorial && <FuelAssist />}
+        {!isJournalOpen && <PlayerHud />}
+        {!isJournalOpen && <MobileDrivingHud />}
+        {!isJournalOpen && !showTutorial && <FuelAssist />}
         <MissionTimer />
         <MissionPanel />
         <MissionToast />
         <GameplayToast />
-        <OverlayManager allowDiscovery={!showTutorial} />
+        <OverlayManager
+          allowDiscovery={!showTutorial}
+          allowStory={!showTutorial && !isJournalOpen}
+        />
         <LevelUpToast />
         {diagnosticsEnabled && <DiagnosticsPanel input={inputController} />}
       </section>
@@ -136,14 +151,13 @@ export function App() {
       {showTutorial && (
         <TutorialOverlay
           input={inputController}
-          onComplete={() => {
-            setTutorialSeen(true);
-            setPaused(false);
-          }}
+          onComplete={() => setPaused(false)}
+          onSkip={() => setPaused(false)}
         />
       )}
       {isPaused &&
         !showTutorial &&
+        !isJournalOpen &&
         !recoveryReason &&
         !activeNarrativeEventId &&
         !activeMissionChoiceObjectiveId && (

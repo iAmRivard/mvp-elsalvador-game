@@ -12,9 +12,13 @@ import { RadioMessageOverlay } from '../story/RadioMessageOverlay';
 
 interface OverlayManagerProps {
   allowDiscovery?: boolean;
+  allowStory?: boolean;
 }
 
-export function OverlayManager({ allowDiscovery = true }: OverlayManagerProps) {
+export function OverlayManager({
+  allowDiscovery = true,
+  allowStory = true,
+}: OverlayManagerProps) {
   const recoveryReason = useGameStore((state) => state.recoveryReason);
   const missionChoiceId = useGameStore(
     (state) => state.activeMissionChoiceObjectiveId,
@@ -44,7 +48,7 @@ export function OverlayManager({ allowDiscovery = true }: OverlayManagerProps) {
       sequence: 1,
     });
   }
-  if (narrativeId) {
+  if (allowStory && narrativeId) {
     candidates.push({
       id: `narrative:${narrativeId}`,
       kind: 'narrative',
@@ -53,7 +57,7 @@ export function OverlayManager({ allowDiscovery = true }: OverlayManagerProps) {
       sequence: 2,
     });
   }
-  if (radioId) {
+  if (allowStory && radioId) {
     candidates.push({
       id: `radio:${radioId}`,
       kind: 'radio',

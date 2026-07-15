@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
-import { useSettingsStore } from '../../store/settingsStore';
 import { SettingsDialog } from './SettingsDialog';
 import { FullscreenButton } from '../pwa/FullscreenButton';
 
@@ -15,7 +14,9 @@ export function PauseMenu({ onExitToTitle }: PauseMenuProps) {
   const setPaused = useGameStore((state) => state.setPaused);
   const saveGame = useGameStore((state) => state.saveGame);
   const saveMessage = useGameStore((state) => state.saveMessage);
-  const setTutorialSeen = useSettingsStore((state) => state.setTutorialSeen);
+  const setOnboardingState = useGameStore(
+    (state) => state.setOnboardingState,
+  );
 
   return (
     <div className="pause-menu-backdrop">
@@ -52,7 +53,13 @@ export function PauseMenu({ onExitToTitle }: PauseMenuProps) {
           <button type="button" onClick={() => setSettingsOpen(true)}>
             Controles
           </button>
-          <button type="button" onClick={() => setTutorialSeen(false)}>
+          <button
+            type="button"
+            onClick={() => {
+              setOnboardingState('introducing');
+              setPaused(false);
+            }}
+          >
             Ver tutorial
           </button>
           <FullscreenButton />

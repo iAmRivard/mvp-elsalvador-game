@@ -38,9 +38,16 @@ describe('overlay manager', () => {
   });
 
   it('keeps discovery compact while the vehicle is moving fast', () => {
+    useGameStore.getState().setTelemetry({
+      longitude: -89.1908911,
+      latitude: 13.6962937,
+      heading: 0,
+      speedMetersPerSecond: 20,
+      fuel: 75,
+      totalDistanceMeters: 0,
+    });
     useGameStore.setState({
       lastDiscoveredLocationId: 'san-salvador',
-      presentationMode: 'fast',
     });
     const { container } = render(<OverlayManager />);
 
@@ -62,7 +69,7 @@ describe('overlay manager', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(screen.queryByText('La señal continúa al oeste')).toBeNull();
-    expect(screen.queryByText('San Salvador')).toBeNull();
+    expect(screen.queryAllByText('San Salvador').length).toBeGreaterThan(0);
     fireEvent.click(within(dialog).getByRole('button'));
     expect(screen.getByText('La señal continúa al oeste')).toBeTruthy();
     expect(document.querySelector('.discovery-toast--compact')).not.toBeNull();
@@ -79,5 +86,20 @@ describe('overlay manager', () => {
     expect(
       container.querySelectorAll('[role="dialog"], [role="alertdialog"]'),
     ).toHaveLength(1);
+  });
+
+  it('suppresses story overlays during contextual onboarding', () => {
+    useGameStore.setState({
+      activeRadioEventId: 'radio-ruta-occidental',
+      recoveryReason: null,
+    });
+    const { container } = render(<OverlayManager allowStory={false} />);
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(
+      container
+        .querySelector('.overlay-manager')
+        ?.getAttribute('data-active-overlay'),
+    ).toBe('none');
   });
 });
