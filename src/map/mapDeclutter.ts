@@ -22,6 +22,8 @@ export const mapDeclutterProfiles: Readonly<
   Record<'stopped' | 'driving' | 'fast', MapDeclutterProfile>
 > = {
   stopped: {
+    // Reference values remain useful for diagnostics; the controller restores
+    // the captured style instead of applying these generic values.
     labelOpacity: {
       navigation: 1,
       'road-primary': 0.95,
@@ -72,6 +74,22 @@ export interface MapLayerInventoryEntry {
   priority: MapLayerPriority;
 }
 
+export interface OriginalLayerPresentation {
+  visibility?: unknown;
+  textOpacity?: unknown;
+  iconOpacity?: unknown;
+  lineOpacity?: unknown;
+  fillOpacity?: unknown;
+  circleOpacity?: unknown;
+  fillExtrusionOpacity?: unknown;
+  rasterOpacity?: unknown;
+}
+
+interface LayerSnapshot {
+  type: LayerSpecification['type'];
+  presentation: OriginalLayerPresentation;
+}
+
 const navigationLayerPrefixes = [
   'active-mission-',
   'road-debug-',
@@ -116,79 +134,220 @@ export function mapLayerInventory(
   }));
 }
 
-function opacityProperty(
+const paintPropertyByPresentationKey = {
+  textOpacity: 'text-opacity',
+  iconOpacity: 'icon-opacity',
+  lineOpacity: 'line-opacity',
+  fillOpacity: 'fill-opacity',
+  circleOpacity: 'circle-opacity',
+  fillExtrusionOpacity: 'fill-extrusion-opacity',
+  rasterOpacity: 'raster-opacity',
+} as const;
+
+type PaintPresentationKey = keyof typeof paintPropertyByPresentationKey;
+
+function opacityKeys(
   type: LayerSpecification['type'],
-): 'text-opacity' | 'line-opacity' | 'fill-opacity' | null {
-  if (type === 'symbol') return 'text-opacity';
-  if (type === 'line') return 'line-opacity';
-  if (type === 'fill') return 'fill-opacity';
-  return null;
+): readonly PaintPresentationKey[] {
+  if (type === 'symbol') return ['textOpacity', 'iconOpacity'];
+  if (type === 'line') return ['lineOpacity'];
+  if (type === 'fill') return ['fillOpacity'];
+  if (type === 'circle') return ['circleOpacity'];
+  if (type === 'fill-extrusion') return ['fillExtrusionOpacity'];
+  if (type === 'raster') return ['rasterOpacity'];
+  return [];
+}
+
+function readOriginalPresentation(
+  map: MapLibreMap,
+  layer: MapLayerInventoryEntry,
+): OriginalLayerPresentation {
+  const presentation: OriginalLayerPresentation = {
+    visibility: map.getLayoutProperty(layer.id, 'visibility'),
+  };
+  for (const key of opacityKeys(layer.type)) {
+    presentation[key] = map.getPaintProperty(
+      layer.id,
+      paintPropertyByPresentationKey[key],
+    );
+  }
+  return presentation;
+}
+
+function restoreLayoutProperty(
+  map: MapLibreMap,
+  layerId: string,
+  value: unknown,
+): void {
+  map.setLayoutProperty(layerId, 'visibility', value ?? null);
+}
+
+function restorePaintProperty(
+  map: MapLibreMap,
+  layerId: string,
+  property: string,
+  value: unknown,
+): void {
+  map.setPaintProperty(layerId, property, value ?? null);
 }
 
 export interface MapDeclutterController {
   apply: (mode: DrivingPresentationMode, immediate?: boolean) => void;
   dispose: () => void;
-  inventory: readonly MapLayerInventoryEntry[];
+  readonly inventory: readonly MapLayerInventoryEntry[];
 }
 
 export function createMapDeclutterController(
   map: MapLibreMap,
   debounceMilliseconds = 300,
 ): MapDeclutterController {
-  const inventory = mapLayerInventory(map.getStyle().layers ?? []);
+  let inventory = mapLayerInventory(map.getStyle().layers ?? []);
+  const snapshots = new Map<string, LayerSnapshot>();
+  const knownLayerIds = new Set(inventory.map((layer) => layer.id));
   let activeProfile: 'stopped' | 'driving' | 'fast' | null = null;
   let pendingProfile: 'stopped' | 'driving' | 'fast' | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
-  const missing = new Set<string>();
+  let inventorySignature = '';
+  let disposed = false;
+
+  const refreshInventory = () => {
+    inventory = mapLayerInventory(map.getStyle().layers ?? []);
+    for (const layer of inventory) knownLayerIds.add(layer.id);
+    return inventory
+      .map((layer) => `${layer.id}:${layer.type}:${layer.priority}`)
+      .join('|');
+  };
+
+  const snapshotFor = (layer: MapLayerInventoryEntry): LayerSnapshot => {
+    const current = snapshots.get(layer.id);
+    if (current?.type === layer.type) return current;
+    const snapshot = {
+      type: layer.type,
+      presentation: readOriginalPresentation(map, layer),
+    };
+    snapshots.set(layer.id, snapshot);
+    return snapshot;
+  };
+
+  const restoreLayer = (
+    layer: MapLayerInventoryEntry,
+    snapshot: LayerSnapshot,
+  ) => {
+    restoreLayoutProperty(map, layer.id, snapshot.presentation.visibility);
+    for (const key of opacityKeys(layer.type)) {
+      restorePaintProperty(
+        map,
+        layer.id,
+        paintPropertyByPresentationKey[key],
+        snapshot.presentation[key],
+      );
+    }
+  };
 
   const commit = (profileName: 'stopped' | 'driving' | 'fast') => {
+    if (disposed) return;
     const startedAt = performance.now();
+    const signature = refreshInventory();
     const profile = mapDeclutterProfiles[profileName];
+    const currentIds = new Set(inventory.map((layer) => layer.id));
+    for (const id of knownLayerIds) {
+      if (!currentIds.has(id)) snapshots.delete(id);
+    }
     let visibleLayerCount = 0;
+    let failedLayerCount = 0;
+
     for (const layer of inventory) {
       if (!map.getLayer(layer.id)) {
-        missing.add(layer.id);
+        failedLayerCount += 1;
         continue;
       }
-      const visible = profile.layerVisibility[layer.priority] !== false;
       try {
-        map.setLayoutProperty(
-          layer.id,
-          'visibility',
-          visible ? 'visible' : 'none',
-        );
-        if (visible) visibleLayerCount += 1;
-        const opacity = profile.labelOpacity[layer.priority];
-        const property = opacityProperty(layer.type);
-        if (property && opacity !== undefined) {
-          map.setPaintProperty(layer.id, property, opacity);
-          if (layer.type === 'symbol') {
-            map.setPaintProperty(layer.id, 'icon-opacity', opacity);
+        const snapshot = snapshotFor(layer);
+        if (profileName === 'stopped') {
+          restoreLayer(layer, snapshot);
+        } else {
+          const visible = profile.layerVisibility[layer.priority] !== false;
+          if (visible) {
+            restoreLayoutProperty(
+              map,
+              layer.id,
+              snapshot.presentation.visibility,
+            );
+          } else {
+            map.setLayoutProperty(layer.id, 'visibility', 'none');
+          }
+
+          const opacity = profile.labelOpacity[layer.priority];
+          for (const key of opacityKeys(layer.type)) {
+            if (opacity === undefined) {
+              restorePaintProperty(
+                map,
+                layer.id,
+                paintPropertyByPresentationKey[key],
+                snapshot.presentation[key],
+              );
+            } else {
+              map.setPaintProperty(
+                layer.id,
+                paintPropertyByPresentationKey[key],
+                opacity,
+              );
+            }
           }
         }
+        const originalVisibility = snapshot.presentation.visibility;
+        const profileHidesLayer =
+          profileName !== 'stopped' &&
+          profile.layerVisibility[layer.priority] === false;
+        if (!profileHidesLayer && originalVisibility !== 'none') {
+          visibleLayerCount += 1;
+        }
       } catch {
-        missing.add(layer.id);
+        failedLayerCount += 1;
       }
     }
+
+    const removedLayerCount = [...knownLayerIds].filter(
+      (id) => !currentIds.has(id),
+    ).length;
     activeProfile = profileName;
     pendingProfile = null;
+    inventorySignature = signature;
     const container = map.getContainer();
     container.dataset.mapDeclutterProfile = profileName;
     container.dataset.mapLayerCount = String(inventory.length);
     container.dataset.mapVisibleLayerCount = String(visibleLayerCount);
-    container.dataset.mapMissingLayerCount = String(missing.size);
+    container.dataset.mapMissingLayerCount = String(
+      removedLayerCount + failedLayerCount,
+    );
     container.dataset.mapDeclutterChangeMs = (
       performance.now() - startedAt
     ).toFixed(2);
   };
 
-  return {
-    inventory,
+  const controller: MapDeclutterController = {
+    get inventory() {
+      return inventory;
+    },
     apply(mode, immediate = false) {
+      if (disposed) return;
       const profile = drivingDeclutterMode(mode);
-      if (profile === activeProfile || profile === pendingProfile) return;
+      const nextSignature = mapLayerInventory(map.getStyle().layers ?? [])
+        .map((layer) => `${layer.id}:${layer.type}:${layer.priority}`)
+        .join('|');
+      if (
+        profile === activeProfile &&
+        profile !== pendingProfile &&
+        nextSignature === inventorySignature
+      ) {
+        return;
+      }
+      if (profile === pendingProfile && nextSignature === inventorySignature) {
+        return;
+      }
       pendingProfile = profile;
       if (timer) clearTimeout(timer);
+      timer = null;
       if (immediate) {
         commit(profile);
         return;
@@ -202,9 +361,11 @@ export function createMapDeclutterController(
       );
     },
     dispose() {
+      disposed = true;
       if (timer) clearTimeout(timer);
       timer = null;
       pendingProfile = null;
     },
   };
+  return controller;
 }
