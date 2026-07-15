@@ -32,7 +32,11 @@ export interface MissionObjective {
   label: string;
   targetLocationId?: string;
   coordinates?: [longitude: number, latitude: number];
+  /** Playable activation point when the narrative marker is away from a road. */
+  interactionCoordinates?: [longitude: number, latitude: number];
   radiusMeters: number;
+  /** Explicit exception for objectives intentionally completed away from roads. */
+  explicitlyOffroad?: boolean;
   requiresFuel?: boolean;
   itemId?: string;
   quantity?: number;
@@ -222,6 +226,7 @@ export const missions: readonly Mission[] = [
         type: 'collect',
         label: 'Recoge el relé de encendido',
         coordinates: [-89.4479, 13.84048],
+        interactionCoordinates: [-89.44728798532248, 13.840732464626095],
         radiusMeters: 65,
         itemId: 'rele-encendido',
         quantity: 1,
@@ -397,6 +402,7 @@ export const missions: readonly Mission[] = [
         label: 'Investiga la señal misteriosa en Suchitoto',
         targetLocationId: 'suchitoto',
         radiusMeters: 1_000,
+        explicitlyOffroad: true,
       },
     ],
     rewards: [

@@ -16,13 +16,20 @@ import {
   followCameraTarget,
   smoothFollowBearing,
 } from '../../game/followCamera';
-import type { DrivingPresentationMode } from '../../game/drivingPresentation';
+import {
+  effectiveDrivingSurfaceLabel,
+  type DrivingPresentationMode,
+} from '../../game/drivingPresentation';
 import { startPlayerGameLoop, type PlayerGameLoop } from '../../game/gameLoop';
 import {
   findDiscoverableLocations,
   findNearestLocation,
 } from '../../game/discovery';
-import { nearestPendingObjective } from '../../game/missions';
+import {
+  isInsideValidObjectiveZone,
+  nearestPendingObjective,
+  objectiveNarrativeCoordinates,
+} from '../../game/missions';
 import { selectedMissionChoiceOption } from '../../game/missionChoices';
 import { InputController } from '../../game/inputController';
 import {
@@ -92,7 +99,9 @@ function syncInteractiveSignal(layer: ThreeGameLayerController): void {
       )
     : null;
   const objective = next?.objective;
-  const coordinates = next?.coordinates;
+  const coordinates = objective
+    ? objectiveNarrativeCoordinates(objective)
+    : null;
   const interactive =
     objective &&
     ['interact', 'collect', 'deliver', 'repair', 'refuel', 'choice'].includes(
@@ -259,6 +268,48 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let interactionWasActive = false;
     let startupReady = false;
 
+    const updateObjectiveZonePresentation = (
+      state = useGameStore.getState(),
+    ) => {
+      const mission = state.activeMissionId
+        ? missionById.get(state.activeMissionId)
+        : null;
+      const playerCoordinates: [number, number] = [
+        state.telemetry.longitude,
+        state.telemetry.latitude,
+      ];
+      const next = mission
+        ? nearestPendingObjective(
+            mission,
+            state.activeMissionCompletedObjectiveIds,
+            playerCoordinates,
+          )
+        : null;
+      const inside = Boolean(
+        next &&
+        isInsideValidObjectiveZone(next.objective, playerCoordinates, {
+          nearestRoadEdgeId: roadContact?.edge.id ?? null,
+          distanceToNearestRoadMeters:
+            roadContact?.nearest.distanceMeters ?? null,
+          expectedRoadEdgeIds: activeRouteEdgeIds,
+          maximumRoadDistanceMeters: roadAssistConfig.disengageDistanceMeters,
+          directRoadContactToleranceMeters:
+            roadAssistConfig.fullAssistRadiusMeters,
+        }),
+      );
+      if (inside !== state.insideValidObjectiveZone) {
+        state.setInsideValidObjectiveZone(inside);
+      }
+      const container = containerRef.current;
+      if (container) {
+        container.dataset.insideValidObjectiveZone = String(inside);
+        container.dataset.drivingSurfaceLabel = effectiveDrivingSurfaceLabel(
+          state.driving.surface,
+          inside,
+        );
+      }
+    };
+
     const finishStartup = () => {
       if (!effectActive) return;
       setLoadingStage('routes');
@@ -363,6 +414,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
 
     const handleLoad = () => {
       setLoadingStage('roads');
+      useGameStore.getState().setInsideValidObjectiveZone(false);
+      updateObjectiveZonePresentation();
       const initialPlayer = runtimeFromTelemetry(
         useGameStore.getState().telemetry,
       );
@@ -820,6 +873,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               containerRef.current.dataset.movementBlockedBy =
                 environment.movementBlockedBy ?? '';
             }
+            updateObjectiveZonePresentation(useGameStore.getState());
           }
 
           const nearestLocation = findNearestLocation(coordinates);
@@ -881,7 +935,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           activeRouteEdgeIds = new Set(state.missionRoute.activeEdgeIds);
         }
         if (threeLayer) syncInteractiveSignal(threeLayer);
-        if (
+        updateObjectiveZonePresentation(state);
+        if (!previousState.isJournalOpen && state.isJournalOpen) {
+          inputController.suspendForOverlay();
+        } else if (
           (!previousState.isPaused && state.isPaused) ||
           (!previousState.recoveryReason && state.recoveryReason) ||
           (!previousState.activeNarrativeEventId &&
@@ -961,6 +1018,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     const handleError = (event: ErrorEvent) => {
       if (!isFatalMapError(event.error)) return;
       startupReady = false;
+      useGameStore.getState().setInsideValidObjectiveZone(false);
       inputController.clearAllInput();
       inputController.resetMobileBoostCompletely();
       setErrorMessage(mapErrorDetails(event.error));
@@ -992,6 +1050,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       unsubscribeSettings?.();
       unsubscribePresentation?.();
       mapDeclutter?.dispose();
+      useGameStore.getState().setInsideValidObjectiveZone(false);
       removeLocationMarkers?.();
       removeFuelStationMarkers?.();
       removeMissionRoute?.();

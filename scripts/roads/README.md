@@ -15,6 +15,7 @@ No se descarga ni consulta un servicio de rutas desde el navegador.
 npm run download:roads
 npm run build:roads
 npm run check:roads
+node scripts/roads/validate-mission-objectives.mjs
 ```
 
 La descarga está fijada al extracto Geofabrik `el-salvador-260712.osm.pbf` y verifica el MD5

@@ -28,7 +28,7 @@ import { vehicleIsReversing, vehicleOrientation } from './navigationGuidance';
 import {
   nearestPendingObjective,
   objectiveIsAvailable,
-  objectiveCoordinates,
+  objectiveNarrativeCoordinates,
 } from '../game/missions';
 import { localRoutingService } from '../roads/routingService';
 import { getRoadWorkerClient } from '../roads/roadWorkerClient';
@@ -198,7 +198,9 @@ function updateTargets(map: MapLibreMap): void {
       ) {
         return [];
       }
-      const coordinates = objectiveCoordinates(objective);
+      // Navigation ends at the playable interaction point, while the target
+      // marker remains at the authored narrative location.
+      const coordinates = objectiveNarrativeCoordinates(objective);
       return coordinates
         ? [
             {

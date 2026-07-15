@@ -66,9 +66,57 @@ export type MissionStartBlockReason =
 export function objectiveCoordinates(
   objective: MissionObjective,
 ): Coordinates | null {
+  if (objective.interactionCoordinates) return objective.interactionCoordinates;
+  return objectiveNarrativeCoordinates(objective);
+}
+
+export function objectiveNarrativeCoordinates(
+  objective: MissionObjective,
+): Coordinates | null {
   if (objective.coordinates) return objective.coordinates;
   if (!objective.targetLocationId) return null;
   return locationById.get(objective.targetLocationId)?.coordinates ?? null;
+}
+
+export interface ObjectiveZoneRoadContext {
+  nearestRoadEdgeId: number | null;
+  distanceToNearestRoadMeters: number | null;
+  expectedRoadEdgeIds: ReadonlySet<number> | readonly number[];
+  maximumRoadDistanceMeters: number;
+  directRoadContactToleranceMeters: number;
+}
+
+export function isInsideValidObjectiveZone(
+  objective: MissionObjective,
+  playerCoordinates: Coordinates,
+  roadContext: ObjectiveZoneRoadContext,
+): boolean {
+  const target = objectiveCoordinates(objective);
+  if (
+    !target ||
+    distanceBetweenMeters(playerCoordinates, target) > objective.radiusMeters
+  ) {
+    return false;
+  }
+  if (objective.explicitlyOffroad) return true;
+  if (
+    roadContext.nearestRoadEdgeId === null ||
+    roadContext.distanceToNearestRoadMeters === null ||
+    roadContext.distanceToNearestRoadMeters >
+      Math.min(objective.radiusMeters, roadContext.maximumRoadDistanceMeters)
+  ) {
+    return false;
+  }
+  const expected =
+    roadContext.expectedRoadEdgeIds instanceof Set
+      ? roadContext.expectedRoadEdgeIds
+      : new Set(roadContext.expectedRoadEdgeIds);
+  return (
+    expected.size === 0 ||
+    expected.has(roadContext.nearestRoadEdgeId) ||
+    roadContext.distanceToNearestRoadMeters <=
+      roadContext.directRoadContactToleranceMeters
+  );
 }
 
 export function missionStartBlockReason(
