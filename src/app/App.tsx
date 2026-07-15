@@ -50,16 +50,14 @@ export function App() {
   const setPaused = useGameStore((state) => state.setPaused);
   const loadGame = useGameStore((state) => state.loadGame);
   const resetGame = useGameStore((state) => state.resetGame);
-  const setOnboardingState = useGameStore(
-    (state) => state.setOnboardingState,
-  );
+  const setOnboardingState = useGameStore((state) => state.setOnboardingState);
   const startMission = useGameStore((state) => state.startMission);
-  const showTutorial =
-    sessionStarted && onboardingIsActive(onboardingState);
+  const showTutorial = sessionStarted && onboardingIsActive(onboardingState);
 
   useEffect(() => startGameAutosave(), []);
   useEffect(() => {
     if (isJournalOpen) inputController.suspendForOverlay();
+    else inputController.resumeFromOverlay();
   }, [inputController, isJournalOpen]);
   const enterGame = (loadSavedGame: boolean) => {
     const loaded = loadSavedGame && hasSavedGame && loadGame();

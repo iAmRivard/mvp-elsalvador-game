@@ -312,5 +312,28 @@ function PlayerHudContent() {
 
 export function PlayerHud() {
   const isJournalOpen = useGameStore((state) => state.isJournalOpen);
-  return isJournalOpen ? null : <PlayerHudContent />;
+  const presentationMode = useGameStore((state) => state.presentationMode);
+  const [compactViewport, setCompactViewport] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia(
+        '(max-width: 600px), (max-width: 900px) and (pointer: coarse)',
+      ).matches,
+  );
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia(
+      '(max-width: 600px), (max-width: 900px) and (pointer: coarse)',
+    );
+    const update = () => setCompactViewport(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  return isJournalOpen ||
+    (compactViewport && presentationMode !== 'stopped') ? null : (
+    <PlayerHudContent />
+  );
 }

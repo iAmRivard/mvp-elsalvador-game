@@ -161,6 +161,22 @@ describe('keyboard route controls', () => {
       boost: false,
       interact: false,
     });
+
+    input.setPointerAction('interact', true);
+    input.advanceMobileCruise(0, 0.5);
+    expect(input.snapshot()).toEqual({
+      throttle: 0,
+      turn: 0,
+      boost: false,
+      interact: false,
+    });
+    expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(35);
+
+    input.resumeFromOverlay();
+    expect(input.snapshot().interact).toBe(false);
+    input.advanceMobileCruise(0, 0.1);
+    expect(input.snapshot().throttle).toBeGreaterThan(0);
+    expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(35);
   });
 
   it('activa Turbo móvil por toque, termina y respeta el enfriamiento', () => {

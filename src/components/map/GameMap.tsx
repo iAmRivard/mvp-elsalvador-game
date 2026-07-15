@@ -387,7 +387,13 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       useGameStore.getState().togglePaused,
       useGameStore.getState().requestMissionRouteRecalculation,
     );
-    const clearInterruptedInput = () => inputController.clearAllInput();
+    const clearInterruptedInput = () => {
+      if (useGameStore.getState().isJournalOpen) {
+        inputController.suspendForOverlay();
+      } else {
+        inputController.clearAllInput();
+      }
+    };
     const resetInput = () => {
       inputController.clearAllInput();
       inputController.resetMobileBoostCompletely();
@@ -585,7 +591,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       gameLoop = startPlayerGameLoop({
         initialPlayer,
         input: inputController,
-        isPaused: () => !startupReady || useGameStore.getState().isPaused,
+        isPaused: () => {
+          const state = useGameStore.getState();
+          return !startupReady || state.isPaused || state.isJournalOpen;
+        },
         getMovementOptions: () => {
           const roadContactTimestamp = performance.now();
           return {
@@ -754,8 +763,18 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           ];
           const state = useGameStore.getState();
           state.setTelemetry(player);
+          if (state.isJournalOpen && !state.isPaused) {
+            state.advanceActiveMission(player, false, 0.1);
+          }
           if (containerRef.current) {
             const inputDiagnostics = inputController.getDiagnostics();
+            containerRef.current.dataset.playerLongitude =
+              player.longitude.toFixed(7);
+            containerRef.current.dataset.playerLatitude =
+              player.latitude.toFixed(7);
+            containerRef.current.dataset.playerSpeedKilometersPerHour = (
+              Math.abs(player.speedMetersPerSecond) * 3.6
+            ).toFixed(2);
             containerRef.current.dataset.inputThrottle =
               inputDiagnostics.throttle.toFixed(3);
             containerRef.current.dataset.inputTurn =
@@ -789,6 +808,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             containerRef.current.dataset.inputCruiseReversing = String(
               inputDiagnostics.mobileCruise.reversing,
             );
+            containerRef.current.dataset.inputCruiseReverseState =
+              inputDiagnostics.mobileCruise.reverseState;
           }
           if (roadTracker) {
             const metrics = roadTracker.getMetrics();

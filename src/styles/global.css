@@ -6735,6 +6735,13 @@ html[data-reduced-motion='true'] *::after {
     visibility: hidden;
   }
 
+  .game-shell--driving .mobile-action-labels,
+  .game-shell--fast .mobile-action-labels,
+  .game-shell--alert .mobile-action-labels,
+  .game-shell--interaction .mobile-action-labels {
+    display: none;
+  }
+
   .game-shell--driving .mission-panel--collapsed,
   .game-shell--fast .mission-panel--collapsed,
   .game-shell--alert .mission-panel--collapsed {

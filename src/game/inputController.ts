@@ -93,6 +93,7 @@ export class InputController {
   };
   private autoThrottleScale = 1;
   private mobileCruiseEnabled = false;
+  private overlaySuspended = false;
   private mobileCruiseVerticalIntent = 0;
   private mobileCruiseThrottle = 0;
   private mobileCruiseTarget: MobileCruiseTarget = {
@@ -159,7 +160,10 @@ export class InputController {
       this.keyboardActions.clear();
       this.notify();
     };
-    const clearInterruptedInput = () => this.clearAllInput();
+    const clearInterruptedInput = () => {
+      if (this.overlaySuspended) this.clearTransientInput(true);
+      else this.clearAllInput();
+    };
     target.addEventListener('keydown', handleKeyDown, { passive: false });
     target.addEventListener('keyup', handleKeyUp, { passive: false });
     target.addEventListener('blur', clearInterruptedInput);
@@ -279,6 +283,10 @@ export class InputController {
     deltaTimeSeconds: number,
   ): void {
     if (!this.mobileCruiseEnabled) return;
+    if (this.overlaySuspended) {
+      this.mobileCruiseThrottle = 0;
+      return;
+    }
     this.updateMobileBoostState();
     const previous = this.mobileCruiseTarget;
     const intent = this.mobileCruiseVerticalIntent;
@@ -579,13 +587,14 @@ export class InputController {
   }
 
   /**
-   * Suspends momentary driving input for a blocking overlay without discarding
-   * the speed the player selected. The next simulation tick resumes cruise;
-   * reverse always has to be armed again after the overlay closes.
+   * Suspends driving input for a blocking overlay without discarding the speed
+   * the player selected. Reverse always has to be armed again after it closes.
    */
   suspendForOverlay(): void {
     const preservedTarget =
       this.mobileCruiseTarget.targetSpeedKilometersPerHour;
+    const changed = !this.overlaySuspended;
+    this.overlaySuspended = true;
     this.clearTransientInput(true);
     this.mobileCruiseTarget = {
       targetSpeedKilometersPerHour: preservedTarget,
@@ -594,6 +603,14 @@ export class InputController {
       reversing: false,
       reverseState: 'forward',
     };
+    if (changed) this.notify();
+  }
+
+  resumeFromOverlay(): void {
+    if (!this.overlaySuspended) return;
+    this.clearTransientInput(true);
+    this.overlaySuspended = false;
+    this.notify();
   }
 
   private clearTransientInput(preserveCruiseTarget: boolean): void {
@@ -686,6 +703,9 @@ export class InputController {
   }
 
   snapshot(): PlayerInput {
+    if (this.overlaySuspended) {
+      return { throttle: 0, turn: 0, boost: false, interact: false };
+    }
     const sources = this.getInputSources();
     const manualThrottle = clampAnalogInput(
       sources.keyboardThrottle +

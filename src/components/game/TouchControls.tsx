@@ -209,6 +209,7 @@ export function TouchControls({ input }: TouchControlsProps) {
 
   useEffect(() => {
     if (isJournalOpen) input.suspendForOverlay();
+    else input.resumeFromOverlay();
   }, [input, isJournalOpen]);
 
   return isJournalOpen ? null : <TouchControlsContent input={input} />;

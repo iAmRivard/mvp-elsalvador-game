@@ -189,6 +189,15 @@ describe('estado de misiones y capítulo', () => {
         'alcanzar-estacion-a-tiempo'
       ].elapsedSeconds,
     ).toBe(1);
+    useGameStore.getState().openJournal('missions');
+    useGameStore
+      .getState()
+      .advanceActiveMission(useGameStore.getState().telemetry, false, 2);
+    expect(
+      useGameStore.getState().activeMissionObjectiveProgress[
+        'alcanzar-estacion-a-tiempo'
+      ].elapsedSeconds,
+    ).toBe(3);
     useGameStore.getState().setPaused(true);
     useGameStore
       .getState()
@@ -197,7 +206,7 @@ describe('estado de misiones y capítulo', () => {
       useGameStore.getState().activeMissionObjectiveProgress[
         'alcanzar-estacion-a-tiempo'
       ].elapsedSeconds,
-    ).toBe(1);
+    ).toBe(3);
   });
 
   it('al fallar el tiempo reintenta desde antes de elegir la ruta', () => {

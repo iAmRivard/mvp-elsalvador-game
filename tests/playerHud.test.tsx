@@ -68,4 +68,18 @@ describe('HUD detenido', () => {
 
     expect(screen.queryByLabelText('Estado del jugador')).toBeNull();
   });
+  it('desmonta el HUD de escritorio durante conducción móvil', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn(() => ({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    });
+    useGameStore.setState({ presentationMode: 'driving' });
+    render(<PlayerHud />);
+
+    expect(screen.queryByLabelText('Estado del jugador')).toBeNull();
+  });
 });

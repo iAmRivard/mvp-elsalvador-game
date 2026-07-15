@@ -12,6 +12,10 @@ async function startFreshExpedition(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
   const skipTutorial = page.getByRole('button', { name: 'Omitir' });
   if (await skipTutorial.isVisible()) await skipTutorial.click();
+  const beginMission = page.getByRole('button', {
+    name: /Comenzar investigación/,
+  });
+  if (await beginMission.isVisible()) await beginMission.click();
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,
   });
@@ -91,9 +95,10 @@ test('mantiene velocidad objetivo, gira, frena y activa reversa', async ({
       Number(await gameMap.getAttribute('data-input-target-speed')),
     )
     .toBeGreaterThan(25);
-  const positionWhenReleased = await page
-    .getByTestId('player-position')
-    .textContent();
+  const positionWhenReleased = await gameMap.evaluate(
+    (element) =>
+      `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+  );
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',
     touchPoints: [],
@@ -109,7 +114,12 @@ test('mantiene velocidad objetivo, gira, frena y activa reversa', async ({
   );
   expect(Math.abs(heldTarget - targetAfterRelease)).toBeLessThan(1);
   await expect
-    .poll(() => page.getByTestId('player-position').textContent())
+    .poll(() =>
+      gameMap.evaluate(
+        (element) =>
+          `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+      ),
+    )
     .not.toBe(positionWhenReleased);
 
   await session.send('Input.dispatchTouchEvent', {
@@ -149,7 +159,10 @@ test('mantiene velocidad objetivo, gira, frena y activa reversa', async ({
   await expect(gameMap).toHaveAttribute('data-input-mobile-boost', 'active');
   await expect(gameMap).toHaveAttribute('data-input-boost', 'true');
   await page.waitForTimeout(2_650);
-  await expect(gameMap).not.toHaveAttribute('data-input-mobile-boost', 'active');
+  await expect(gameMap).not.toHaveAttribute(
+    'data-input-mobile-boost',
+    'active',
+  );
   expect(
     Math.abs(
       Number(await gameMap.getAttribute('data-input-target-speed')) -
@@ -181,13 +194,45 @@ test('mantiene velocidad objetivo, gira, frena y activa reversa', async ({
     )
     .toBeLessThan(0.6);
   await expect(gameMap).toHaveAttribute('data-input-cruise-braking', 'true');
+  await expect(gameMap).toHaveAttribute(
+    'data-input-cruise-reverse-state',
+    'awaiting-release',
+    {
+      timeout: 6_000,
+    },
+  );
+  await page.waitForTimeout(700);
+  await expect(gameMap).toHaveAttribute('data-input-cruise-reversing', 'false');
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+  await expect(gameMap).toHaveAttribute(
+    'data-input-cruise-reverse-state',
+    'reverse-armed',
+  );
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [
+      { id: 4, x: joystickCenter.x, y: joystickCenter.y, force: 1 },
+    ],
+  });
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [
+      {
+        id: 4,
+        x: joystickCenter.x,
+        y: joystickCenter.y + joystickCenter.width * 0.44,
+        force: 1,
+      },
+    ],
+  });
   await expect(gameMap).toHaveAttribute('data-input-cruise-reversing', 'true', {
     timeout: 6_000,
   });
   await expect
-    .poll(async () =>
-      Number(await gameMap.getAttribute('data-input-throttle')),
-    )
+    .poll(async () => Number(await gameMap.getAttribute('data-input-throttle')))
     .toBeLessThan(0);
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',
