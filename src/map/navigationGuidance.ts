@@ -24,6 +24,10 @@ function turnDirection(difference: number): 'izquierda' | 'derecha' {
   return difference < 0 ? 'izquierda' : 'derecha';
 }
 
+export function vehicleIsReversing(speedMetersPerSecond: number): boolean {
+  return speedMetersPerSecond < -0.14;
+}
+
 export function navigationGuidanceMessage(
   navigation: ActiveNavigationState | null,
   orientation: VehicleOrientation,
