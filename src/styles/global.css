@@ -2164,6 +2164,49 @@ html[data-tutorial-target='target'] .map-canvas {
   background: #6bd2a0;
 }
 
+.fuel-assist.fuel-assist--nearby {
+  display: block;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 0;
+  border-color: rgb(78 191 139 / 28%);
+  background: rgb(12 31 27 / 88%);
+}
+
+.fuel-assist--station-compact {
+  display: block;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 0;
+  border-color: rgb(78 191 139 / 28%);
+  background: rgb(12 31 27 / 88%);
+}
+
+.fuel-assist--nearby .fuel-assist__compact {
+  display: flex;
+  min-height: 32px;
+  gap: 5px;
+  align-items: center;
+  padding: 6px 10px;
+  border: 0;
+  color: #dceae1;
+  background: transparent;
+}
+
+.fuel-assist__compact > span {
+  color: #70d7a5;
+}
+
+.fuel-assist__compact > strong,
+.fuel-assist__compact > small {
+  font-size: 0.62rem;
+  white-space: nowrap;
+}
+
+.fuel-assist__compact > small {
+  color: #a9bcb1;
+}
+
 .telemetry-grid {
   display: grid;
   gap: 8px;
@@ -6069,6 +6112,14 @@ html[data-reduced-motion='true'] *::after {
 @media (max-width: 600px) {
   .fuel-assist {
     bottom: max(186px, calc(env(safe-area-inset-bottom) + 176px));
+  }
+
+  .fuel-assist--station,
+  .fuel-assist--station-compact,
+  .fuel-assist--nearby {
+    left: max(12px, env(safe-area-inset-left));
+    transform: none;
+    max-width: min(240px, calc(100% - 156px));
   }
 
   .game-shell:has(.fuel-assist) .gameplay-toast {
