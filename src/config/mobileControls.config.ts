@@ -70,6 +70,9 @@ export const mobileCruiseConfig = {
   stoppedSpeedMetersPerSecond: 0.14,
   responseRangeKilometersPerHour: 18,
   targetSpeedToleranceKilometersPerHour: 1.5,
+  boostTargetSpeedKilometersPerHour: 137,
+  boostRecoveryMilliseconds: 1_000,
+  boostRecoveryMaximumBrake: 0.18,
   diagnosticsUpdateIntervalMilliseconds: 100,
 } as const;
 
@@ -86,6 +89,10 @@ export const joystickSizeMultipliers: Readonly<Record<JoystickSize, number>> = {
   medium: 1,
   large: 1.16,
 };
+
+export function controlViewportScale(viewportHeight: number): number {
+  return viewportHeight <= 560 ? 0.58 : 1;
+}
 
 export const autoThrottleConfig = {
   targetThrottle: 0.72,

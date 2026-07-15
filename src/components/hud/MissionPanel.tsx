@@ -32,7 +32,7 @@ import type { NavigationInstructionType } from '../../types/navigation';
 import type { StoryLogEntry } from '../../types/progression';
 
 const compactViewportQuery =
-  '(max-width: 600px), (max-height: 560px) and (pointer: coarse)';
+  '(max-width: 600px), (max-width: 900px) and (pointer: coarse), (max-height: 560px) and (pointer: coarse)';
 
 export type MobileJournalSheetState =
   'closed' | 'compact' | 'half' | 'expanded';
@@ -180,6 +180,7 @@ export function MissionPanel() {
     () => useGameStore.getState().storyLogRequest.section,
   );
   const telemetry = useGameStore((state) => state.telemetry);
+  const presentationMode = useGameStore((state) => state.presentationMode);
   const driving = useGameStore((state) => state.driving);
   const activeMissionId = useGameStore((state) => state.activeMissionId);
   const completedObjectiveIds = useGameStore(
@@ -334,6 +335,21 @@ export function MissionPanel() {
       }),
     [compactViewport],
   );
+
+  useEffect(() => {
+    if (
+      !compactViewport ||
+      (presentationMode !== 'driving' && presentationMode !== 'fast')
+    ) {
+      return;
+    }
+    autoCollapseAt.current = null;
+    const timer = window.setTimeout(() => {
+      setSheetState('compact');
+      setCollapsed(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [compactViewport, presentationMode]);
 
   useEffect(
     () =>

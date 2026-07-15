@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { SettingsDialog } from './SettingsDialog';
+import { FullscreenButton } from '../pwa/FullscreenButton';
 
 interface PauseMenuProps {
   onExitToTitle: () => void;
@@ -54,6 +55,7 @@ export function PauseMenu({ onExitToTitle }: PauseMenuProps) {
           <button type="button" onClick={() => setTutorialSeen(false)}>
             Ver tutorial
           </button>
+          <FullscreenButton />
           <button
             type="button"
             className="pause-menu__exit"

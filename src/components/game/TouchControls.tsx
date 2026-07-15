@@ -1,5 +1,6 @@
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
+  controlViewportScale,
   joystickSizeMultipliers,
   virtualJoystickConfig,
 } from '../../config/mobileControls.config';
@@ -30,6 +31,11 @@ const cruiseGearLabels = {
 } as const;
 
 export function TouchControls({ input }: TouchControlsProps) {
+  const [viewportScale, setViewportScale] = useState(() =>
+    typeof window === 'undefined'
+      ? 1
+      : controlViewportScale(window.innerHeight),
+  );
   const isPaused = useGameStore((state) => state.isPaused);
   const togglePaused = useGameStore((state) => state.togglePaused);
   const setFollowingPlayer = useGameStore((state) => state.setFollowingPlayer);
@@ -61,7 +67,7 @@ export function TouchControls({ input }: TouchControlsProps) {
     nearestObjective.distanceMeters <= interactionObjective.radiusMeters
       ? interactionLabelForObjective(interactionObjective)
       : null;
-  const sizeMultiplier = joystickSizeMultipliers[joystickSize];
+  const sizeMultiplier = joystickSizeMultipliers[joystickSize] * viewportScale;
   const singleDriveJoystick = controlMode === 'single-drive-joystick';
   const targetSpeedJoystick = controlMode === 'target-speed-joystick';
   const driveJoystick = singleDriveJoystick || targetSpeedJoystick;
@@ -71,6 +77,13 @@ export function TouchControls({ input }: TouchControlsProps) {
     () => input.getMobileCruiseTarget(),
   );
   const previousReversing = useRef(false);
+
+  useEffect(() => {
+    const updateViewportScale = () =>
+      setViewportScale(controlViewportScale(window.innerHeight));
+    window.addEventListener('resize', updateViewportScale);
+    return () => window.removeEventListener('resize', updateViewportScale);
+  }, []);
 
   useEffect(() => {
     input.clearAllInput();

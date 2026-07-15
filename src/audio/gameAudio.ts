@@ -6,6 +6,7 @@ import {
   type MusicState,
   type MusicTrackId,
 } from '../config/audio.config';
+import type { RoadSurface } from '../types/roads';
 
 export interface AudioSettings {
   masterVolume: number;
@@ -16,9 +17,11 @@ export interface AudioSettings {
   reducedEffects: boolean;
 }
 
-export interface VehicleAudioState {
-  speedRatio: number;
-  offroad: boolean;
+export interface DrivingAudioState {
+  normalizedSpeed: number;
+  accelerationIntent: number;
+  boostActive: boolean;
+  surface: RoadSurface;
   paused: boolean;
 }
 
@@ -34,7 +37,13 @@ interface LoopTrack {
   gain: GainNode;
 }
 
-const vehicleLoopCues = ['engineIdle', 'engineDrive', 'offroad'] as const;
+const vehicleLoopCues = [
+  'engineIdle',
+  'engineDrive',
+  'rolling',
+  'wind',
+  'offroad',
+] as const;
 const musicTrackIds = Object.keys(musicTrackUrls) as MusicTrackId[];
 
 function clampedRatio(value: number): number {
@@ -73,9 +82,11 @@ class LocalGameAudio {
     musicMuted: false,
     reducedEffects: false,
   };
-  private vehicle: VehicleAudioState = {
-    speedRatio: 0,
-    offroad: false,
+  private vehicle: DrivingAudioState = {
+    normalizedSpeed: 0,
+    accelerationIntent: 0,
+    boostActive: false,
+    surface: 'primary',
     paused: true,
   };
   private music: AdaptiveMusicState = {
@@ -105,23 +116,22 @@ class LocalGameAudio {
     return this.unlockPromise;
   }
 
-  updateVehicle(next: VehicleAudioState): void {
+  updateVehicle(next: DrivingAudioState): void {
     const previous = this.vehicle;
     this.vehicle = {
-      speedRatio: clampedRatio(next.speedRatio),
-      offroad: next.offroad,
+      normalizedSpeed: clampedRatio(next.normalizedSpeed),
+      accelerationIntent: Math.max(-1, Math.min(1, next.accelerationIntent)),
+      boostActive: next.boostActive,
+      surface: next.surface,
       paused: next.paused,
     };
-    if (
-      this.vehicle.speedRatio >= audioConfig.turboThresholdRatio &&
-      previous.speedRatio < audioConfig.turboThresholdRatio
-    ) {
+    if (this.vehicle.boostActive && !previous.boostActive) {
       this.play('turbo');
     }
     if (
-      previous.speedRatio - this.vehicle.speedRatio >=
-        audioConfig.brakeDeltaRatio &&
-      previous.speedRatio > 0.25
+      this.vehicle.accelerationIntent < -audioConfig.brakeDeltaRatio &&
+      previous.accelerationIntent >= -audioConfig.brakeDeltaRatio &&
+      previous.normalizedSpeed > 0.2
     ) {
       this.play('brake');
     }
@@ -286,16 +296,31 @@ class LocalGameAudio {
   private applyVehicleMix(): void {
     const context = this.context;
     if (!context) return;
-    const speed = this.vehicle.speedRatio;
+    const speed = this.vehicle.normalizedSpeed;
     const active = this.vehicle.paused ? 0 : 1;
+    const acceleration = Math.max(0, this.vehicle.accelerationIntent);
+    const wind = Math.max(
+      0,
+      (speed - audioConfig.windThresholdRatio) /
+        (1 - audioConfig.windThresholdRatio),
+    );
     const offroadMultiplier =
-      this.settings.reducedEffects || !this.vehicle.offroad ? 0 : 1;
+      this.settings.reducedEffects ||
+      !['track', 'dirt-road', 'offroad'].includes(this.vehicle.surface)
+        ? 0
+        : 1;
     const targets = {
       engineIdle:
         active *
         audioConfig.engineIdleMaximumGain *
         (0.25 + (1 - speed) * 0.75),
-      engineDrive: active * audioConfig.engineDriveMaximumGain * speed,
+      engineDrive:
+        active *
+        audioConfig.engineDriveMaximumGain *
+        speed *
+        (0.45 + acceleration * 0.55),
+      rolling: active * audioConfig.rollingMaximumGain * speed,
+      wind: active * audioConfig.windMaximumGain * wind,
       offroad:
         active * audioConfig.offroadMaximumGain * speed * offroadMultiplier,
     };
@@ -312,6 +337,20 @@ class LocalGameAudio {
       .get('engineDrive')
       ?.source.playbackRate.setTargetAtTime(
         0.75 + speed * 0.85,
+        context.currentTime,
+        audioConfig.parameterSmoothingSeconds,
+      );
+    this.vehicleLoops
+      .get('rolling')
+      ?.source.playbackRate.setTargetAtTime(
+        0.8 + speed * 0.55,
+        context.currentTime,
+        audioConfig.parameterSmoothingSeconds,
+      );
+    this.vehicleLoops
+      .get('wind')
+      ?.source.playbackRate.setTargetAtTime(
+        0.85 + speed * 0.35,
         context.currentTime,
         audioConfig.parameterSmoothingSeconds,
       );

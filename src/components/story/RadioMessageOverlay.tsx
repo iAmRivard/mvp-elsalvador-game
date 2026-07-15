@@ -1,26 +1,72 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { narrativeEventById } from '../../data/chapter1';
 import { useGameStore } from '../../store/gameStore';
 
 const AUTO_CLOSE_MILLISECONDS = 12_000;
+const DRIVING_AUTO_CLOSE_MILLISECONDS = 10_000;
 
 export function RadioMessageOverlay() {
+  const compactMessageRef = useRef<HTMLButtonElement>(null);
+  const fullMessageRef = useRef<HTMLElement>(null);
   const eventId = useGameStore((state) => state.activeRadioEventId);
+  const presentationMode = useGameStore((state) => state.presentationMode);
+  const speedKilometersPerHour = useGameStore(
+    (state) => state.telemetry.speedKilometersPerHour,
+  );
   const dismiss = useGameStore((state) => state.dismissRadioEvent);
   const requestStoryLog = useGameStore((state) => state.requestStoryLog);
   const event = eventId ? narrativeEventById.get(eventId) : null;
+  const renderCount = useRef(0);
+  const compact =
+    Math.abs(speedKilometersPerHour) >= 5 && presentationMode !== 'stopped';
 
   useEffect(() => {
     if (!event) return;
-    const timer = window.setTimeout(dismiss, AUTO_CLOSE_MILLISECONDS);
+    const timer = window.setTimeout(
+      dismiss,
+      compact ? DRIVING_AUTO_CLOSE_MILLISECONDS : AUTO_CLOSE_MILLISECONDS,
+    );
     return () => window.clearTimeout(timer);
-  }, [dismiss, event]);
+  }, [compact, dismiss, event]);
+
+  useEffect(() => {
+    renderCount.current += 1;
+    const message = compactMessageRef.current ?? fullMessageRef.current;
+    if (message) {
+      message.dataset.renderCount = String(renderCount.current);
+    }
+  });
 
   if (!event || event.presentation !== 'radio') return null;
 
+  if (compact) {
+    return (
+      <div className="radio-overlay radio-overlay--compact" aria-live="polite">
+        <button
+          ref={compactMessageRef}
+          type="button"
+          className="radio-message radio-message--compact"
+          aria-label="Abrir transmisión en la bitácora"
+          onClick={() => {
+            requestStoryLog('transmissions');
+            dismiss();
+          }}
+        >
+          <strong>📻 RADIO · {event.channelLabel}</strong>
+          <span>{event.message}</span>
+          {event.objectiveSummary && (
+            <small>
+              {event.objectiveSummary.replace(/^Objetivo:\s*/i, '')}
+            </small>
+          )}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="radio-overlay" aria-live="polite">
-      <aside className="radio-message" role="status">
+      <aside ref={fullMessageRef} className="radio-message" role="status">
         <header>
           <span aria-hidden="true">◉</span>
           <div>

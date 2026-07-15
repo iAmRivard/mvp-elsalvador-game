@@ -4513,6 +4513,411 @@ html[data-tutorial-target='target'] .map-canvas {
   }
 }
 
+/* v0.2.5 — dynamic driving presentation */
+.player-hud {
+  transition:
+    width 180ms ease,
+    padding 180ms ease,
+    opacity 180ms ease;
+}
+
+.player-hud__expand {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgb(255 244 205 / 26%);
+  border-radius: 999px;
+  color: #fff4cd;
+  background: rgb(9 27 24 / 86%);
+  font: inherit;
+  cursor: pointer;
+}
+
+.player-hud--compact-driving {
+  width: min(292px, calc(100vw - 48px));
+  padding: 14px 16px;
+}
+
+.player-hud--compact-driving .progress-readout,
+.player-hud--compact-driving .telemetry-grid,
+.player-hud--compact-driving .condition-readout > small,
+.player-hud--compact-driving
+  .surface-readout
+  small:not(.surface-readout__warning) {
+  display: none;
+}
+
+.player-hud--compact-driving .surface-readout {
+  min-height: 42px;
+  margin-top: 8px;
+  padding: 8px 10px;
+}
+
+.player-hud--compact-driving .vehicle-readouts {
+  margin-top: 8px;
+}
+
+.game-shell--fast .topbar .brand-eyebrow,
+.game-shell--fast .brand-title--full {
+  display: none;
+}
+
+.game-shell--fast .brand-title--compact {
+  display: inline;
+}
+
+.mobile-driving-hud {
+  display: none;
+}
+
+.tutorial-coach--contextual {
+  top: auto;
+  bottom: max(28px, calc(env(safe-area-inset-bottom) + 18px));
+  left: max(330px, calc(env(safe-area-inset-left) + 320px));
+  width: min(330px, calc(100vw - 700px));
+  padding: 10px 12px;
+  transform: none;
+}
+
+.tutorial-coach--contextual header {
+  margin-bottom: 3px;
+}
+
+.tutorial-coach--contextual h2 {
+  margin: 2px 0 3px;
+  font-size: 0.98rem;
+}
+
+.tutorial-coach--contextual p {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.tutorial-coach__action-hint,
+.mobile-tutorial-card__action-hint {
+  display: block;
+  margin-top: 5px;
+  color: #6fd8e2;
+  font-size: 0.58rem;
+  font-weight: 750;
+}
+
+.radio-overlay--compact {
+  pointer-events: none;
+}
+
+.radio-message--compact {
+  display: grid;
+  gap: 2px;
+  max-height: 18dvh;
+  padding: 9px 11px;
+  overflow: hidden;
+  border: 1px solid rgb(49 200 219 / 36%);
+  color: #eefafa;
+  background: rgb(8 29 29 / 94%);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 36%);
+  text-align: left;
+  pointer-events: auto;
+}
+
+.radio-message--compact > strong,
+.radio-message--compact > span,
+.radio-message--compact > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.radio-message--compact > strong {
+  color: #ffe08a;
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+}
+
+.radio-message--compact > span {
+  font-size: 0.68rem;
+}
+
+.radio-message--compact > small {
+  color: #a9dbe0;
+  font-size: 0.58rem;
+}
+
+.fullscreen-button {
+  display: grid;
+  gap: 2px;
+}
+
+.fullscreen-button > span {
+  font-size: 0.48rem;
+  font-weight: 600;
+}
+
+.fullscreen-unavailable {
+  display: block;
+  color: #91a49c;
+  font-size: 0.58rem;
+  line-height: 1.35;
+}
+
+.install-hint {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 8px 9px 8px 11px;
+  border: 1px solid rgb(49 200 219 / 20%);
+  border-radius: 9px;
+  color: #bed1ca;
+  background: rgb(8 26 24 / 70%);
+  font-size: 0.64rem;
+  line-height: 1.4;
+}
+
+.install-hint button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  color: #dce9e4;
+  background: transparent;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+html[data-fullscreen='true'],
+html[data-fullscreen='true'] body,
+html[data-fullscreen='true'] #root,
+html[data-fullscreen='true'] .game-shell {
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+@media (max-width: 600px),
+  (max-width: 900px) and (pointer: coarse),
+  (max-height: 560px) and (pointer: coarse) {
+  .player-hud--compact-driving {
+    display: none;
+  }
+
+  .mobile-driving-hud {
+    position: fixed;
+    z-index: 28;
+    top: max(52px, calc(env(safe-area-inset-top) + 46px));
+    right: max(12px, calc(env(safe-area-inset-right) + 8px));
+    left: max(12px, calc(env(safe-area-inset-left) + 8px));
+    display: grid;
+    overflow: hidden;
+    border: 1px solid rgb(49 200 219 / 36%);
+    border-radius: 11px;
+    background: linear-gradient(135deg, rgb(7 31 32 / 96%), rgb(9 23 23 / 94%));
+    box-shadow: 0 12px 30px rgb(0 0 0 / 38%);
+    pointer-events: auto;
+  }
+
+  .mobile-driving-hud__navigation {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    min-height: 48px;
+    padding: 6px 10px;
+    border: 0;
+    color: #eefafa;
+    background: transparent;
+    text-align: left;
+  }
+
+  .mobile-driving-hud__maneuver {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border-radius: 8px;
+    color: #ffe08a;
+    background: rgb(255 224 138 / 9%);
+    font-size: 1.35rem;
+    font-weight: 850;
+  }
+
+  .mobile-driving-hud__copy {
+    display: grid;
+    min-width: 0;
+    gap: 1px;
+  }
+
+  .mobile-driving-hud__copy strong,
+  .mobile-driving-hud__copy small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-driving-hud__copy strong {
+    font-size: 0.7rem;
+  }
+
+  .mobile-driving-hud__copy small {
+    color: #9fc7c8;
+    font-size: 0.55rem;
+  }
+
+  .mobile-driving-hud__vitals {
+    display: flex;
+    min-height: 30px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 7px;
+    padding: 5px 10px;
+    border-top: 1px solid rgb(49 200 219 / 18%);
+    color: #c8ddd8;
+    font-size: 0.57rem;
+    white-space: nowrap;
+  }
+
+  .mobile-driving-hud__vitals strong {
+    color: #fff4cd;
+    font-size: 0.78rem;
+  }
+
+  .mobile-driving-hud--fast {
+    border-color: rgb(255 224 138 / 48%);
+  }
+
+  .mobile-driving-hud--alert {
+    border-color: rgb(255 111 91 / 64%);
+  }
+
+  .game-shell--driving .mission-panel--collapsed,
+  .game-shell--fast .mission-panel--collapsed,
+  .game-shell--alert .mission-panel--collapsed {
+    display: none;
+  }
+
+  .game-shell--driving .topbar .current-region,
+  .game-shell--fast .topbar .current-region {
+    display: none;
+  }
+
+  .game-shell--driving .brand-lockup,
+  .game-shell--fast .brand-lockup {
+    opacity: 0.58;
+  }
+
+  .radio-overlay--compact .radio-message--compact {
+    position: fixed;
+    z-index: 29;
+    top: max(140px, calc(env(safe-area-inset-top) + 132px));
+    right: max(12px, calc(env(safe-area-inset-right) + 8px));
+    left: max(12px, calc(env(safe-area-inset-left) + 8px));
+    width: auto;
+  }
+
+  .mobile-tutorial-card {
+    position: fixed !important;
+    top: auto;
+    right: max(12px, calc(env(safe-area-inset-right) + 8px));
+    bottom: max(174px, calc(env(safe-area-inset-bottom) + 164px));
+    left: max(12px, calc(env(safe-area-inset-left) + 8px));
+    width: auto;
+    max-height: 15dvh;
+    padding: 7px 10px;
+    overflow: hidden;
+    transform: none;
+  }
+
+  .mobile-tutorial-card header {
+    margin-bottom: 1px;
+  }
+
+  .mobile-tutorial-card h2 {
+    margin: 1px 0 2px;
+    font-size: 0.82rem;
+  }
+
+  .mobile-tutorial-card > p {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    font-size: 0.61rem;
+    line-height: 1.25;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .mobile-tutorial-card footer {
+    margin-top: 4px;
+  }
+
+  html[data-tutorial-target='route'] .mobile-tutorial-card,
+  html[data-tutorial-target='target'] .mobile-tutorial-card,
+  html[data-tutorial-target='journal'] .mobile-tutorial-card {
+    top: max(142px, calc(env(safe-area-inset-top) + 134px));
+    bottom: auto;
+  }
+
+  .install-hint {
+    font-size: 0.58rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 560px) and (pointer: coarse) {
+  .mobile-actions {
+    flex-direction: row;
+    gap: 6px;
+    align-items: flex-end;
+  }
+
+  .mobile-actions .touch-button--boost,
+  .mobile-actions .touch-button--interact {
+    width: 48px;
+    height: 48px;
+  }
+
+  .mobile-driving-hud {
+    top: max(48px, calc(env(safe-area-inset-top) + 42px));
+    right: auto;
+    left: 50%;
+    width: min(430px, 50vw);
+    transform: translateX(-50%);
+  }
+
+  .mobile-driving-hud__navigation {
+    min-height: 38px;
+    padding-block: 3px;
+  }
+
+  .mobile-driving-hud__vitals {
+    min-height: 26px;
+    padding-block: 3px;
+  }
+
+  .radio-overlay--compact .radio-message--compact {
+    top: max(122px, calc(env(safe-area-inset-top) + 116px));
+    right: max(10px, env(safe-area-inset-right));
+    left: auto;
+    width: min(330px, 38vw);
+  }
+
+  .mobile-tutorial-card {
+    top: auto;
+    right: auto;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(142px, calc(env(safe-area-inset-left) + 136px));
+    width: min(320px, 38vw);
+    max-height: 24dvh;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mission-timer--urgent,
   .mission-timer--critical {
@@ -5946,7 +6351,9 @@ html[data-reduced-motion='true'] *::after {
   }
 }
 
-@media (max-width: 600px), (max-height: 560px) and (pointer: coarse) {
+@media (max-width: 600px),
+  (max-width: 900px) and (pointer: coarse),
+  (max-height: 560px) and (pointer: coarse) {
   .mission-panel--journal-sheet {
     position: fixed;
     top: auto !important;
@@ -6290,5 +6697,78 @@ html[data-reduced-motion='true'] *::after {
     width: 116px;
     height: 36px;
     border-radius: 9px;
+  }
+}
+
+/* Final cascade guards for the compact driving budget. */
+@media (max-width: 600px),
+  (max-width: 900px) and (pointer: coarse),
+  (max-height: 560px) and (pointer: coarse) {
+  .player-hud.player-hud--compact-driving {
+    display: none;
+  }
+
+  .mobile-driving-hud {
+    top: max(48px, calc(env(safe-area-inset-top) + 42px));
+  }
+
+  .mobile-driving-hud__navigation {
+    min-height: 40px;
+    padding: 4px 8px;
+  }
+
+  .mobile-driving-hud__vitals {
+    min-height: 26px;
+    padding: 3px 8px;
+  }
+
+  .game-shell--driving .topbar,
+  .game-shell--fast .topbar,
+  .game-shell--alert .topbar {
+    padding-top: max(6px, calc(env(safe-area-inset-top) + 3px));
+    padding-bottom: 4px;
+  }
+
+  .game-shell--driving .brand-lockup,
+  .game-shell--fast .brand-lockup,
+  .game-shell--alert .brand-lockup {
+    visibility: hidden;
+  }
+
+  .game-shell--driving .mission-panel--collapsed,
+  .game-shell--fast .mission-panel--collapsed,
+  .game-shell--alert .mission-panel--collapsed {
+    display: none;
+  }
+
+  .mobile-tutorial-card {
+    position: fixed !important;
+    top: auto;
+    right: max(12px, calc(env(safe-area-inset-right) + 8px));
+    bottom: max(174px, calc(env(safe-area-inset-bottom) + 164px));
+    left: max(12px, calc(env(safe-area-inset-left) + 8px));
+    width: auto;
+    max-height: 15dvh;
+    padding: 7px 10px;
+    overflow: hidden;
+    transform: none;
+  }
+
+  html[data-tutorial-target='route'] .mobile-tutorial-card,
+  html[data-tutorial-target='target'] .mobile-tutorial-card,
+  html[data-tutorial-target='journal'] .mobile-tutorial-card {
+    top: max(142px, calc(env(safe-area-inset-top) + 134px));
+    bottom: auto;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 560px) and (pointer: coarse) {
+  .mobile-tutorial-card {
+    top: auto;
+    right: auto;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(142px, calc(env(safe-area-inset-left) + 136px));
+    width: min(320px, 38vw);
+    max-height: 24dvh;
   }
 }

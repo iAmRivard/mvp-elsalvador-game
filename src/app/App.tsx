@@ -10,6 +10,7 @@ import { MissionPanel } from '../components/hud/MissionPanel';
 import { MissionToast } from '../components/hud/MissionToast';
 import { MissionTimer } from '../components/hud/MissionTimer';
 import { PlayerHud } from '../components/hud/PlayerHud';
+import { MobileDrivingHud } from '../components/hud/MobileDrivingHud';
 import { PauseMenu } from '../components/menu/PauseMenu';
 import { RecommendedControlsPrompt } from '../components/menu/RecommendedControlsPrompt';
 import { StartScreen } from '../components/menu/StartScreen';
@@ -33,6 +34,7 @@ export function App() {
   const [inputController] = useState(() => new InputController());
   const hasSavedGame = useGameStore((state) => state.hasSavedGame);
   const isPaused = useGameStore((state) => state.isPaused);
+  const presentationMode = useGameStore((state) => state.presentationMode);
   const recoveryReason = useGameStore((state) => state.recoveryReason);
   const activeNarrativeEventId = useGameStore(
     (state) => state.activeNarrativeEventId,
@@ -48,10 +50,6 @@ export function App() {
   const showTutorial = sessionStarted && !tutorialSeen;
 
   useEffect(() => startGameAutosave(), []);
-  useEffect(() => {
-    if (showTutorial) setPaused(true);
-  }, [setPaused, showTutorial]);
-
   const enterGame = (loadSavedGame: boolean) => {
     if (loadSavedGame && hasSavedGame) loadGame();
     setPaused(false);
@@ -75,8 +73,11 @@ export function App() {
   }
 
   return (
-    <main className="game-shell">
-      <GameAudioBridge />
+    <main
+      className={`game-shell game-shell--${presentationMode}`}
+      data-driving-mode={presentationMode}
+    >
+      <GameAudioBridge input={inputController} />
       <header className="topbar">
         <div className="brand-lockup">
           <span className="brand-eyebrow">Exploración 2.5D</span>
@@ -110,6 +111,7 @@ export function App() {
         </Suspense>
 
         <PlayerHud />
+        <MobileDrivingHud />
         {!showTutorial && <FuelAssist />}
         <MissionTimer />
         <MissionPanel />

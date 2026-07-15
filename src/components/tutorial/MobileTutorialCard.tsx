@@ -7,6 +7,7 @@ interface MobileTutorialCardProps {
   description: string;
   details?: string;
   canAdvance: boolean;
+  automatic: boolean;
   isLast: boolean;
   onPrevious: () => void;
   onNext: () => void;
@@ -36,6 +37,7 @@ export function MobileTutorialCard({
   description,
   details,
   canAdvance,
+  automatic,
   isLast,
   onPrevious,
   onNext,
@@ -116,19 +118,25 @@ export function MobileTutorialCard({
           <p>{details}</p>
         </details>
       )}
-      <footer>
-        <button type="button" disabled={step === 1} onClick={onPrevious}>
-          Anterior
-        </button>
-        <button
-          type="button"
-          className="tutorial-next"
-          disabled={!canAdvance}
-          onClick={onNext}
-        >
-          {isLast ? 'Finalizar' : 'Siguiente'}
-        </button>
-      </footer>
+      {automatic ? (
+        <small className="mobile-tutorial-card__action-hint">
+          Realiza la acción para continuar
+        </small>
+      ) : (
+        <footer>
+          <button type="button" disabled={step === 1} onClick={onPrevious}>
+            Anterior
+          </button>
+          <button
+            type="button"
+            className="tutorial-next"
+            disabled={!canAdvance}
+            onClick={onNext}
+          >
+            {isLast ? 'Finalizar' : 'Entendido'}
+          </button>
+        </footer>
+      )}
     </aside>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { experienceProgress } from '../../game/progression';
 import { conditionWarningCopy } from '../../game/conditionWarnings';
@@ -15,7 +15,11 @@ function compassPoint(heading: number): string {
 }
 
 export function PlayerHud() {
+  const hudRef = useRef<HTMLElement>(null);
+  const renderCount = useRef(0);
+  const [expandedWhileDriving, setExpandedWhileDriving] = useState(false);
   const telemetry = useGameStore((state) => state.telemetry);
+  const presentationMode = useGameStore((state) => state.presentationMode);
   const isFollowingPlayer = useGameStore((state) => state.isFollowingPlayer);
   const discoveredCount = useGameStore(
     (state) => state.discoveredLocationIds.length,
@@ -35,6 +39,23 @@ export function PlayerHud() {
     state.inventory.reduce((total, entry) => total + entry.quantity, 0),
   );
   const progress = experienceProgress(experience);
+  const compactDriving =
+    Math.abs(telemetry.speedKilometersPerHour) >= 5 &&
+    presentationMode !== 'stopped' &&
+    !expandedWhileDriving;
+
+  useEffect(() => {
+    if (presentationMode !== 'stopped') return;
+    const timer = window.setTimeout(() => setExpandedWhileDriving(false), 0);
+    return () => window.clearTimeout(timer);
+  }, [presentationMode]);
+
+  useEffect(() => {
+    renderCount.current += 1;
+    if (hudRef.current) {
+      hudRef.current.dataset.renderCount = String(renderCount.current);
+    }
+  });
 
   useEffect(() => {
     if (!conditionWarning) return;
@@ -46,9 +67,26 @@ export function PlayerHud() {
   return (
     <>
       <aside
-        className={`player-hud ${telemetry.fuel <= fuelStationConfig.lowFuelThreshold ? 'player-hud--fuel-low' : ''} ${telemetry.fuel <= fuelStationConfig.criticalFuelThreshold ? 'player-hud--fuel-critical' : ''}`}
+        ref={hudRef}
+        className={`player-hud ${compactDriving ? 'player-hud--compact-driving' : ''} ${telemetry.fuel <= fuelStationConfig.lowFuelThreshold ? 'player-hud--fuel-low' : ''} ${telemetry.fuel <= fuelStationConfig.criticalFuelThreshold ? 'player-hud--fuel-critical' : ''}`}
         aria-label="Estado del jugador"
+        data-presentation-mode={presentationMode}
       >
+        {Math.abs(telemetry.speedKilometersPerHour) >= 5 && (
+          <button
+            type="button"
+            className="player-hud__expand"
+            aria-label={
+              expandedWhileDriving
+                ? 'Contraer información de conducción'
+                : 'Expandir información de conducción'
+            }
+            aria-expanded={expandedWhileDriving}
+            onClick={() => setExpandedWhileDriving((current) => !current)}
+          >
+            {expandedWhileDriving ? '−' : '+'}
+          </button>
+        )}
         <div className="progress-readout">
           <div className="level-badge" aria-label={`Nivel ${level}`}>
             <span>Nivel</span>

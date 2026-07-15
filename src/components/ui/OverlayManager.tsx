@@ -22,6 +22,9 @@ export function OverlayManager({ allowDiscovery = true }: OverlayManagerProps) {
   const narrativeId = useGameStore((state) => state.activeNarrativeEventId);
   const radioId = useGameStore((state) => state.activeRadioEventId);
   const discoveryId = useGameStore((state) => state.lastDiscoveredLocationId);
+  const presentationMode = useGameStore((state) => state.presentationMode);
+  const discoveryCanUseLargeOverlay =
+    presentationMode === 'stopped' || presentationMode === 'interaction';
   const candidates: OverlayCandidate[] = [];
   if (recoveryReason) {
     candidates.push({
@@ -64,7 +67,7 @@ export function OverlayManager({ allowDiscovery = true }: OverlayManagerProps) {
       id: `discovery:${discoveryId}`,
       kind: 'discovery',
       priority: 'discovery',
-      large: true,
+      large: discoveryCanUseLargeOverlay,
       sequence: 4,
     });
   }

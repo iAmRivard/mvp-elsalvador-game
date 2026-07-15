@@ -37,6 +37,21 @@ describe('overlay manager', () => {
     expect(useGameStore.getState().isPaused).toBe(false);
   });
 
+  it('keeps discovery compact while the vehicle is moving fast', () => {
+    useGameStore.setState({
+      lastDiscoveredLocationId: 'san-salvador',
+      presentationMode: 'fast',
+    });
+    const { container } = render(<OverlayManager />);
+
+    expect(container.querySelector('.discovery-toast--compact')).not.toBeNull();
+    expect(
+      container
+        .querySelector('.overlay-manager')
+        ?.getAttribute('data-active-overlay'),
+    ).toBe('none');
+  });
+
   it('queues radio until mandatory narrative is dismissed', () => {
     useGameStore.getState().startMission('la-transmision');
     useGameStore.setState({

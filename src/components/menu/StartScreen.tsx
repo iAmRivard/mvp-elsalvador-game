@@ -7,6 +7,8 @@ import { loadRoadNetwork, retryRoadNetworkLoad } from '../../roads/roadNetwork';
 import { preloadRoadWorker } from '../../roads/roadWorkerClient';
 import { useGameStore } from '../../store/gameStore';
 import { SettingsDialog } from './SettingsDialog';
+import { FullscreenButton } from '../pwa/FullscreenButton';
+import { InstallExperienceHint } from '../pwa/InstallExperienceHint';
 
 interface StartScreenProps {
   onContinue: () => void;
@@ -160,7 +162,10 @@ export function StartScreen({ onContinue, onNewGame }: StartScreenProps) {
           >
             Configuración
           </button>
+          <FullscreenButton />
         </div>
+
+        <InstallExperienceHint />
 
         <div
           className={`start-preparation start-preparation--${preparationStage}`}

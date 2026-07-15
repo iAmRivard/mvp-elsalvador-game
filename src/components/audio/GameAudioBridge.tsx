@@ -7,6 +7,7 @@ import { activeMissionTimer } from '../../game/missionTimer';
 import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { fuelStationConfig } from '../../config/fuelStations.config';
+import type { InputController } from '../../game/inputController';
 
 function configureAudio(): void {
   const settings = useSettingsStore.getState();
@@ -48,21 +49,24 @@ function updateAdaptiveMusic(): number | null {
   return timerRunning && timer ? Math.ceil(timer.remainingSeconds) : null;
 }
 
-function updateVehicleAudio(): void {
+function updateVehicleAudio(input: InputController): void {
   const state = useGameStore.getState();
+  const drivingInput = input.getDiagnostics();
   gameAudio.updateVehicle({
-    speedRatio:
+    normalizedSpeed:
       Math.abs(state.telemetry.speedMetersPerSecond) /
       travelConfig.boostMaximumSpeedMetersPerSecond,
-    offroad: state.driving.surface === 'offroad',
+    accelerationIntent: drivingInput.throttle,
+    boostActive: drivingInput.boost,
+    surface: state.driving.surface,
     paused: state.isPaused,
   });
 }
 
-export function GameAudioBridge() {
+export function GameAudioBridge({ input }: { input: InputController }) {
   useEffect(() => {
     configureAudio();
-    updateVehicleAudio();
+    updateVehicleAudio(input);
     let previousTimerSecond = updateAdaptiveMusic();
     const unlock = () => {
       void gameAudio.unlock();
@@ -71,8 +75,9 @@ export function GameAudioBridge() {
     window.addEventListener('keydown', unlock, { capture: true });
 
     const unsubscribeSettings = useSettingsStore.subscribe(configureAudio);
+    const unsubscribeInput = input.subscribe(() => updateVehicleAudio(input));
     const unsubscribeGame = useGameStore.subscribe((state, previousState) => {
-      updateVehicleAudio();
+      updateVehicleAudio(input);
       const timerSecond = updateAdaptiveMusic();
       if (
         state.activeMissionId &&
@@ -127,12 +132,13 @@ export function GameAudioBridge() {
 
     return () => {
       unsubscribeGame();
+      unsubscribeInput();
       unsubscribeSettings();
       window.removeEventListener('pointerdown', unlock, { capture: true });
       window.removeEventListener('keydown', unlock, { capture: true });
       gameAudio.shutdown();
     };
-  }, []);
+  }, [input]);
 
   return null;
 }

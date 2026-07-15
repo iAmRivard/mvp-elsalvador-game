@@ -41,6 +41,31 @@ describe('presentación narrativa', () => {
     expect(useGameStore.getState().activeRadioEventId).toBeNull();
   });
 
+  it('reduce la radio a tres líneas mientras conduce', () => {
+    useGameStore.setState((state) => ({
+      activeRadioEventId: 'radio-ruta-occidental',
+      presentationMode: 'fast',
+      telemetry: {
+        ...state.telemetry,
+        speedMetersPerSecond: 17,
+        speedKilometersPerHour: 61.2,
+      },
+    }));
+    const { container } = render(<RadioMessageOverlay />);
+
+    expect(container.querySelector('.radio-message--compact')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Bitácora' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cerrar' })).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Abrir transmisión en la bitácora',
+      }),
+    );
+    expect(useGameStore.getState().storyLogRequest.section).toBe(
+      'transmissions',
+    );
+  });
+
   it('la introducción de capítulo pausa y lo comunica', () => {
     useGameStore.getState().startMission('la-transmision');
     render(<NarrativeDialog />);

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Rutas Perdidas">
+  <rect width="512" height="512" rx="112" fill="#101a19"/>
+  <path d="M58 392c82-90 138-27 205-119 64-88 115-91 191-155" fill="none" stroke="#31c8db" stroke-width="42" stroke-linecap="round"/>
+  <path d="M58 392c82-90 138-27 205-119 64-88 115-91 191-155" fill="none" stroke="#fff4cd" stroke-width="10" stroke-dasharray="24 28" stroke-linecap="round"/>
+  <circle cx="265" cy="270" r="42" fill="#d9a84e" stroke="#fff4cd" stroke-width="12"/>
+  <path d="M265 226l21 54-21-12-21 12z" fill="#101a19"/>
+</svg>

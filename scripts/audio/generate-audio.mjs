@@ -60,6 +60,10 @@ function noiseGenerator(seed) {
 
 const offroadNoise = noiseGenerator(0x5a17);
 let smoothedOffroadNoise = 0;
+const rollingNoise = noiseGenerator(0x4d31);
+let smoothedRollingNoise = 0;
+const windNoise = noiseGenerator(0x7182);
+let smoothedWindNoise = 0;
 const turboNoise = noiseGenerator(0x7b04);
 const brakeNoise = noiseGenerator(0x11c3);
 const radioNoise = noiseGenerator(0x8790);
@@ -81,6 +85,23 @@ const sounds = [
       0.18 * triangle(92, time) +
       0.11 * sine(184, time) +
       0.05 * sine(276, time),
+  },
+  {
+    name: 'rolling.wav',
+    duration: 1,
+    sample: (time) => {
+      smoothedRollingNoise =
+        smoothedRollingNoise * 0.84 + rollingNoise() * 0.16;
+      return smoothedRollingNoise * 0.11 + 0.035 * sine(24, time);
+    },
+  },
+  {
+    name: 'wind.wav',
+    duration: 1,
+    sample: () => {
+      smoothedWindNoise = smoothedWindNoise * 0.94 + windNoise() * 0.06;
+      return smoothedWindNoise * 0.24;
+    },
   },
   {
     name: 'offroad.wav',
