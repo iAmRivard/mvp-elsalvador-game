@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/noto-sans';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { App } from './app/App';
+import { registerServiceWorkerWithUpdates } from './components/pwa/serviceWorkerUpdates';
 import './styles/global.css';
 
 const root = document.getElementById('root');
@@ -17,8 +18,6 @@ createRoot(root).render(
   </StrictMode>,
 );
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
-  });
+if (import.meta.env.PROD) {
+  registerServiceWorkerWithUpdates();
 }

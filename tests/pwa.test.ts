@@ -28,9 +28,13 @@ describe('experiencia PWA', () => {
     expect(
       readFileSync(resolve('public/images/app-icon-512.png')).length,
     ).toBeGreaterThan(5_000);
-    expect(readFileSync(resolve('public/sw.js'), 'utf8')).toContain(
-      'rutas-perdidas-v0.2.5',
-    );
+    const serviceWorker = readFileSync(resolve('public/sw.js'), 'utf8');
+    expect(serviceWorker).toContain("CACHE_VERSION = 'v0.2.5.1'");
+    expect(serviceWorker).toContain("request.mode === 'navigate'");
+    expect(serviceWorker).toContain('isHashedStaticAsset(url)');
+    expect(serviceWorker).toContain("request.headers.has('range')");
+    expect(serviceWorker).toContain("endsWith('.pmtiles')");
+    expect(serviceWorker).toContain('event.waitUntil(');
     expect(readFileSync(resolve('index.html'), 'utf8')).toContain(
       '/manifest.webmanifest',
     );
