@@ -71,11 +71,16 @@ async function installSave(page: Page, options: SeedOptions) {
 }
 
 async function interact(page: Page) {
-  const touchAction = page.locator('.touch-button--interact');
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    const touchAction = page.locator('.touch-button--interact');
     if (await touchAction.isVisible()) {
-      await touchAction.click();
-      await page.waitForTimeout(320);
+      try {
+        await touchAction.click({ timeout: 1_500 });
+      } catch {
+        await page.keyboard.down('Space');
+        await page.waitForTimeout(320);
+        await page.keyboard.up('Space');
+      }
     } else {
       await page.keyboard.down('Space');
       await page.waitForTimeout(320);
@@ -123,7 +128,7 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
     {
       key: settingsKey,
       settings: {
-        version: 7,
+        version: 8,
         settings: {
           graphicsQuality: 'low',
           reduceMotion: true,
@@ -139,6 +144,8 @@ test('recoge combustible, repara el vehículo y completa misiones', async ({
           reduceAudioEffects: true,
           recommendedControlsPromptDismissed: true,
           singleDriveJoystickPromptDismissed: true,
+          targetSpeedJoystickPromptDismissed: true,
+          controlMode: 'target-speed-joystick',
         },
       },
     },

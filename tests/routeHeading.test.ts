@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   navigationGuidanceMessage,
+  vehicleIsReversing,
   vehicleOrientation,
 } from '../src/map/navigationGuidance';
 import {
@@ -166,5 +167,11 @@ describe('navigation guidance', () => {
         true,
       ),
     ).toBeNull();
+  });
+
+  it('detects reverse from signed meters per second, not absolute speed', () => {
+    expect(vehicleIsReversing(-0.15)).toBe(true);
+    expect(vehicleIsReversing(-0.14)).toBe(false);
+    expect(vehicleIsReversing(2)).toBe(false);
   });
 });

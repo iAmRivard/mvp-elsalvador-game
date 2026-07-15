@@ -26,6 +26,7 @@ describe('configuración visual', () => {
       reduceAudioEffects: false,
       recommendedControlsPromptDismissed: false,
       singleDriveJoystickPromptDismissed: false,
+      targetSpeedJoystickPromptDismissed: false,
       controlMode: 'joystick-pedals',
       joystickPositionMode: 'fixed',
       joystickSize: 'medium',
@@ -67,6 +68,7 @@ describe('configuración visual', () => {
       reduceAudioEffects: false,
       recommendedControlsPromptDismissed: false,
       singleDriveJoystickPromptDismissed: false,
+      targetSpeedJoystickPromptDismissed: false,
       controlMode: 'joystick-pedals',
       joystickPositionMode: 'fixed',
       joystickSize: 'medium',
@@ -76,9 +78,9 @@ describe('configuración visual', () => {
     });
   });
 
-  it('usa joystick único en instalaciones nuevas y conserva modos existentes', () => {
+  it('usa velocidad objetivo en instalaciones nuevas y conserva modos existentes', () => {
     expect(defaultMobileControlsSettings.controlMode).toBe(
-      'single-drive-joystick',
+      'target-speed-joystick',
     );
     expect(
       parseVisualSettings(
@@ -99,16 +101,18 @@ describe('configuración visual', () => {
     expect(
       parseVisualSettings(
         JSON.stringify({
-          version: 6,
+          version: 7,
           settings: {
             graphicsQuality: 'medium',
             controlMode: 'classic-buttons',
+            singleDriveJoystickPromptDismissed: true,
           },
         }),
       ),
     ).toMatchObject({
       controlMode: 'classic-buttons',
-      singleDriveJoystickPromptDismissed: false,
+      singleDriveJoystickPromptDismissed: true,
+      targetSpeedJoystickPromptDismissed: false,
     });
   });
 

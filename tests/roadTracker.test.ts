@@ -1,4 +1,6 @@
+import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
+import { stepPlayerDetailed } from '../src/game/movement';
 import { RoadTracker } from '../src/roads/roadTracker';
 import { RoadSpatialIndex } from '../src/roads/spatialIndex';
 import type { RoadNetwork } from '../src/types/roads';
@@ -151,12 +153,101 @@ describe('road tracker', () => {
     expect(tracker.update([-89.299, 13.7001])?.edge.id).toBe(2);
   });
 
-  it('disengages after leaving the configured road radius', () => {
+  it('keeps one failed reading as an unclassified recovery', () => {
     const tracker = new RoadTracker(
       new RoadSpatialIndex(createRoadTestNetwork()),
     );
-    expect(tracker.update([-89.2995, 13.7])).not.toBeNull();
-    expect(tracker.update([-89.31, 13.71])).toBeNull();
+    expect(
+      tracker.update([-89.2995, 13.7], {
+        mobile: true,
+        timestampMilliseconds: 0,
+      }),
+    ).not.toBeNull();
+    const recovered = tracker.update([-89.31, 13.71], {
+      mobile: true,
+      timestampMilliseconds: 100,
+    });
+
+    expect(recovered).toMatchObject({
+      surface: 'road-unclassified',
+      recovered: true,
+    });
+    expect(tracker.getDiagnostics()).toMatchObject({
+      consecutiveMisses: 1,
+      contactSource: 'grace',
+      offroadReason: null,
+    });
+  });
+
+  it('allows the fourth consecutive miss to become offroad', () => {
+    const tracker = new RoadTracker(
+      new RoadSpatialIndex(createRoadTestNetwork()),
+    );
+    tracker.update([-89.2995, 13.7], {
+      mobile: true,
+      timestampMilliseconds: 0,
+    });
+
+    for (const timestampMilliseconds of [100, 200, 300]) {
+      expect(
+        tracker.update([-89.31, 13.71], {
+          mobile: true,
+          timestampMilliseconds,
+        }),
+      ).not.toBeNull();
+    }
+    expect(
+      tracker.update([-89.31, 13.71], {
+        mobile: true,
+        timestampMilliseconds: 400,
+      }),
+    ).toBeNull();
+    expect(tracker.getDiagnostics()).toMatchObject({
+      surface: 'offroad',
+      consecutiveMisses: 4,
+      offroadReason: 'maximum-misses',
+    });
+  });
+
+  it('expires recovery after the grace period', () => {
+    const tracker = new RoadTracker(
+      new RoadSpatialIndex(createRoadTestNetwork()),
+    );
+    tracker.update([-89.2995, 13.7], {
+      mobile: true,
+      timestampMilliseconds: 0,
+    });
+    expect(
+      tracker.update([-89.31, 13.71], {
+        mobile: true,
+        timestampMilliseconds: 1_001,
+      }),
+    ).toBeNull();
+    expect(tracker.getDiagnostics().offroadReason).toBe('contact-timeout');
+  });
+
+  it('recovers direct contact and resets misses', () => {
+    const tracker = new RoadTracker(
+      new RoadSpatialIndex(createRoadTestNetwork()),
+    );
+    tracker.update([-89.2995, 13.7], {
+      mobile: true,
+      timestampMilliseconds: 0,
+    });
+    tracker.update([-89.31, 13.71], {
+      mobile: true,
+      timestampMilliseconds: 100,
+    });
+    const recovered = tracker.update([-89.2995, 13.7], {
+      mobile: true,
+      timestampMilliseconds: 200,
+    });
+
+    expect(recovered?.surface).toBe('primary');
+    expect(tracker.getContactMemory()).toMatchObject({
+      lastSurface: 'primary',
+      consecutiveMisses: 0,
+    });
   });
 
   it('uses heading to choose the intended branch of a T intersection', () => {
@@ -242,5 +333,37 @@ describe('road tracker', () => {
 
     expect(neutral.update(position)?.edge.id).toBe(0);
     expect(turning.update(position, { heading: 0 })?.edge.id).toBe(2);
+  });
+
+  it('keeps the urban point reproduced from the phone video on road', async () => {
+    const network = JSON.parse(
+      await readFile('public/data/roads/western-corridor.json', 'utf8'),
+    ) as RoadNetwork;
+    const tracker = new RoadTracker(new RoadSpatialIndex(network));
+    const position: [number, number] = [-89.1913911, 13.6957937];
+    const contact = tracker.update(position, {
+      heading: 0,
+      mobile: true,
+      timestampMilliseconds: 0,
+    });
+
+    expect(contact).toMatchObject({
+      edge: { id: 2988, roadClass: 'secondary' },
+    });
+    expect(contact?.nearest.distanceMeters).toBeCloseTo(48.47, 1);
+    const result = stepPlayerDetailed(
+      {
+        longitude: position[0],
+        latitude: position[1],
+        heading: 0,
+        speedMetersPerSecond: 10,
+        fuel: 75,
+        totalDistanceMeters: 0,
+      },
+      { throttle: 1, turn: 0, boost: false, interact: false },
+      0.05,
+      { roadNetworkEnabled: true, roadContact: contact },
+    );
+    expect(result.environment.surface).toBe('secondary');
   });
 });

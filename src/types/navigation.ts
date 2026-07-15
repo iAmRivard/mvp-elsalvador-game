@@ -45,7 +45,7 @@ export interface ActiveNavigationState {
 }
 
 export interface NavigationTarget {
-  kind: 'fuel-station' | 'location';
+  kind: 'mission-start' | 'fuel-station' | 'location';
   id: string;
   label: string;
   coordinates: RoadCoordinates;

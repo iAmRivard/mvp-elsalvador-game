@@ -1,4 +1,9 @@
-import { useEffect, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { chapterOneMissionIds } from '../../data/chapter1';
 import { locationById } from '../../data/locations';
 import { missionById, missions, type Mission } from '../../data/missions';
@@ -18,10 +23,26 @@ import {
   nearestPendingObjective,
 } from '../../game/missions';
 import { formatNavigationInstruction } from '../../map/navigationInstructions';
-import { navigationGuidanceMessage } from '../../map/navigationGuidance';
+import {
+  navigationGuidanceMessage,
+  vehicleIsReversing,
+} from '../../map/navigationGuidance';
 import { useGameStore, type StoryLogSection } from '../../store/gameStore';
 import type { NavigationInstructionType } from '../../types/navigation';
 import type { StoryLogEntry } from '../../types/progression';
+
+const compactViewportQuery =
+  '(max-width: 600px), (max-height: 560px) and (pointer: coarse)';
+
+export type MobileJournalSheetState =
+  'closed' | 'compact' | 'half' | 'expanded';
+
+function isCompactViewport(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia(compactViewportQuery).matches
+  );
+}
 
 function formatDistance(distanceMeters: number): string {
   return distanceMeters < 1_000
@@ -139,13 +160,22 @@ function MissionStartCard({
 }
 
 export function MissionPanel() {
-  const [collapsed, setCollapsed] = useState(() =>
-    typeof window === 'undefined'
-      ? false
-      : window.matchMedia(
-          '(max-width: 600px), (max-height: 560px) and (pointer: coarse)',
-        ).matches,
+  const panelRef = useRef<HTMLElement>(null);
+  const panelCommitCount = useRef(0);
+  const sheetCommitCount = useRef(0);
+  const [compactViewport, setCompactViewport] = useState(isCompactViewport);
+  const [collapsed, setCollapsed] = useState(isCompactViewport);
+  const [sheetState, setSheetState] = useState<MobileJournalSheetState>(() =>
+    isCompactViewport() ? 'compact' : 'closed',
   );
+  const autoCollapseAt = useRef<number | null>(null);
+  const sheetDrag = useRef<{
+    pointerId: number;
+    startY: number;
+    lastY: number;
+    startState: MobileJournalSheetState;
+  } | null>(null);
+  const suppressSheetHandleClick = useRef(false);
   const [section, setSection] = useState<StoryLogSection>(
     () => useGameStore.getState().storyLogRequest.section,
   );
@@ -206,12 +236,13 @@ export function MissionPanel() {
           fuelMultiplier: selectedChoice?.fuelMultiplier ?? 1,
         });
   const rangeMeters = estimateFuelRange(telemetry.fuel, driving.surface);
+  const reversing = vehicleIsReversing(telemetry.speedMetersPerSecond);
   const navigationGuidance = navigationGuidanceMessage(
     missionRoute.activeNavigation,
     missionRoute.orientation,
     telemetry.speedKilometersPerHour,
     driving.roadDistanceMeters,
-    telemetry.speedKilometersPerHour < -0.5,
+    reversing,
   );
   const optionalMissions = missions.filter(
     (mission) => mission.optional && !completedMissionIds.includes(mission.id),
@@ -228,6 +259,30 @@ export function MissionPanel() {
     completedMissionIds.includes(mission.id),
   );
   const compactMission = active ?? recommendedMission;
+  const miniNavigationText = reversing
+    ? 'Reversa · guía pausada'
+    : (navigationGuidance ??
+      (missionRoute.nextInstruction &&
+      missionRoute.distanceToNextInstructionMeters !== null
+        ? formatNavigationInstruction(
+            missionRoute.nextInstruction,
+            missionRoute.distanceToNextInstructionMeters,
+          )
+        : 'Sigue la ruta hacia el objetivo'));
+  const miniNavigationDistance =
+    missionRoute.distanceMeters ?? next?.distanceMeters ?? null;
+
+  useEffect(() => {
+    panelCommitCount.current += 1;
+    if (compactViewport && !collapsed) sheetCommitCount.current += 1;
+    if (panelRef.current) {
+      panelRef.current.dataset.renderCount = String(panelCommitCount.current);
+      panelRef.current.dataset.sheetRenderCount = String(
+        sheetCommitCount.current,
+      );
+    }
+  });
+
   useEffect(
     () =>
       useGameStore.subscribe((state, previousState) => {
@@ -238,16 +293,18 @@ export function MissionPanel() {
           return;
         }
         setSection(state.storyLogRequest.section);
+        autoCollapseAt.current = null;
+        setSheetState('half');
         setCollapsed(false);
       }),
     [],
   );
 
   useEffect(() => {
-    const compactQuery = window.matchMedia(
-      '(max-width: 600px), (max-height: 560px) and (pointer: coarse)',
-    );
+    const compactQuery = window.matchMedia(compactViewportQuery);
     const handleCompactChange = (event: MediaQueryListEvent) => {
+      setCompactViewport(event.matches);
+      setSheetState(event.matches ? 'compact' : 'closed');
       setCollapsed(event.matches);
     };
     compactQuery.addEventListener('change', handleCompactChange);
@@ -255,11 +312,132 @@ export function MissionPanel() {
       compactQuery.removeEventListener('change', handleCompactChange);
   }, []);
 
+  useEffect(
+    () =>
+      useGameStore.subscribe((state, previousState) => {
+        if (
+          !compactViewport ||
+          state.activeMissionId === previousState.activeMissionId
+        ) {
+          return;
+        }
+        if (state.activeMissionId) {
+          setSection('missions');
+          setSheetState('half');
+          setCollapsed(false);
+          autoCollapseAt.current = performance.now() + 2_500;
+        } else {
+          autoCollapseAt.current = null;
+          setSheetState('compact');
+          setCollapsed(true);
+        }
+      }),
+    [compactViewport],
+  );
+
+  useEffect(
+    () =>
+      useGameStore.subscribe((state) => {
+        if (
+          !compactViewport ||
+          !state.activeMissionId ||
+          autoCollapseAt.current === null ||
+          performance.now() < autoCollapseAt.current ||
+          Math.abs(state.telemetry.speedKilometersPerHour) <= 5
+        ) {
+          return;
+        }
+        autoCollapseAt.current = null;
+        setSheetState('compact');
+        setCollapsed(true);
+      }),
+    [compactViewport],
+  );
+
+  const openJournal = (requestedSection: StoryLogSection = 'missions') => {
+    dismissDiscovery();
+    autoCollapseAt.current = null;
+    setSection(requestedSection);
+    setSheetState('half');
+    setCollapsed(false);
+  };
+  const closeJournal = () => {
+    autoCollapseAt.current = null;
+    setSheetState(compactViewport ? 'compact' : 'closed');
+    setCollapsed(true);
+  };
+  const beginSheetDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!compactViewport || collapsed) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    sheetDrag.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      lastY: event.clientY,
+      startState: sheetState,
+    };
+  };
+  const moveSheetDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (sheetDrag.current?.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    sheetDrag.current.lastY = event.clientY;
+  };
+  const finishSheetDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = sheetDrag.current;
+    if (drag?.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const deltaY = drag.lastY - drag.startY;
+    sheetDrag.current = null;
+    if (Math.abs(deltaY) < 36) return;
+    suppressSheetHandleClick.current = true;
+    if (deltaY < 0) {
+      setSheetState('expanded');
+      setCollapsed(false);
+    } else if (drag.startState === 'expanded') {
+      setSheetState('half');
+    } else {
+      closeJournal();
+    }
+  };
+
   return (
     <aside
-      className={`mission-panel ${collapsed ? 'mission-panel--collapsed' : ''}`}
+      ref={panelRef}
+      className={`mission-panel ${collapsed ? 'mission-panel--collapsed' : ''} ${compactViewport && !collapsed ? `mission-panel--journal-sheet mission-panel--sheet-${sheetState}` : ''}`}
       aria-label="Panel de misiones"
+      data-mobile-sheet-state={compactViewport ? sheetState : 'closed'}
+      onPointerDown={(event) => event.stopPropagation()}
+      onWheel={(event) => event.stopPropagation()}
     >
+      {compactViewport && !collapsed && (
+        <button
+          type="button"
+          className="mission-panel__drag-handle"
+          aria-label={
+            sheetState === 'expanded'
+              ? 'Contraer bitácora'
+              : 'Expandir bitácora'
+          }
+          onClick={() => {
+            if (suppressSheetHandleClick.current) {
+              suppressSheetHandleClick.current = false;
+              return;
+            }
+            setSheetState((current) =>
+              current === 'expanded' ? 'half' : 'expanded',
+            );
+          }}
+          onPointerDown={beginSheetDrag}
+          onPointerMove={moveSheetDrag}
+          onPointerUp={finishSheetDrag}
+          onPointerCancel={finishSheetDrag}
+        >
+          <span aria-hidden="true" />
+        </button>
+      )}
       <header className="mission-panel__header">
         <div>
           <span className="mission-panel__eyebrow">Bitácora de campo</span>
@@ -270,25 +448,69 @@ export function MissionPanel() {
           aria-label={
             collapsed
               ? 'Expandir panel de misiones'
-              : 'Contraer panel de misiones'
+              : compactViewport
+                ? 'Cerrar bitácora'
+                : 'Contraer panel de misiones'
           }
           aria-expanded={!collapsed}
           onClick={() => {
-            if (collapsed) dismissDiscovery();
-            setCollapsed((value) => !value);
+            if (collapsed) {
+              openJournal();
+            } else {
+              closeJournal();
+            }
           }}
         >
           <span aria-hidden="true">{collapsed ? '＋' : '−'}</span>
         </button>
       </header>
 
-      {collapsed && compactMission && (
+      {collapsed && active && (
+        <section
+          className="mobile-mini-navigator"
+          aria-label="Navegación de misión activa"
+          data-reversing={reversing}
+          data-testid="mobile-mini-navigator"
+        >
+          <button
+            type="button"
+            aria-label={`Ver objetivo de ${active.title}`}
+            onClick={() => openJournal()}
+          >
+            <span
+              className="mobile-mini-navigator__maneuver"
+              aria-hidden="true"
+            >
+              {reversing
+                ? '↓'
+                : maneuverSymbol(
+                    missionRoute.activeNavigation?.maneuverType ??
+                      missionRoute.nextInstruction?.type ??
+                      'continue',
+                  )}
+            </span>
+            <span className="mobile-mini-navigator__copy">
+              <strong>{miniNavigationText}</strong>
+              <span>{next?.objective.label ?? 'Objetivo registrado'}</span>
+              <small>
+                {active.title}
+                {miniNavigationDistance === null
+                  ? ''
+                  : ` · ${formatDistance(miniNavigationDistance)}`}
+              </small>
+            </span>
+            <span className="mobile-mini-navigator__action">Ver objetivo</span>
+          </button>
+        </section>
+      )}
+
+      {collapsed && !active && compactMission && (
         <section
           className="mission-panel__collapsed-cta"
-          aria-label={active ? 'Misión activa' : 'Siguiente misión'}
+          aria-label="Siguiente misión"
           data-testid="mobile-mission-cta"
         >
-          <span>{active ? 'Misión activa' : 'Siguiente misión'}</span>
+          <span>Siguiente misión</span>
           <strong>{compactMission.title}</strong>
           <p>{compactMission.description}</p>
           <div>
@@ -296,29 +518,19 @@ export function MissionPanel() {
               type="button"
               className="mission-button mission-button--primary"
               onClick={() => {
-                if (active) {
-                  setSection('missions');
-                  setCollapsed(false);
-                } else if (recommendedMission && recommendation?.canStartNow) {
+                if (recommendedMission && recommendation?.canStartNow) {
                   startMission(recommendedMission.id);
                 } else {
                   requestRouteRecalculation();
                 }
               }}
             >
-              {active
-                ? 'Continuar misión'
-                : recommendation?.canStartNow
-                  ? 'Iniciar misión'
-                  : 'Ir al inicio'}
+              {recommendation?.canStartNow ? 'Iniciar misión' : 'Ir al inicio'}
             </button>
             <button
               type="button"
               className="mission-panel__details-button"
-              onClick={() => {
-                setSection('missions');
-                setCollapsed(false);
-              }}
+              onClick={() => openJournal()}
             >
               Ver detalles
             </button>
@@ -358,11 +570,13 @@ export function MissionPanel() {
               >
                 <div className="mission-route-summary__header">
                   <span>
-                    {missionRoute.status === 'fallback'
-                      ? 'Ruta vial no disponible'
-                      : missionRoute.activeNavigation?.requiresRejoin
-                        ? 'Reincorporación'
-                        : 'Ruta por carretera'}
+                    {reversing
+                      ? 'Guía pausada en reversa'
+                      : missionRoute.status === 'fallback'
+                        ? 'Ruta vial no disponible'
+                        : missionRoute.activeNavigation?.requiresRejoin
+                          ? 'Reincorporación'
+                          : 'Ruta por carretera'}
                   </span>
                   <button
                     type="button"
@@ -374,36 +588,39 @@ export function MissionPanel() {
                     <span aria-hidden="true">↻</span>
                   </button>
                 </div>
-                {(navigationGuidance ||
-                  (missionRoute.nextInstruction &&
-                    missionRoute.distanceToNextInstructionMeters !== null)) && (
-                  <div className="mission-navigation-next">
-                    <span aria-hidden="true">
-                      {maneuverSymbol(
-                        missionRoute.activeNavigation?.maneuverType ??
-                          missionRoute.nextInstruction?.type ??
-                          'continue',
-                      )}
-                    </span>
-                    <div>
-                      <small>
-                        {missionRoute.activeNavigation?.requiresRejoin
-                          ? 'Vuelve al camino'
-                          : 'Próxima maniobra'}
-                      </small>
-                      <strong>
-                        {navigationGuidance ??
-                          (missionRoute.nextInstruction &&
-                          missionRoute.distanceToNextInstructionMeters !== null
-                            ? formatNavigationInstruction(
-                                missionRoute.nextInstruction,
-                                missionRoute.distanceToNextInstructionMeters,
-                              )
-                            : '')}
-                      </strong>
+                {!reversing &&
+                  (navigationGuidance ||
+                    (missionRoute.nextInstruction &&
+                      missionRoute.distanceToNextInstructionMeters !==
+                        null)) && (
+                    <div className="mission-navigation-next">
+                      <span aria-hidden="true">
+                        {maneuverSymbol(
+                          missionRoute.activeNavigation?.maneuverType ??
+                            missionRoute.nextInstruction?.type ??
+                            'continue',
+                        )}
+                      </span>
+                      <div>
+                        <small>
+                          {missionRoute.activeNavigation?.requiresRejoin
+                            ? 'Vuelve al camino'
+                            : 'Próxima maniobra'}
+                        </small>
+                        <strong>
+                          {navigationGuidance ??
+                            (missionRoute.nextInstruction &&
+                            missionRoute.distanceToNextInstructionMeters !==
+                              null
+                              ? formatNavigationInstruction(
+                                  missionRoute.nextInstruction,
+                                  missionRoute.distanceToNextInstructionMeters,
+                                )
+                              : '')}
+                        </strong>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
                 <strong>
                   {next?.objective.label ?? 'Objetivo registrado'}
                 </strong>

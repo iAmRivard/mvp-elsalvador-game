@@ -5,7 +5,6 @@ import { FuelAssist } from '../components/hud/FuelAssist';
 import { GameplayToast } from '../components/hud/GameplayToast';
 import { GameAudioBridge } from '../components/audio/GameAudioBridge';
 import { CurrentRegion } from '../components/hud/CurrentRegion';
-import { DiscoveryToast } from '../components/hud/DiscoveryToast';
 import { LevelUpToast } from '../components/hud/LevelUpToast';
 import { MissionPanel } from '../components/hud/MissionPanel';
 import { MissionToast } from '../components/hud/MissionToast';
@@ -13,12 +12,9 @@ import { MissionTimer } from '../components/hud/MissionTimer';
 import { PlayerHud } from '../components/hud/PlayerHud';
 import { PauseMenu } from '../components/menu/PauseMenu';
 import { RecommendedControlsPrompt } from '../components/menu/RecommendedControlsPrompt';
-import { VehicleRecoveryDialog } from '../components/menu/VehicleRecoveryDialog';
 import { StartScreen } from '../components/menu/StartScreen';
 import { TutorialOverlay } from '../components/menu/TutorialOverlay';
-import { NarrativeDialog } from '../components/story/NarrativeDialog';
-import { RadioMessageOverlay } from '../components/story/RadioMessageOverlay';
-import { MissionChoiceDialog } from '../components/story/MissionChoiceDialog';
+import { OverlayManager } from '../components/ui/OverlayManager';
 import { gameConfig } from '../config/game.config';
 import { InputController } from '../game/inputController';
 import { startGameAutosave, useGameStore } from '../store/gameStore';
@@ -117,10 +113,9 @@ export function App() {
         {!showTutorial && <FuelAssist />}
         <MissionTimer />
         <MissionPanel />
-        {!showTutorial && <DiscoveryToast />}
         <MissionToast />
         <GameplayToast />
-        <RadioMessageOverlay />
+        <OverlayManager allowDiscovery={!showTutorial} />
         <LevelUpToast />
         {diagnosticsEnabled && <DiagnosticsPanel input={inputController} />}
       </section>
@@ -146,10 +141,7 @@ export function App() {
             }}
           />
         )}
-      <VehicleRecoveryDialog />
       <RecommendedControlsPrompt />
-      <MissionChoiceDialog />
-      <NarrativeDialog />
     </main>
   );
 }

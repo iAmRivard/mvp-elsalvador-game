@@ -44,9 +44,6 @@ export function RadioMessageOverlay() {
           </p>
         )}
         <footer>
-          <button type="button" onClick={dismiss}>
-            Cerrar
-          </button>
           <button
             type="button"
             onClick={() => {
@@ -54,7 +51,10 @@ export function RadioMessageOverlay() {
               dismiss();
             }}
           >
-            Abrir bitácora
+            Bitácora
+          </button>
+          <button type="button" onClick={dismiss}>
+            Cerrar
           </button>
         </footer>
       </aside>

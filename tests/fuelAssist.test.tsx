@@ -15,35 +15,90 @@ describe('asistencia visible de combustible', () => {
 
   afterEach(cleanup);
 
-  it('muestra la estación más cercana al llegar a 25%', () => {
+  it('no muestra CTA con combustible alto aunque esté en una estación', () => {
     useGameStore.setState((state) => ({
-      telemetry: { ...state.telemetry, fuel: 25 },
-      vehicle: { ...state.vehicle, fuel: 25 },
+      telemetry: {
+        ...state.telemetry,
+        longitude: capitalStation.coordinates[0],
+        latitude: capitalStation.coordinates[1],
+        fuel: 75,
+      },
+      vehicle: { ...state.vehicle, fuel: 75 },
+    }));
+    const { container } = render(<FuelAssist />);
+
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('muestra una estación discreta entre 25% y 35%', () => {
+    useGameStore.setState((state) => ({
+      telemetry: { ...state.telemetry, fuel: 30 },
+      vehicle: { ...state.vehicle, fuel: 30 },
     }));
     render(<FuelAssist />);
 
-    expect(screen.getByText('Combustible bajo')).toBeTruthy();
-    expect(screen.getByText(/Estación más cercana:/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Marcar ruta' }));
+    expect(screen.getByText('Estación cercana')).toBeTruthy();
+    expect(screen.getByText(/· \d+(\.\d+)? (m|km)/)).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole('button', { name: /Estación cercana/i }),
+    );
     expect(useGameStore.getState().navigationTarget).toMatchObject({
       kind: 'fuel-station',
       id: capitalStation.id,
     });
   });
 
-  it('ofrece autonomía y consume un bidón al llegar a 10%', () => {
+  it('muestra CTA crítico bajo 25% y permite usar un bidón', () => {
     useGameStore.setState((state) => ({
-      telemetry: { ...state.telemetry, fuel: 10 },
-      vehicle: { ...state.vehicle, fuel: 10 },
+      telemetry: { ...state.telemetry, fuel: 20 },
+      vehicle: { ...state.vehicle, fuel: 20 },
       inventory: [{ itemId: 'bidon-combustible', quantity: 1 }],
     }));
     render(<FuelAssist />);
 
-    expect(screen.getByText('Combustible crítico')).toBeTruthy();
-    expect(screen.getByText(/Autonomía aproximada:/)).toBeTruthy();
+    expect(screen.getByText('Combustible bajo')).toBeTruthy();
+    expect(screen.getByText(/Estación más cercana:/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Marcar ruta' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Usar bidón (1)' }));
-    expect(useGameStore.getState().telemetry.fuel).toBe(40);
+    expect(useGameStore.getState().telemetry.fuel).toBe(50);
     expect(useGameStore.getState().inventory).toEqual([]);
+  });
+
+  it('muestra distancia y regreso a misión con ruta temporal activa', () => {
+    useGameStore.setState((state) => ({
+      activeMissionId: 'la-transmision',
+      telemetry: { ...state.telemetry, fuel: 75 },
+      vehicle: { ...state.vehicle, fuel: 75 },
+      navigationTarget: {
+        kind: 'fuel-station',
+        id: capitalStation.id,
+        label: capitalStation.name,
+        coordinates: capitalStation.coordinates,
+      },
+    }));
+    render(<FuelAssist />);
+
+    expect(screen.getByText(/Punto de combustible ·/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Volver a misión' }));
+    expect(useGameStore.getState().navigationTarget).toBeNull();
+  });
+
+  it('muestra recarga compacta en estación con combustible bajo no crítico', () => {
+    useGameStore.setState((state) => ({
+      telemetry: {
+        ...state.telemetry,
+        longitude: capitalStation.coordinates[0],
+        latitude: capitalStation.coordinates[1],
+        speedMetersPerSecond: 0,
+        speedKilometersPerHour: 0,
+        fuel: 30,
+      },
+      vehicle: { ...state.vehicle, fuel: 30 },
+    }));
+    render(<FuelAssist />);
+
+    expect(screen.getByText('Recargar')).toBeTruthy();
+    expect(screen.queryByText('Punto de combustible')).toBeNull();
   });
 
   it('explica la recarga al detenerse dentro del punto', () => {

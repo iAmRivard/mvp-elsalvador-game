@@ -59,7 +59,13 @@ detrás del jugador, mantiene continuidad e histéresis y detecta si hace falta 
 heading, índice y distancia al segmento. En retornos, paralelas y circuitos evita saltar a una parte
 lejana sólo porque esté cerca geográficamente.
 
-`ActiveNavigationState` es la única fuente para flecha, texto, tramo inmediato, maniobra y distancia.
-El triángulo y Three.js mantienen `physicalHeading`; la flecha hueca usa `recommendedHeading` y se
-oculta al quedar alineada. Con velocidad menor de 2 km/h y diferencia mayor de 45 grados se muestra
-una indicación para girar sin rotar el vehículo automáticamente. No hay navegación por voz.
+`ActiveNavigationState` es la única fuente para chevrón, texto, tramo inmediato, maniobra y
+distancia. El triángulo cian y Three.js mantienen `physicalHeading`; el chevrón amarillo usa
+`recommendedHeading` y `navigationArrowPosition()` lo coloca 35 m por delante en la geometría
+inmediata. Si no existe punto válido, el Marker queda en la posición del jugador con offset
+`[0, -40]`; no se transforma el elemento raíz administrado por MapLibre.
+
+La reversa usa `speedMetersPerSecond < -0.14`, no la velocidad absoluta del HUD. En ese estado se
+vacían tramo inmediato y conector de reincorporación, se oculta el chevrón y el mini navegador
+muestra **Reversa · guía pausada**. Con velocidad menor de 2 km/h y diferencia mayor de 45 grados se
+muestra una indicación para girar sin rotar el vehículo automáticamente. No hay navegación por voz.

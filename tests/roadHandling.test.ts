@@ -34,21 +34,53 @@ describe('road handling', () => {
       primary: 1,
       track: 0.5,
       'dirt-road': 0.5,
+      'road-unclassified': 0.7,
       offroad: 0.25,
     });
     expect(roadFuelMultipliers).toMatchObject({
       primary: 1,
       track: 1.35,
       'dirt-road': 1.35,
+      'road-unclassified': 1.15,
       offroad: 1.75,
     });
     expect(roadConditionMultipliers).toMatchObject({
       primary: 1,
       'dirt-road': 1.25,
+      'road-unclassified': 1.05,
       offroad: 1.75,
     });
     expect(roadSurfaceLabels['dirt-road']).toBe('Camino de tierra');
+    expect(roadSurfaceLabels['road-unclassified']).toBe(
+      'Vía sin clasificar',
+    );
     expect(roadSurfaceLabels.offroad).toBe('Fuera de carretera');
+  });
+
+  it('uses the temporary unclassified surface during recovered contact', () => {
+    const player: PlayerRuntime = {
+      longitude: -89.2995,
+      latitude: 13.7007,
+      heading: 90,
+      speedMetersPerSecond: 5,
+      fuel: 100,
+      totalDistanceMeters: 0,
+    };
+    const contact = roadContact(player);
+    contact.surface = 'road-unclassified';
+    contact.recovered = true;
+    const result = stepPlayerDetailed(
+      player,
+      { ...idleInput, throttle: 1 },
+      0.05,
+      { roadNetworkEnabled: true, roadContact: contact },
+    );
+
+    expect(result.environment).toMatchObject({
+      surface: 'road-unclassified',
+      speedMultiplier: 0.7,
+      fuelMultiplier: 1.15,
+    });
   });
 
   it('treats a visible unpaved edge as dirt road instead of offroad', () => {

@@ -36,6 +36,56 @@ describe('acciones de guardado del estado global', () => {
     expect(state.playerRuntimeRevision).toBe(previousRevision + 1);
   });
 
+  it('restaura una ruta temporal y permite volver a la misión', () => {
+    useGameStore.getState().startMission('la-transmision');
+    useGameStore.getState().dismissNarrativeEvent();
+    expect(
+      useGameStore
+        .getState()
+        .markFuelStationRoute('abastecimiento-san-salvador'),
+    ).toBe(true);
+    expect(useGameStore.getState().saveGame()).toBe(true);
+
+    useGameStore.getState().clearNavigationTarget();
+    expect(useGameStore.getState().navigationTarget).toBeNull();
+    expect(useGameStore.getState().loadGame()).toBe(true);
+    expect(useGameStore.getState().navigationTarget).toMatchObject({
+      kind: 'fuel-station',
+      id: 'abastecimiento-san-salvador',
+      label: 'Punto de abastecimiento San Salvador',
+    });
+
+    useGameStore.getState().clearNavigationTarget();
+    expect(useGameStore.getState()).toMatchObject({
+      navigationTarget: null,
+      gameplayFeedback: { message: 'Ruta de misión restaurada' },
+    });
+  });
+
+  it('vuelve a la misión cuando el destino guardado ya no existe', () => {
+    expect(
+      useGameStore
+        .getState()
+        .markFuelStationRoute('abastecimiento-san-salvador'),
+    ).toBe(true);
+    expect(useGameStore.getState().saveGame()).toBe(true);
+    const envelope = JSON.parse(
+      window.localStorage.getItem(GAME_SAVE_KEY)!,
+    ) as { game: { navigationTarget: { id: string } } };
+    envelope.game.navigationTarget.id = 'estacion-eliminada';
+    window.localStorage.setItem(GAME_SAVE_KEY, JSON.stringify(envelope));
+
+    expect(useGameStore.getState().loadGame()).toBe(true);
+    expect(useGameStore.getState()).toMatchObject({
+      navigationTarget: null,
+      gameplayFeedback: {
+        message:
+          'La ruta temporal ya no está disponible. Volviste al objetivo de misión.',
+        tone: 'warning',
+      },
+    });
+  });
+
   it('reinicia todos los datos y elimina el guardado anterior', () => {
     useGameStore.getState().addExperience(950);
     useGameStore.getState().saveGame();

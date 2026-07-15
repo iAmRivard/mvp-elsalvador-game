@@ -74,6 +74,10 @@ export function startPlayerGameLoop(
     previousTimestamp = timestamp;
 
     if (!options.isPaused()) {
+      options.input.advanceMobileCruise(
+        player.speedMetersPerSecond,
+        deltaTimeSeconds,
+      );
       const input = options.input.snapshot();
       const result = stepPlayerDetailed(
         player,

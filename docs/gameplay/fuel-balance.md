@@ -1,4 +1,4 @@
-# Balance de combustible v0.2.4
+# Balance de combustible v0.2.4.1
 
 ## Fórmula
 
@@ -37,12 +37,16 @@ completamente offroad consume 31.5 puntos. Las pruebas cubren ambos perfiles y r
 
 ## Puntos de abastecimiento
 
-San Salvador, Las Delicias y El Congo tienen puntos narrativos activos del capítulo 1. A 25% el HUD
-muestra el más cercano y permite marcar una ruta A* temporal; a 10% agrega autonomía y **Usar bidón**.
-El destino temporal vive sólo en runtime: no sustituye la misión guardada. Dentro de 180 m y a no
-más de 2 km/h, **Recargar** agrega hasta 45%, crea un checkpoint seguro y restaura la ruta de misión.
+San Salvador, Las Delicias y El Congo tienen puntos narrativos activos del capítulo 1. Por encima de
+35% sólo queda el indicador normal. Entre 25–35% aparece un chip discreto e interactivo con estación
+y distancia. Por debajo de 25% aparece **Combustible bajo**, distancia, **Marcar ruta** y bidón.
 
-El bidón consumible agrega hasta 30%. Puede usarse desde 10% o desde el diálogo de 0%, donde también
+El destino temporal guarda sólo tipo e ID en el formato v4; no sustituye la misión. Al cargar se
+valida y A* se recalcula. Si ya no está disponible, vuelve al objetivo de misión con aviso. Dentro
+de 180 m y a no más de 2 km/h, **Recargar** agrega hasta 45%, crea un checkpoint seguro y restaura la
+ruta de misión.
+
+El bidón consumible agrega hasta 30%. Puede usarse bajo 25% o desde el diálogo de 0%, donde también
 se ofrece recargar si el vehículo ya está dentro de una estación. Si ninguna opción está disponible,
 recuperación permite regresar al último punto seguro con hasta 20% de emergencia, reintentar o
 abandonar la misión. Estas salidas evitan un guardado imposible de continuar.

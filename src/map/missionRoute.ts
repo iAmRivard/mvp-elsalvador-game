@@ -24,7 +24,7 @@ import {
   navigationProgress,
   projectPositionOntoRoute,
 } from './navigationInstructions';
-import { vehicleOrientation } from './navigationGuidance';
+import { vehicleIsReversing, vehicleOrientation } from './navigationGuidance';
 import {
   nearestPendingObjective,
   objectiveIsAvailable,
@@ -228,6 +228,42 @@ export function distanceToRouteMeters(
   );
 }
 
+export function navigationArrowPosition(
+  routeCoordinates: readonly RoadCoordinates[],
+  activeSegmentIndex: number,
+  lookAheadMeters: number,
+): RoadCoordinates | null {
+  if (
+    routeCoordinates.length < 2 ||
+    activeSegmentIndex < 0 ||
+    activeSegmentIndex >= routeCoordinates.length - 1 ||
+    !Number.isFinite(lookAheadMeters) ||
+    lookAheadMeters <= 0
+  ) {
+    return null;
+  }
+  let remainingMeters = lookAheadMeters;
+  for (
+    let index = activeSegmentIndex;
+    index < routeCoordinates.length - 1;
+    index += 1
+  ) {
+    const start = routeCoordinates[index];
+    const end = routeCoordinates[index + 1];
+    const segmentMeters = distanceBetweenMeters(start, end);
+    if (segmentMeters <= 0.01) continue;
+    if (remainingMeters <= segmentMeters) {
+      const progress = remainingMeters / segmentMeters;
+      return [
+        start[0] + (end[0] - start[0]) * progress,
+        start[1] + (end[1] - start[1]) * progress,
+      ];
+    }
+    remainingMeters -= segmentMeters;
+  }
+  return null;
+}
+
 function fallbackDurationSeconds(distanceMeters: number): number {
   return (
     distanceMeters /
@@ -323,7 +359,7 @@ export function addMissionRoute(
     'aria-label',
     'Dirección recomendada de la ruta',
   );
-  maneuverMarkerElement.textContent = '↑';
+  maneuverMarkerElement.textContent = '⌃';
   maneuverMarkerElement.hidden = true;
   const maneuverMarker = new Marker({
     element: maneuverMarkerElement,
@@ -404,12 +440,16 @@ export function addMissionRoute(
       physicalHeading,
       lastKnownSegmentIndex,
     );
+    const gameState = useGameStore.getState();
+    const reversing = vehicleIsReversing(
+      gameState.telemetry.speedMetersPerSecond,
+    );
     lastKnownSegmentIndex =
       progress.activeNavigation?.routeSegmentIndex ?? lastKnownSegmentIndex;
     immediateSource()?.setData({
       type: 'FeatureCollection',
       features:
-        progress.immediateCoordinates.length >= 2
+        !reversing && progress.immediateCoordinates.length >= 2
           ? [
               {
                 type: 'Feature',
@@ -425,7 +465,7 @@ export function addMissionRoute(
     rejoinSource()?.setData({
       type: 'FeatureCollection',
       features:
-        progress.rejoinCoordinates.length >= 2
+        !reversing && progress.rejoinCoordinates.length >= 2
           ? [
               {
                 type: 'Feature',
@@ -442,7 +482,7 @@ export function addMissionRoute(
       physicalHeading,
       progress.activeNavigation?.recommendedHeading ?? null,
     );
-    useGameStore.getState().setMissionNavigation({
+    gameState.setMissionNavigation({
       nextInstruction: progress.nextInstruction,
       distanceToNextInstructionMeters: progress.distanceToNextInstructionMeters,
       offRoute: progress.offRoute,
@@ -450,19 +490,37 @@ export function addMissionRoute(
       orientation,
     });
     if (
+      reversing ||
       !progress.activeNavigation ||
-      orientation.headingDifference === null ||
-      Math.abs(orientation.headingDifference) <=
-        routingConfig.headingAlignmentThresholdDegrees
+      orientation.headingDifference === null
     ) {
       maneuverMarkerElement.hidden = true;
+      const container = map.getContainer();
+      container.dataset.navigationArrowLongitude = '';
+      container.dataset.navigationArrowLatitude = '';
+      container.dataset.navigationArrowFallback = '';
     } else {
+      const arrowPosition = navigationArrowPosition(
+        progress.immediateCoordinates,
+        0,
+        35,
+      );
       maneuverMarker
-        .setLngLat(position)
+        .setLngLat(arrowPosition ?? position)
+        .setOffset(arrowPosition ? [0, 0] : [0, -40])
         .setRotation(progress.activeNavigation.recommendedHeading);
       maneuverMarkerElement.hidden = false;
+      const container = map.getContainer();
+      container.dataset.navigationArrowLongitude = String(
+        (arrowPosition ?? position)[0],
+      );
+      container.dataset.navigationArrowLatitude = String(
+        (arrowPosition ?? position)[1],
+      );
+      container.dataset.navigationArrowFallback = String(!arrowPosition);
     }
     const container = map.getContainer();
+    container.dataset.navigationReversing = String(reversing);
     container.dataset.navigationOffRoute = String(progress.offRoute);
     container.dataset.navigationRequiresRejoin = String(
       progress.activeNavigation?.requiresRejoin ?? false,

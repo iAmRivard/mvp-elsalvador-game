@@ -221,13 +221,14 @@ function roadState(
   );
   if (
     !nearest ||
-    nearest.distanceMeters > roadAssistConfig.detectionRadiusMeters
+    (nearest.distanceMeters > roadAssistConfig.detectionRadiusMeters &&
+      !roadContact.recovered)
   ) {
     return { surface: 'offroad', contact: null };
   }
   return {
-    surface: roadSurfaceForEdge(roadContact.edge),
-    contact: { edge: roadContact.edge, nearest },
+    surface: roadContact.surface ?? roadSurfaceForEdge(roadContact.edge),
+    contact: { ...roadContact, nearest },
   };
 }
 
@@ -257,9 +258,9 @@ function stepPlayerOnce(
   const maximumReverseSpeed = handling.maximumReverseSpeed * speedMultiplier;
   const targetSpeed =
     throttle > 0
-      ? maximumForwardSpeed
+      ? maximumForwardSpeed * throttle
       : throttle < 0
-        ? -maximumReverseSpeed
+        ? maximumReverseSpeed * throttle
         : 0;
   const isChangingDirection =
     (player.speedMetersPerSecond > 0 && targetSpeed < 0) ||

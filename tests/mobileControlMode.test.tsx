@@ -8,7 +8,7 @@ import { InputController } from '../src/game/inputController';
 import { useGameStore } from '../src/store/gameStore';
 import { useSettingsStore } from '../src/store/settingsStore';
 
-describe('modo móvil de joystick único', () => {
+describe('modos móviles de conducción', () => {
   beforeEach(() => {
     useGameStore.setState(useGameStore.getInitialState(), true);
     useSettingsStore.setState(useSettingsStore.getInitialState(), true);
@@ -42,15 +42,26 @@ describe('modo móvil de joystick único', () => {
   it('ofrece la migración una vez y conserva la elección', () => {
     useSettingsStore.setState({
       controlMode: 'classic-buttons',
-      singleDriveJoystickPromptDismissed: false,
+      targetSpeedJoystickPromptDismissed: false,
     });
     render(<RecommendedControlsPrompt />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Probar modo simple' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Probar' }));
     expect(useSettingsStore.getState()).toMatchObject({
-      controlMode: 'single-drive-joystick',
-      singleDriveJoystickPromptDismissed: true,
+      controlMode: 'target-speed-joystick',
+      targetSpeedJoystickPromptDismissed: true,
     });
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('muestra el objetivo sin pedales en el modo recomendado', () => {
+    useSettingsStore.setState({ controlMode: 'target-speed-joystick' });
+    render(<TouchControls input={new InputController()} />);
+
+    expect(screen.getByLabelText('Joystick de velocidad objetivo')).toBeTruthy();
+    expect(screen.getByTestId('mobile-cruise-target').textContent).toContain(
+      'OBJETIVO 0 km/h',
+    );
+    expect(screen.queryByRole('button', { name: 'Acelerar' })).toBeNull();
   });
 });

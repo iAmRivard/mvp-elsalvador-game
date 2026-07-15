@@ -129,7 +129,7 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
         window.localStorage.setItem(
           storedSettingsKey,
           JSON.stringify({
-            version: 7,
+            version: 8,
             settings: {
               graphicsQuality: 'low',
               reduceMotion: true,
@@ -143,6 +143,8 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
               reduceAudioEffects: true,
               recommendedControlsPromptDismissed: true,
               singleDriveJoystickPromptDismissed: true,
+              targetSpeedJoystickPromptDismissed: true,
+              controlMode: 'target-speed-joystick',
             },
           }),
         );
@@ -302,7 +304,7 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
     };
   }, saveKey);
   expect(persisted).toMatchObject({
-    version: 3,
+    version: 4,
     activeMissionId: 'camino-hacia-santa-ana',
     selectedRoute: 'north',
   });

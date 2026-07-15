@@ -114,9 +114,10 @@ test('reinicia y vuelve a alinear con la red vial ya montada', async ({
   const alignedStart = await position.textContent();
 
   await page.keyboard.down('w');
-  await page.waitForTimeout(700);
+  await expect
+    .poll(() => position.textContent())
+    .not.toBe(alignedStart ?? '', { timeout: 5_000 });
   await page.keyboard.up('w');
-  await expect(position).not.toHaveText(alignedStart ?? '');
 
   await page.getByRole('button', { name: 'Partida y guardado' }).click();
   await page.getByRole('menuitem', { name: 'Reiniciar partida' }).click();

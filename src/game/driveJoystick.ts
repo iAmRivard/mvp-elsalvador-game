@@ -2,8 +2,8 @@ import { driveJoystickConfig } from '../config/mobileControls.config';
 import { applyDeadZone, applyResponseCurve } from './analogInput';
 
 export interface DriveJoystickOutput {
-  throttle: number;
   turn: number;
+  verticalIntent: number;
 }
 
 export function driveJoystickOutput(
@@ -18,11 +18,23 @@ export function driveJoystickOutput(
     applyDeadZone(-normalizedY, driveJoystickConfig.verticalDeadZone),
     driveJoystickConfig.throttleExponent,
   );
+  const verticalIntent =
+    Math.abs(throttle) >
+    Math.abs(turn) * driveJoystickConfig.verticalIntentDominanceRatio
+      ? throttle
+      : 0;
   return {
     turn,
-    throttle:
-      throttle < 0
-        ? Math.max(-driveJoystickConfig.reverseMaximum, throttle)
-        : throttle,
+    verticalIntent,
   };
+}
+
+export function legacyDriveJoystickThrottle(normalizedY: number): number {
+  const throttle = applyResponseCurve(
+    applyDeadZone(-normalizedY, driveJoystickConfig.verticalDeadZone),
+    driveJoystickConfig.throttleExponent,
+  );
+  return throttle < 0
+    ? Math.max(-driveJoystickConfig.reverseMaximum, throttle)
+    : throttle;
 }

@@ -5,11 +5,11 @@ La partida se almacena en `localStorage` bajo la clave
 
 ## Versión actual
 
-La versión actual es `3` y utiliza este sobre:
+La versión actual es `4` y utiliza este sobre:
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "savedAt": "2026-07-13T16:00:00.000Z",
   "game": {
     "player": {},
@@ -28,6 +28,10 @@ La versión actual es `3` y utiliza este sobre:
     "lastSafeCheckpoint": {},
     "currentChapterId": "chapter-1",
     "completedChapterIds": [],
+    "navigationTarget": {
+      "kind": "fuel-station",
+      "id": "abastecimiento-san-salvador"
+    },
     "roadNetworkVersion": 2
   }
 }
@@ -41,8 +45,12 @@ guarda: sólo se registra su versión y se vuelve a cargar desde el archivo est�
 Los cierres narrativos no duplican IDs de aristas en el documento. Se reconstruyen a partir de la
 misión, objetivos completados y `missionChoiceSelections`, por lo que **Camino bloqueado** conserva
 desvío y tiempo al cargar. Los overlays activos no se persisten; sus entradas de Bitácora sí.
-Los destinos temporales de ubicación o combustible tampoco se persisten: al cargar se recupera la
-ruta normal de la misión sin modificar su progreso.
+
+`navigationTarget` guarda únicamente `kind` (`mission-start`, `location` o `fuel-station`) e `id`;
+no persiste geometría ni resultado A*. Al cargar se valida contra ubicaciones desbloqueadas,
+estaciones disponibles o inicios de misión y se reconstruyen etiqueta/coordenadas desde datos
+locales. El mapa recalcula A*. Si ya no existe, se descarta, vuelve al objetivo de misión y muestra
+un aviso; el progreso no cambia.
 
 Cada checkpoint conserva posición, combustible, condición, inventario, energía, misión, objetivos
 completados y progreso parcial. `lastCheckpoint` permite reintentar una misión y
@@ -64,7 +72,7 @@ descartan identificadores de misiones, objetivos y ubicaciones que no existan en
 Las ubicaciones inicialmente disponibles siempre se restituyen.
 
 Los estados planos sin versión y los marcados como versión `0` se migran al contrato actual. Las
-migraciones explícitas de versión `1` y `2` conservan posición, combustible, experiencia, misiones,
-ubicaciones e inventario; agregan elecciones y Bitácora vacías cuando no existían. Los objetos
-especiales conocidos se trasladan también al inventario.
+migraciones explícitas de versión `1`, `2` y `3` conservan posición, combustible, experiencia,
+misiones, ubicaciones e inventario; agregan elecciones, Bitácora o destino nulo cuando no existían.
+Los objetos especiales conocidos se trasladan también al inventario.
 Una versión futura desconocida o un JSON inválido se rechaza sin reemplazar la partida en memoria.

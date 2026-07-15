@@ -256,11 +256,16 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       });
     };
 
-    const roadContextFor = (player: PlayerRuntime) => ({
+    const roadContextFor = (
+      player: PlayerRuntime,
+      timestampMilliseconds = performance.now(),
+    ) => ({
       heading: normalizeHeading(
         player.heading + (player.speedMetersPerSecond < -0.5 ? 180 : 0),
       ),
       activeRouteEdgeIds,
+      mobile: deviceProfile.isTouch,
+      timestampMilliseconds,
     });
 
     const cameraForPlayer = (player: PlayerRuntime) => {
@@ -470,32 +475,36 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         initialPlayer,
         input: inputController,
         isPaused: () => !startupReady || useGameStore.getState().isPaused,
-        getMovementOptions: () => ({
-          steeringSensitivity: useSettingsStore.getState().steeringSensitivity,
-          roadAssistMode: useSettingsStore.getState().roadAssistMode,
-          roadAssistStrengthMultiplier: deviceProfile.isTouch
-            ? roadAssistConfig.mobileStrengthMultiplier
-            : 1,
-          roadNetworkEnabled,
-          roadContact,
-          roadContactAt: roadTracker
-            ? (runtime) => {
-                roadContact =
-                  roadTracker?.update(
-                    [runtime.longitude, runtime.latitude],
-                    roadContextFor(runtime),
-                  ) ?? null;
-                return roadContact ?? null;
-              }
-            : undefined,
-          restrictedAreaTypeAt,
-          driveEnabled: useGameStore.getState().vehicle.condition > 0,
-          routeFuelMultiplier:
-            selectedMissionChoiceOption(
-              useGameStore.getState().activeMissionId,
-              useGameStore.getState().missionChoiceSelections,
-            )?.fuelMultiplier ?? 1,
-        }),
+        getMovementOptions: () => {
+          const roadContactTimestamp = performance.now();
+          return {
+            steeringSensitivity:
+              useSettingsStore.getState().steeringSensitivity,
+            roadAssistMode: useSettingsStore.getState().roadAssistMode,
+            roadAssistStrengthMultiplier: deviceProfile.isTouch
+              ? roadAssistConfig.mobileStrengthMultiplier
+              : 1,
+            roadNetworkEnabled,
+            roadContact,
+            roadContactAt: roadTracker
+              ? (runtime) => {
+                  roadContact =
+                    roadTracker?.update(
+                      [runtime.longitude, runtime.latitude],
+                      roadContextFor(runtime, roadContactTimestamp),
+                    ) ?? null;
+                  return roadContact ?? null;
+                }
+              : undefined,
+            restrictedAreaTypeAt,
+            driveEnabled: useGameStore.getState().vehicle.condition > 0,
+            routeFuelMultiplier:
+              selectedMissionChoiceOption(
+                useGameStore.getState().activeMissionId,
+                useGameStore.getState().missionChoiceSelections,
+              )?.fuelMultiplier ?? 1,
+          };
+        },
         onVisualUpdate: (player, timestamp) => {
           visualFrameCount += 1;
           const frameSampleDuration = timestamp - lastFrameSampleTimestamp;
@@ -610,6 +619,18 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             );
             containerRef.current.dataset.inputAutoThrottle =
               inputDiagnostics.autoThrottleStatus;
+            containerRef.current.dataset.inputTargetSpeed =
+              inputDiagnostics.mobileCruise.targetSpeedKilometersPerHour.toFixed(
+                1,
+              );
+            containerRef.current.dataset.inputCruiseGear =
+              inputDiagnostics.mobileCruise.selectedGear;
+            containerRef.current.dataset.inputCruiseBraking = String(
+              inputDiagnostics.mobileCruise.braking,
+            );
+            containerRef.current.dataset.inputCruiseReversing = String(
+              inputDiagnostics.mobileCruise.reversing,
+            );
           }
           if (roadTracker) {
             const metrics = roadTracker.getMetrics();
@@ -623,14 +644,29 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               containerRef.current.dataset.roadSelectedEdge = String(
                 roadDiagnostics.selectedEdgeId ?? '',
               );
+              containerRef.current.dataset.roadPreviousEdge = String(
+                roadDiagnostics.previousEdgeId ?? '',
+              );
               containerRef.current.dataset.roadSelectedScore =
                 roadDiagnostics.selectedScore?.toFixed(2) ?? '';
-              const selectedCandidate = roadDiagnostics.candidates.find(
-                (candidate) =>
-                  candidate.edgeId === roadDiagnostics.selectedEdgeId,
-              );
               containerRef.current.dataset.roadDistanceMeters =
-                selectedCandidate?.distanceMeters.toFixed(1) ?? '';
+                roadDiagnostics.nearestEdgeDistanceMeters?.toFixed(1) ?? '';
+              containerRef.current.dataset.roadContactSurface =
+                roadDiagnostics.surface;
+              containerRef.current.dataset.roadConsecutiveMisses = String(
+                roadDiagnostics.consecutiveMisses,
+              );
+              containerRef.current.dataset.roadGraceRemainingMs = String(
+                Math.round(
+                  roadDiagnostics.gracePeriodRemainingMilliseconds,
+                ),
+              );
+              containerRef.current.dataset.roadOffroadReason =
+                roadDiagnostics.offroadReason ?? '';
+              containerRef.current.dataset.roadContactSource =
+                roadDiagnostics.contactSource;
+              containerRef.current.dataset.roadDiagnosticExport =
+                JSON.stringify(roadTracker.getDiagnosticExport());
               containerRef.current.dataset.roadCandidateScores =
                 roadDiagnostics.candidates
                   .map(

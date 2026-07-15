@@ -28,8 +28,10 @@ recorre las 23,054 aristas ni los 17,083 nodos completos.
 
 La clase vial conserva el costo topológico de A*, mientras la superficie gobierna conducción y HUD.
 Las vías con superficie no pavimentada explícita usan `dirt-road`: ritmo `0.5`, combustible `1.35`
-y condición `1.25`. `track` queda para trazas transitables más débiles y `offroad` sólo se asigna
-cuando no existe una arista jugable cercana.
+y condición `1.25`. `road-unclassified` representa contacto recuperado o una vía cercana sin clase
+completa: ritmo `0.7`, combustible `1.15` y condición `1.05`. `track` queda para trazas transitables
+más débiles y `offroad` sólo se asigna cuando no existe una arista jugable cercana después de la
+histéresis.
 
 La capa de superficie renderiza las mismas geometrías del grafo. Carreteras principales son sólidas,
 vías secundarias más delgadas y los 1,019 tramos `dirt-road` usan una línea discontinua diferenciada.
@@ -46,6 +48,12 @@ en `localStorage`. Los resultados medidos del build de producción están en `pe
 Cada candidato recibe puntuaciones de distancia, heading, continuidad, ruta activa, arista anterior
 y clase de vía. Se penalizan tramos detrás del vehículo, giros incompatibles y calles paralelas que
 no pertenecen a la ruta. La histéresis exige una mejora clara antes de cambiar de arista.
+
+En móvil, `RoadContactMemory` conserva edge, superficie, instante válido y misses. El radio directo
+es 52 m; tras un miss busca el edge anterior hasta 70 m y mantiene `road-unclassified` durante
+1 segundo y hasta tres misses. El cuarto miss produce `maximum-misses`; superar la gracia produce
+`contact-timeout`. Un contacto directo reinicia misses inmediatamente. Así un hueco aislado del
+grafo no cambia el HUD a offroad.
 
 La ruta activa tiene prioridad en intersecciones, pero el giro manual reduce la asistencia para
 permitir abandonar voluntariamente el camino. El paso de movimiento vuelve a proyectar solo contra
@@ -64,3 +72,7 @@ algoritmo y su ciclo de recálculo están en `routing.md`.
 `VITE_ROAD_DEBUG=true npm run dev` superpone en turquesa las aristas generadas. La capa es opcional,
 se carga de forma diferida y se elimina junto con el mapa. Esta variable no debe habilitarse en el
 build normal de Dokploy.
+
+Con `VITE_ENABLE_DIAGNOSTICS=true`, el panel añade edge actual/anterior, distancia, superficie,
+misses, gracia, fuente y motivo de offroad. `getDiagnosticExport()` devuelve coordenadas y causa, y
+se conservan las últimas 20 transiciones de superficie para reproducir recorridos del teléfono.
