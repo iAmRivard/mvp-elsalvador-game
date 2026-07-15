@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TutorialOverlay } from '../src/components/menu/TutorialOverlay';
 import { InputController } from '../src/game/inputController';
@@ -23,6 +29,13 @@ function setCoarsePointer(matches: boolean): void {
   });
 }
 
+async function reachCoast(input: InputController): Promise<void> {
+  act(() => input.setJoystickTurn(0.5));
+  await act(() => vi.advanceTimersByTimeAsync(420));
+  act(() => input.setTouchThrottle(0.6));
+  await act(() => vi.advanceTimersByTimeAsync(420));
+}
+
 describe('tutorial contextual', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -37,20 +50,22 @@ describe('tutorial contextual', () => {
     delete document.documentElement.dataset.tutorialTarget;
   });
 
-  it('completa acciones detectables sin botón Siguiente', async () => {
+  it('completa acciones detectables sin botón Siguiente ni Entendido', async () => {
     const input = new InputController();
     render(<TutorialOverlay input={input} onComplete={vi.fn()} />);
 
     expect(screen.getByText('Gira el vehículo')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Siguiente' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Entendido' })).toBeNull();
     act(() => input.setJoystickTurn(0.45));
     await act(() => vi.advanceTimersByTimeAsync(420));
-    expect(screen.getByText('Aumenta la velocidad')).toBeTruthy();
+    expect(screen.getByText('Elige tu velocidad')).toBeTruthy();
 
     act(() => input.setTouchThrottle(0.6));
     await act(() => vi.advanceTimersByTimeAsync(420));
-    expect(screen.getByText('Suelta y mantén la marcha')).toBeTruthy();
+    expect(screen.getByText('Mantén la marcha')).toBeTruthy();
     expect(document.documentElement.dataset.tutorialTarget).toBe('coast');
+    expect(useGameStore.getState().onboardingState).toBe('driving-basics');
   });
 
   it('usa tarjeta compacta y adapta la instrucción al control clásico', async () => {
@@ -63,11 +78,45 @@ describe('tutorial contextual', () => {
     expect(
       document.querySelector('[data-tutorial-card="mobile"]'),
     ).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Siguiente' })).toBeNull();
     act(() => input.setJoystickTurn(0.5));
     await act(() => vi.advanceTimersByTimeAsync(420));
     expect(
       screen.getByText('Mantén Avanzar para ganar velocidad.'),
     ).toBeTruthy();
+  });
+
+  it('exige sostener la marcha centrada durante 600 ms', async () => {
+    const input = new InputController();
+    render(<TutorialOverlay input={input} onComplete={vi.fn()} />);
+    await reachCoast(input);
+
+    act(() => {
+      input.setTouchThrottle(0);
+      useGameStore.setState((state) => ({
+        telemetry: {
+          ...state.telemetry,
+          speedMetersPerSecond: 10 / 3.6,
+          speedKilometersPerHour: 10,
+        },
+      }));
+    });
+    await act(() => vi.advanceTimersByTimeAsync(599));
+    expect(screen.getByText('Mantén la marcha')).toBeTruthy();
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    await act(() => vi.advanceTimersByTimeAsync(420));
+    expect(screen.getByText('Frena de verdad')).toBeTruthy();
+  });
+
+  it('omitir cambia solo el onboarding y conserva la misión', () => {
+    const input = new InputController();
+    const finish = vi.fn();
+    useGameStore.setState({ activeMissionId: 'la-transmision' });
+    render(<TutorialOverlay input={input} onComplete={finish} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Omitir' }));
+
+    expect(useGameStore.getState().onboardingState).toBe('skipped');
+    expect(useGameStore.getState().activeMissionId).toBe('la-transmision');
+    expect(finish).toHaveBeenCalledTimes(1);
   });
 });

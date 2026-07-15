@@ -5,12 +5,7 @@ interface MobileTutorialCardProps {
   totalSteps: number;
   title: string;
   description: string;
-  details?: string;
-  canAdvance: boolean;
-  automatic: boolean;
-  isLast: boolean;
-  onPrevious: () => void;
-  onNext: () => void;
+  available: boolean;
   onSkip: () => void;
 }
 
@@ -35,12 +30,7 @@ export function MobileTutorialCard({
   totalSteps,
   title,
   description,
-  details,
-  canAdvance,
-  automatic,
-  isLast,
-  onPrevious,
-  onNext,
+  available,
   onSkip,
 }: MobileTutorialCardProps) {
   const cardRef = useRef<HTMLElement>(null);
@@ -48,7 +38,7 @@ export function MobileTutorialCard({
   const [position, setPosition] = useState<CardPosition | null>(null);
 
   const startDrag = (event: PointerEvent<HTMLElement>) => {
-    if ((event.target as HTMLElement).closest('button, summary')) return;
+    if ((event.target as HTMLElement).closest('button')) return;
     const rectangle = cardRef.current?.getBoundingClientRect();
     if (!rectangle) return;
     dragRef.current = {
@@ -92,6 +82,7 @@ export function MobileTutorialCard({
       aria-labelledby="mobile-tutorial-title"
       aria-live="polite"
       data-tutorial-card="mobile"
+      data-tutorial-available={available}
       style={position ? { left: position.x, top: position.y } : undefined}
     >
       <header
@@ -112,31 +103,11 @@ export function MobileTutorialCard({
       </header>
       <h2 id="mobile-tutorial-title">{title}</h2>
       <p>{description}</p>
-      {details && (
-        <details>
-          <summary>Ver detalles</summary>
-          <p>{details}</p>
-        </details>
-      )}
-      {automatic ? (
-        <small className="mobile-tutorial-card__action-hint">
-          Realiza la acción para continuar
-        </small>
-      ) : (
-        <footer>
-          <button type="button" disabled={step === 1} onClick={onPrevious}>
-            Anterior
-          </button>
-          <button
-            type="button"
-            className="tutorial-next"
-            disabled={!canAdvance}
-            onClick={onNext}
-          >
-            {isLast ? 'Finalizar' : 'Entendido'}
-          </button>
-        </footer>
-      )}
+      <small className="mobile-tutorial-card__action-hint">
+        {available
+          ? 'Realiza la acción para continuar'
+          : 'Continúa la misión para habilitar esta acción'}
+      </small>
     </aside>
   );
 }
