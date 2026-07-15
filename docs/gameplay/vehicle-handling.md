@@ -36,6 +36,12 @@ El giro requiere movimiento, se invierte en reversa y conserva 48 % de su autori
 velocidad maxima. La preferencia de direccion multiplica el giro por 0.78, 1 o 1.22. Teclado y
 controles tactiles producen el mismo `PlayerInput`, por lo que comparten las reglas.
 
+En el modo móvil recomendado, el eje vertical modifica un objetivo persistente entre 0 y 90 km/h a
+70 km/h por segundo al subir y 100 km/h por segundo al bajar. Centrar conserva ese objetivo. Una
+respuesta proporcional sobre 18 km/h de error produce throttle; no hay PID ni persistencia por frame.
+La reversa sólo entra con objetivo cero, velocidad absoluta menor o igual a 0.14 m/s y 350 ms de
+intención descendente. Pausa, blur, diálogo y recuperación cancelan el objetivo por seguridad.
+
 El delta de cada paso se limita a 50 ms. El desplazamiento geográfico se divide además en pasos de
 10 m, con un máximo de 12 por frame. Cada subpaso comprueba carretera, agua, límites, bloqueos,
 descubrimientos, objetivos, colisiones y desgaste; el progreso no puede saltar un objetivo durante
@@ -61,16 +67,19 @@ checkpoint correspondiente.
 ## Superficie y combustible
 
 Al cargar el corredor, el game loop recibe un contacto vial actualizado a 10 Hz. La clase limita la
-velocidad objetivo entre 125 % en autopista y 40 % en pista; fuera de carretera usa 25 %. El consumo
+velocidad objetivo entre 125 % en autopista y 40 % en pista; fuera de carretera usa 25 %. Una
+recuperación `road-unclassified` usa 70% de ritmo, 115% de consumo y 105% de desgaste. El consumo
 varía entre 100 % en vías principales y 175 % fuera de carretera. Los cambios desaceleran con el
 frenado normal en vez de cortar la velocidad instantáneamente.
 
 ## Asistencia
 
 Los modos **Libre**, **Suave** y **Firme** cambian únicamente la corrección de posición y rumbo; las
-reglas de superficie siguen activas. A 8 m o menos se aplica la fuerza completa y disminuye hasta 36
-m. Después de 52 m el rastreador libera la arista. Mantener giro manual reduce la corrección al 28 %
-para permitir una salida voluntaria. En controles táctiles la fuerza aumenta 18 %.
+reglas de superficie siguen activas. A 8 m o menos se aplica la fuerza completa y disminuye hasta 52
+m. En móvil, una lectura válida actualiza memoria; un miss intenta el último edge hasta 70 m y
+conserva contacto durante 1 segundo o tres misses. El cuarto miss o el timeout permite offroad.
+Mantener giro manual reduce la corrección al 28 % para permitir una salida voluntaria. En controles
+táctiles la fuerza aumenta 18 %.
 
 La posición se interpola como máximo 12 % por paso y nunca se teletransporta. El rastreador pondera
 ruta activa, continuidad, heading, distancia, clase y arista previa; la histéresis evita oscilar

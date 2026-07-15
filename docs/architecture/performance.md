@@ -9,10 +9,11 @@ El game loop mantiene objetos imperativos por frame y entrega telemetría a Reac
 
 Con `VITE_ENABLE_DIAGNOSTICS=true npm run dev`, el panel muestra:
 
-- FPS, tiempo aproximado de frame, throttle, turn, puntero y crucero;
-- superficie, edge elegido, distancia, score y primeros candidatos viales;
+- FPS, tiempo aproximado de frame, throttle, turn, objetivo, marcha y tiempo del último gesto;
+- superficie, edge actual/anterior, distancia, misses, gracia, causa, score y candidatos viales;
 - búsqueda espacial, tiempo total de ruta, tiempo del worker y nodos expandidos;
-- aciertos/entradas de caché, carga, índice, memoria vial y heap cuando está disponible.
+- aciertos/entradas de caché, carga, índice, memoria vial y heap cuando está disponible;
+- commits de `MissionPanel`/bottom sheet y overlay activo con cantidad en espera.
 
 Los mismos valores relevantes se exponen como atributos `data-*` para Playwright. El panel requiere
 `import.meta.env.DEV`, por lo que no aparece en el build de producción aunque la variable se defina.
@@ -52,20 +53,21 @@ solicitud pendiente se cuentan como antiguas y no se aplican. El timeout es 4 s.
 sin Worker usa A* local como fallback, mientras una respuesta obsoleta se descarta para no reemplazar
 la ruta vigente. El router y su caché LRU de 32 entradas permanecen dentro del worker.
 
-## Tamaños del build v0.2.4
+## Tamaños del build v0.2.4.1
 
 - Grafo vial: 6,317,168 bytes; 17,083 nodos y 23,054 aristas.
 - Worker vial: 23.12 KiB sin comprimir.
-- CSS: 159.41 KiB, 28.16 KiB gzip.
-- Chunk inicial: 361.66 KiB, 105.62 KiB gzip.
-- `GameMap`: 79.25 KiB, 26.35 KiB gzip.
+- CSS: 166.39 KiB, 29.33 KiB gzip.
+- Chunk inicial: 372.48 KiB, 108.37 KiB gzip.
+- `GameMap`: 85.96 KiB, 28.03 KiB gzip.
 - Capa Three.js: 608.77 KiB, 154.48 KiB gzip.
 - Motor cartográfico diferido: 1,028.13 KiB, 273.19 KiB gzip.
 
-La ampliación incluye superficie vial, navegación sincronizada, marcadores adaptativos, tutorial
-compacto, joystick único y combustible. La validación de producción conserva una sola solicitud del
-grafo y A* dentro del worker; los valores de tiempo de la tabla v0.2.1 permanecen como referencia
-histórica hasta repetir una medición dedicada sin carga concurrente de Playwright.
+La ampliación incluye velocidad objetivo sin estado React por movimiento, memoria vial encapsulada,
+un único Marker de guía, mini navegador, sheet condicional y cola de overlays. La validación de
+producción conserva una sola solicitud del grafo y A* dentro del worker; los valores de tiempo de la
+tabla v0.2.1 permanecen como referencia histórica hasta repetir una medición dedicada sin carga
+concurrente de Playwright.
 
 Los nombres hash y tamaños pueden variar con el bundler. `npm run build`, `npm run test:e2e` y los
 atributos de diagnóstico son la fuente para una medición nueva; CI no fija umbrales de FPS de

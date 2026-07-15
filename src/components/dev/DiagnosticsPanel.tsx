@@ -11,6 +11,7 @@ interface RuntimeDiagnosticsSnapshot {
   frameMilliseconds: string;
   throttle: string;
   turn: string;
+  joystickMilliseconds: string;
   pointer: string;
   cruise: string;
   targetSpeed: string;
@@ -36,6 +37,9 @@ interface RuntimeDiagnosticsSnapshot {
   roadIndexMilliseconds: string;
   roadMemoryMegabytes: string;
   heapMemoryMegabytes: string;
+  missionPanelRenders: string;
+  journalSheetRenders: string;
+  activeOverlays: string;
 }
 
 const unavailable = '—';
@@ -48,6 +52,12 @@ function readRuntimeDiagnostics(
   input: InputController,
 ): RuntimeDiagnosticsSnapshot {
   const dataset = document.querySelector<HTMLElement>('.map-canvas')?.dataset;
+  const joystickDataset =
+    document.querySelector<HTMLElement>('.virtual-joystick')?.dataset;
+  const missionDataset =
+    document.querySelector<HTMLElement>('.mission-panel')?.dataset;
+  const overlayDataset =
+    document.querySelector<HTMLElement>('.overlay-manager')?.dataset;
   const fps = Number(dataset?.runtimeFps);
   const inputDiagnostics = input.getDiagnostics();
   return {
@@ -56,6 +66,7 @@ function readRuntimeDiagnostics(
       Number.isFinite(fps) && fps > 0 ? (1_000 / fps).toFixed(1) : unavailable,
     throttle: inputDiagnostics.throttle.toFixed(2),
     turn: inputDiagnostics.turn.toFixed(2),
+    joystickMilliseconds: value(joystickDataset?.processingMs, ' ms'),
     pointer: inputDiagnostics.pointerActive ? 'activo' : 'libre',
     cruise: inputDiagnostics.autoThrottleStatus,
     targetSpeed: `${inputDiagnostics.mobileCruise.targetSpeedKilometersPerHour.toFixed(0)} km/h`,
@@ -88,6 +99,11 @@ function readRuntimeDiagnostics(
     roadIndexMilliseconds: value(dataset?.roadIndexMs, ' ms'),
     roadMemoryMegabytes: value(dataset?.roadMemoryMb, ' MiB'),
     heapMemoryMegabytes: value(dataset?.memoryMb, ' MiB'),
+    missionPanelRenders: value(missionDataset?.renderCount),
+    journalSheetRenders: value(missionDataset?.sheetRenderCount),
+    activeOverlays: overlayDataset?.activeOverlay
+      ? `${overlayDataset.activeOverlay} (+${overlayDataset.queuedOverlays ?? '0'})`
+      : unavailable,
   };
 }
 
@@ -116,6 +132,8 @@ export function DiagnosticsPanel({ input }: DiagnosticsPanelProps) {
         <dd>
           {snapshot.throttle} / {snapshot.turn}
         </dd>
+        <dt>Tiempo joystick</dt>
+        <dd>{snapshot.joystickMilliseconds}</dd>
         <dt>Modo móvil</dt>
         <dd>{controlMode}</dd>
         <dt>Puntero / crucero</dt>
@@ -182,6 +200,12 @@ export function DiagnosticsPanel({ input }: DiagnosticsPanelProps) {
         <dd>
           {snapshot.roadMemoryMegabytes} / {snapshot.heapMemoryMegabytes}
         </dd>
+        <dt>Renders misión / sheet</dt>
+        <dd>
+          {snapshot.missionPanelRenders} / {snapshot.journalSheetRenders}
+        </dd>
+        <dt>Overlay activo / cola</dt>
+        <dd>{snapshot.activeOverlays}</dd>
       </dl>
     </details>
   );

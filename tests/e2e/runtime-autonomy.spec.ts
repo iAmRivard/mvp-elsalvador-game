@@ -130,6 +130,46 @@ async function interact(page: Page) {
   await page.keyboard.up('Space');
 }
 
+async function expandMissionJournal(page: Page) {
+  const details = page.getByRole('button', { name: 'Ver detalles' });
+  const expandMissions = page.getByRole('button', {
+    name: 'Expandir panel de misiones',
+  });
+  const viewObjective = page.getByRole('button', { name: /Ver objetivo/ });
+  if (await details.isVisible()) await details.click();
+  else if (await viewObjective.isVisible()) await viewObjective.click();
+  else if (await expandMissions.isVisible()) await expandMissions.click();
+  await page.getByRole('button', { name: 'Misiones', exact: true }).click();
+}
+
+async function abandonActiveMission(page: Page) {
+  const abandonMission = page.getByRole('button', { name: 'Abandonar misión' });
+  await abandonMission.scrollIntoViewIfNeeded();
+  await abandonMission.evaluate((element) =>
+    (element as HTMLButtonElement).click(),
+  );
+  await expect(
+    page.getByRole('complementary', { name: 'Panel de misiones' }),
+  ).not.toContainText('Abandonar misión');
+}
+
+async function startMissionFromList(
+  page: Page,
+  title: string,
+  buttonName: string | RegExp = 'Iniciar',
+) {
+  await expandMissionJournal(page);
+  const missionCard = page
+    .locator('.mission-list__item, .mission-optional')
+    .filter({
+      has: page.getByRole('heading', { name: title, exact: true }),
+    });
+  await expect(missionCard).toBeVisible();
+  await missionCard
+    .getByRole('button', { name: buttonName })
+    .evaluate((element) => (element as HTMLButtonElement).click());
+}
+
 test('carga el mapa sin solicitudes a terceros', async ({
   page,
   baseURL,
@@ -274,7 +314,11 @@ test('carga el mapa sin solicitudes a terceros', async ({
   const positionBeforeRecalculation = await page
     .getByTestId('player-position')
     .textContent();
-  await page.getByRole('button', { name: 'Recalcular ruta' }).click();
+  if (testInfo.project.name.includes('mobile')) {
+    await page.keyboard.press('r');
+  } else {
+    await page.getByRole('button', { name: 'Recalcular ruta' }).click();
+  }
   await page.keyboard.down('w');
   await expect(gameMap).toHaveAttribute('data-input-throttle', '1.000');
   await page.waitForTimeout(350);
@@ -284,21 +328,28 @@ test('carga el mapa sin solicitudes a terceros', async ({
     .poll(() => page.getByTestId('player-position').textContent())
     .not.toBe(positionBeforeRecalculation);
 
-  await page.getByRole('button', { name: 'Abandonar misión' }).click();
-  const suchitotoMission = page.locator('.mission-list__item').filter({
+  await abandonActiveMission(page);
+  await expandMissionJournal(page);
+  const suchitotoMission = page.locator('.mission-optional').filter({
     has: page.getByRole('heading', {
       name: 'Señales en Suchitoto',
       exact: true,
     }),
   });
-  await suchitotoMission.getByRole('button', { name: 'Iniciar' }).click();
+  await expect(suchitotoMission).toBeVisible();
+  await suchitotoMission
+    .getByRole('button', { name: 'Iniciar opcional' })
+    .evaluate((element) => (element as HTMLButtonElement).click());
+  await expect(
+    page.getByRole('complementary', { name: 'Panel de misiones' }),
+  ).toContainText('Señales en Suchitoto');
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'fallback');
   await expect(gameMap).toHaveAttribute(
     'data-mission-route-coordinate-count',
     '2',
   );
-  await page.getByRole('button', { name: 'Abandonar misión' }).click();
-  await firstMission.getByRole('button', { name: 'Iniciar' }).click();
+  await abandonActiveMission(page);
+  await startMissionFromList(page, 'La transmisión');
   await page.getByRole('button', { name: 'Comenzar investigación' }).click();
   await interact(page);
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road');

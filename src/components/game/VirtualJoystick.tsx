@@ -147,6 +147,7 @@ export function VirtualJoystick({
 
   const move = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (pointerIdRef.current !== event.pointerId) return;
+    const processingStartedAt = performance.now();
     event.preventDefault();
     event.stopPropagation();
     const deltaX = event.clientX - centerRef.current.x;
@@ -174,6 +175,11 @@ export function VirtualJoystick({
     } else {
       const normalized = applyDeadZone(visualX / radiusPixels, deadZone);
       input.setJoystickTurn(applyResponseCurve(normalized, responseExponent));
+    }
+    if (surfaceRef.current) {
+      surfaceRef.current.dataset.processingMs = (
+        performance.now() - processingStartedAt
+      ).toFixed(3);
     }
   };
 

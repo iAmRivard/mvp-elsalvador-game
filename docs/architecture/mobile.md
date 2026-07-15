@@ -7,11 +7,14 @@ orientación, tipo de puntero y zonas seguras del dispositivo. La entrada móvil
 ## Entrada analógica
 
 `InputController` conserva por separado teclado, botones de puntero, pedales táctiles, joystick de
-dirección, joystick de conducción y crucero. `setDriveJoystick()` actualiza throttle y turn de forma
-atómica; `snapshot()` limita cada eje a `[-1, 1]`. Teclado mantiene valores digitales, mientras los
-joysticks aplican clamp, zona muerta y curva de respuesta.
+dirección, joystick de conducción, crucero y velocidad objetivo. `setTargetSpeedJoystick()` recibe
+`verticalIntent` y giro sin convertir el gesto inmediatamente en throttle. El game loop llama
+`advanceMobileCruise()` y una respuesta proporcional compara objetivo y velocidad firmada.
+`snapshot()` limita cada eje a `[-1, 1]`; el gesto no escribe en Zustand ni en `localStorage`.
 
-`clearAllInput()` limpia teclas, punteros, timers, pedales, joystick, turbo, interacción y crucero.
+`clearAllInput()` limpia teclas, punteros, timers, pedales, joystick, turbo, interacción, crucero y
+objetivo móvil. La decisión de seguridad es cancelar el objetivo, no conservarlo, al pausar o perder
+foco. Centrar o soltar sólo el puntero usa `clearPointerActions()` y sí conserva el objetivo.
 Se ejecuta al perder foco o visibilidad, pausar, abrir un diálogo, cambiar modo u orientación,
 recuperar la partida, fallar una misión y desmontar el mapa. Liberar o cancelar un puntero también
 restaura su control sin dejar valores retenidos.
@@ -23,19 +26,25 @@ cancelan el temporizador.
 
 ## Modos
 
-- **Joystick único**, predeterminado para instalaciones nuevas: X gira y Y controla aceleración,
-  frenado y reversa. Al bajar mientras avanza primero frena hasta cero; sólo entonces aplica reversa
-  limitada a `0.55`. Mantiene Turbo, interacción, pausa y recentrado, sin pedales ni `AUTO` obligatorio.
+- **Velocidad objetivo**, predeterminado para instalaciones nuevas: arriba ajusta progresivamente
+  0–90 km/h, centrar mantiene el objetivo y X gira sin modificarlo. Abajo reduce, frena a cero y,
+  después de 350 ms casi detenido, activa reversa. El indicador muestra detenido, lento, crucero,
+  rápido, frenando o reversa. Turbo no modifica el objetivo.
+- **Joystick único**: conserva el throttle continuo de v0.2.4 como alternativa. X gira y Y controla
+  aceleración, frenado y reversa.
 - **Joystick + crucero**: el botón `AUTO` mantiene throttle `0.72`; comienza apagado y nunca se
   reactiva solo. Joystick queda a la izquierda; Turbo, freno e interacción quedan a la derecha.
 - **Joystick + pedales**: conserva acelerador y freno sostenidos como control manual.
 - **Botones clásicos**: conserva la cruceta digital completa como alternativa accesible.
 
 Documentos de preferencias existentes mantienen su modo. Un documento antiguo sin `controlMode`
-recibe `joystick-pedals`; sólo la ausencia total de preferencias usa el nuevo recomendado.
+recibe su fallback histórico; sólo la ausencia total de preferencias usa el nuevo recomendado. El
+aviso **Velocidad objetivo** se muestra una sola vez a instalaciones anteriores y permite probar o
+mantener sus controles.
 
 El joystick de conducción usa zonas muertas `0.12` horizontal y `0.16` vertical, exponentes `1.4`
-y `1.25`, umbral de freno `-0.18` y reversa máxima `0.55`. El joystick fijo tiene radio de 72 px,
+y `1.25` y dominancia vertical `1.12`; una intención horizontal aislada produce `verticalIntent=0`.
+El modo heredado conserva umbral de freno `-0.18` y reversa máxima `0.55`. El joystick fijo tiene radio de 72 px,
 knob de 30 px, zona muerta inicial `0.14` y curva `1.45`.
 También existe posición flotante dentro de una zona válida del lado izquierdo. Pointer Events,
 `setPointerCapture` y un ID activo único permiten touch, stylus y mouse; el centro no cambia durante
@@ -45,7 +54,7 @@ el gesto y el valor vuelve a cero al liberar, cancelar o perder captura.
 
 La sección **Controles móviles** permite modo, posición fija o flotante, tamaño pequeño/mediano/grande,
 zona muerta y vibración. La sensibilidad de dirección se aplica también al joystick. `settingsStore`
-usa versión 7: instalaciones nuevas eligen joystick único; documentos v1-v6 conservan su modo y
+usa versión 8: instalaciones nuevas eligen velocidad objetivo; documentos v1-v7 conservan su modo y
 reciben una recomendación descartable una sola vez.
 
 Los eventos hápticos son pulsos cortos para botón, turbo, offroad, colisión, condición, objetivo y crucero. Se
@@ -59,10 +68,15 @@ inclinación y recentrado. La atribución de MapLibre inicia compacta y su botó
 inferior central, fuera de joystick y pedales.
 
 La bitácora comienza contraída en pantallas de hasta 600 px o dispositivos táctiles de poca altura.
-Su CTA permite iniciar, continuar o ir al comienzo sin scroll. El tutorial usa una tarjeta movible
-de hasta 25% de la altura y pasa a un lateral en horizontal. La ayuda de combustible se coloca sobre
-los controles en vertical y en el espacio central en horizontal; pruebas geométricas impiden cruces
-con joystick y acciones. Todos los bordes usan `env(safe-area-inset-*)`.
+Al iniciar misión abre un resumen `half`; después de 2.5 segundos y al superar 5 km/h queda un mini
+navegador con maniobra, distancia y objetivo. **Ver objetivo** abre un bottom sheet al 55% (`half`),
+expandible al 85%, con handle, scroll interno y cierre sticky. No se renderiza el cuerpo completo al
+estar contraído.
+
+Una cola determinista permite sólo un overlay grande: recuperación/elección, narrativa, radio,
+descubrimiento e información. Radio usa hasta 25% de altura debajo del mini navegador; si coincide
+un descubrimiento, éste se vuelve toast compacto. La ayuda de combustible sólo aparece entre
+25–35%, bajo 25% o mientras hay ruta temporal. Todos los bordes usan `env(safe-area-inset-*)`.
 
 ## Perfil gráfico
 
@@ -79,11 +93,11 @@ puntero y movimiento reducido.
 
 ## Pruebas
 
-Playwright usa Chrome de escritorio, Pixel 7 vertical y Pixel 7 horizontal. Comprueba joystick único
-en diagonal, frenado, reversa, pérdida de foco, Turbo simultáneo, modos alternativos, persistencia,
-interacción, ausencia de scroll y separación geométrica de HUD, misión, combustible, joystick,
-acciones y atribución. La prueba de autonomía también inspecciona píxeles del canvas antes y después
-de conducir.
+Playwright usa Chrome de escritorio, Pixel 7 vertical y Pixel 7 horizontal. Comprueba incremento y
+retención de objetivo, giro aislado, frenado, reversa, limpieza por pausa, Turbo, modos alternativos,
+mini navegador, bottom sheet, radio, combustible contextual, persistencia de ruta y separación
+geométrica de HUD, chevrón, joystick, acciones y atribución. La prueba de autonomía también
+inspecciona píxeles del canvas antes y después de conducir.
 
 También abre contextos DPR 2 y 3 y confirma que el mapa no solicita sprites. La validación física y
 sus límites están en
