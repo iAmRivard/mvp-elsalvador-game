@@ -1,6 +1,5 @@
 import { fuelStationConfig } from '../../config/fuelStations.config';
 import { fuelStationById } from '../../data/fuelStations';
-import { estimateFuelRange } from '../../game/fuel';
 import {
   fuelAlertLevel,
   isFuelStationAvailable,
@@ -19,7 +18,6 @@ function formatDistance(distanceMeters: number): string {
 export function FuelAssist() {
   const telemetry = useGameStore((state) => state.telemetry);
   const vehicle = useGameStore((state) => state.vehicle);
-  const drivingSurface = useGameStore((state) => state.driving.surface);
   const currentChapterId = useGameStore((state) => state.currentChapterId);
   const navigationTarget = useGameStore((state) => state.navigationTarget);
   const activeMissionId = useGameStore((state) => state.activeMissionId);
@@ -65,90 +63,125 @@ export function FuelAssist() {
     telemetry.speedKilometersPerHour <=
     fuelStationConfig.maximumRefuelSpeedKilometersPerHour;
 
-  if (
-    (!nearby || telemetry.fuel >= vehicle.maximumFuel) &&
-    !alertLevel &&
-    !hasFuelRoute
-  ) {
-    return null;
-  }
+  if (!alertLevel && !hasFuelRoute) return null;
 
   if (nearby && telemetry.fuel < vehicle.maximumFuel) {
+    if (alertLevel === 'critical' || hasFuelRoute) {
+      return (
+        <aside
+          className="fuel-assist fuel-assist--station"
+          aria-label="Punto de combustible"
+          data-testid="fuel-assist"
+        >
+          <span className="fuel-assist__eyebrow">Punto de combustible</span>
+          <strong>{nearby.station.name}</strong>
+          <div className="fuel-assist__stats">
+            <span>Combustible actual: {telemetry.fuel.toFixed(0)}%</span>
+            <span>Costo: gratuito</span>
+          </div>
+          <button
+            type="button"
+            className="fuel-assist__primary"
+            disabled={!canRefuel}
+            onClick={() => refuelAtStation(nearby.station.id)}
+          >
+            {canRefuel ? 'Recargar' : 'Detente para recargar'}
+          </button>
+        </aside>
+      );
+    }
+
     return (
       <aside
-        className="fuel-assist fuel-assist--station"
+        className="fuel-assist fuel-assist--station fuel-assist--station-compact"
         aria-label="Punto de combustible"
         data-testid="fuel-assist"
       >
-        <span className="fuel-assist__eyebrow">Punto de combustible</span>
-        <strong>{nearby.station.name}</strong>
-        <div className="fuel-assist__stats">
-          <span>Combustible actual: {telemetry.fuel.toFixed(0)}%</span>
-          <span>Costo: gratuito</span>
-        </div>
         <button
           type="button"
-          className="fuel-assist__primary"
+          className="fuel-assist__compact"
+          title={nearby.station.name}
           disabled={!canRefuel}
           onClick={() => refuelAtStation(nearby.station.id)}
         >
-          {canRefuel ? 'Recargar' : 'Detente para recargar'}
+          <span aria-hidden="true">⛽</span>
+          <strong>{canRefuel ? 'Recargar' : 'Detente para recargar'}</strong>
+          <small>· {nearby.station.name}</small>
         </button>
       </aside>
     );
   }
 
+  if (hasFuelRoute && !selected) return null;
   if (!destination) return null;
 
-  const rangeKilometers =
-    estimateFuelRange(telemetry.fuel, drivingSurface) / 1_000;
-  const title =
-    alertLevel === 'critical'
-      ? 'Combustible crítico'
-      : alertLevel === 'low'
-        ? 'Combustible bajo'
-        : 'Ruta a combustible';
+  if (hasFuelRoute && selected) {
+    return (
+      <aside
+        className="fuel-assist fuel-assist--route"
+        aria-label="Ruta temporal a combustible"
+        data-testid="fuel-assist"
+      >
+        <span className="fuel-assist__eyebrow">
+          ⛽ Punto de combustible · {formatDistance(selected.distanceMeters)}
+        </span>
+        <strong>{selected.station.name}</strong>
+        <div className="fuel-assist__actions">
+          <button type="button" onClick={clearNavigationTarget}>
+            {activeMissionId ? 'Volver a misión' : 'Cancelar ruta'}
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
+  if (alertLevel === 'low') {
+    return (
+      <aside
+        className="fuel-assist fuel-assist--nearby"
+        aria-label="Estación de combustible cercana"
+        data-testid="fuel-assist"
+      >
+        <button
+          type="button"
+          className="fuel-assist__compact"
+          title={destination.station.name}
+          onClick={() => markFuelStationRoute(destination.station.id)}
+        >
+          <span aria-hidden="true">⛽</span>
+          <strong>Estación cercana</strong>
+          <small>· {formatDistance(destination.distanceMeters)}</small>
+        </button>
+      </aside>
+    );
+  }
 
   return (
     <aside
-      className={`fuel-assist ${alertLevel === 'critical' ? 'fuel-assist--critical' : ''}`}
-      aria-label={title}
+      className="fuel-assist fuel-assist--critical"
+      aria-label="Combustible bajo"
       data-testid="fuel-assist"
     >
-      <span className="fuel-assist__eyebrow">{title}</span>
+      <span className="fuel-assist__eyebrow">Combustible bajo</span>
       <strong>{destination.station.name}</strong>
       <small>
-        {alertLevel === 'critical'
-          ? `Autonomía aproximada: ${rangeKilometers.toFixed(0)} km`
-          : `Estación más cercana: ${formatDistance(destination.distanceMeters)}`}
+        Estación más cercana: {formatDistance(destination.distanceMeters)}
       </small>
       <div className="fuel-assist__actions">
         <button
           type="button"
           className="fuel-assist__primary"
-          disabled={hasFuelRoute}
           onClick={() => markFuelStationRoute(destination.station.id)}
         >
-          {hasFuelRoute
-            ? 'Ruta marcada'
-            : alertLevel === 'critical'
-              ? 'Ir a estación'
-              : 'Marcar ruta'}
+          Marcar ruta
         </button>
-        {alertLevel === 'critical' && (
-          <button
-            type="button"
-            disabled={canisterCount === 0}
-            onClick={useFuelCanister}
-          >
-            Usar bidón{canisterCount > 0 ? ` (${String(canisterCount)})` : ''}
-          </button>
-        )}
-        {hasFuelRoute && (
-          <button type="button" onClick={clearNavigationTarget}>
-            {activeMissionId ? 'Volver a misión' : 'Cancelar ruta'}
-          </button>
-        )}
+        <button
+          type="button"
+          disabled={canisterCount === 0}
+          onClick={useFuelCanister}
+        >
+          Usar bidón{canisterCount > 0 ? ` (${String(canisterCount)})` : ''}
+        </button>
       </div>
     </aside>
   );

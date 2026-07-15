@@ -32,9 +32,10 @@ describe('puntos narrativos de combustible', () => {
   });
 
   it('aplica los umbrales de HUD y el radio de interacción', () => {
-    expect(fuelAlertLevel(26)).toBeNull();
+    expect(fuelAlertLevel(36)).toBeNull();
+    expect(fuelAlertLevel(35)).toBe('low');
     expect(fuelAlertLevel(25)).toBe('low');
-    expect(fuelAlertLevel(10)).toBe('critical');
+    expect(fuelAlertLevel(24.9)).toBe('critical');
     expect(
       isWithinFuelStationRange(fuelStationConfig.interactionRadiusMeters),
     ).toBe(true);

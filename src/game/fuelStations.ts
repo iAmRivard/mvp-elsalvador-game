@@ -52,7 +52,7 @@ export function isWithinFuelStationRange(distanceMeters: number): boolean {
 }
 
 export function fuelAlertLevel(fuelPercent: number): FuelAlertLevel {
-  if (fuelPercent <= fuelStationConfig.criticalFuelThreshold) return 'critical';
+  if (fuelPercent < fuelStationConfig.criticalFuelThreshold) return 'critical';
   if (fuelPercent <= fuelStationConfig.lowFuelThreshold) return 'low';
   return null;
 }
