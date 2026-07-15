@@ -13,6 +13,8 @@ interface RuntimeDiagnosticsSnapshot {
   turn: string;
   pointer: string;
   cruise: string;
+  targetSpeed: string;
+  targetGear: string;
   roadStatus: string;
   roadSurface: string;
   roadEdge: string;
@@ -50,6 +52,10 @@ function readRuntimeDiagnostics(
     turn: inputDiagnostics.turn.toFixed(2),
     pointer: inputDiagnostics.pointerActive ? 'activo' : 'libre',
     cruise: inputDiagnostics.autoThrottleStatus,
+    targetSpeed: `${inputDiagnostics.mobileCruise.targetSpeedKilometersPerHour.toFixed(0)} km/h`,
+    targetGear: inputDiagnostics.mobileCruise.reversing
+      ? 'reverse'
+      : inputDiagnostics.mobileCruise.selectedGear,
     roadStatus: value(dataset?.roadNetworkStatus),
     roadSurface: value(dataset?.roadSurface),
     roadEdge: value(dataset?.roadSelectedEdge),
@@ -103,6 +109,10 @@ export function DiagnosticsPanel({ input }: DiagnosticsPanelProps) {
         <dt>Puntero / crucero</dt>
         <dd>
           {snapshot.pointer} / {snapshot.cruise}
+        </dd>
+        <dt>Objetivo / marcha</dt>
+        <dd>
+          {snapshot.targetSpeed} / {snapshot.targetGear}
         </dd>
         <dt>Red / superficie</dt>
         <dd>

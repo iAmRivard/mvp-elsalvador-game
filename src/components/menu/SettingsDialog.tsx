@@ -62,9 +62,14 @@ const mobileControlOptions: readonly {
   description: string;
 }[] = [
   {
+    value: 'target-speed-joystick',
+    label: 'Velocidad objetivo',
+    description: 'Ajusta y mantiene la marcha',
+  },
+  {
     value: 'single-drive-joystick',
-    label: 'Joystick simple',
-    description: 'Acelera, frena y gira',
+    label: 'Joystick continuo',
+    description: 'Throttle directo anterior',
   },
   {
     value: 'joystick-auto-throttle',

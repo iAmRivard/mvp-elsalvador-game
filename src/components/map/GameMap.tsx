@@ -610,6 +610,18 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             );
             containerRef.current.dataset.inputAutoThrottle =
               inputDiagnostics.autoThrottleStatus;
+            containerRef.current.dataset.inputTargetSpeed =
+              inputDiagnostics.mobileCruise.targetSpeedKilometersPerHour.toFixed(
+                1,
+              );
+            containerRef.current.dataset.inputCruiseGear =
+              inputDiagnostics.mobileCruise.selectedGear;
+            containerRef.current.dataset.inputCruiseBraking = String(
+              inputDiagnostics.mobileCruise.braking,
+            );
+            containerRef.current.dataset.inputCruiseReversing = String(
+              inputDiagnostics.mobileCruise.reversing,
+            );
           }
           if (roadTracker) {
             const metrics = roadTracker.getMetrics();
