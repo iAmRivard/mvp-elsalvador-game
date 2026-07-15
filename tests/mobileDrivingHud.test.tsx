@@ -58,5 +58,7 @@ describe('HUD móvil de conducción', () => {
       section: 'missions',
       revision: 1,
     });
+    expect(useGameStore.getState().isJournalOpen).toBe(true);
+    expect(screen.queryByTestId('mobile-driving-hud')).toBeNull();
   });
 });

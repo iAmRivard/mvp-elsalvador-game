@@ -31,7 +31,7 @@ function maneuverSymbol(type: NavigationInstructionType): string {
   }
 }
 
-export function MobileDrivingHud() {
+function MobileDrivingHudContent() {
   const hudRef = useRef<HTMLElement>(null);
   const renderCount = useRef(0);
   const presentationMode = useGameStore((state) => state.presentationMode);
@@ -51,16 +51,12 @@ export function MobileDrivingHud() {
         telemetry.latitude,
       ])
     : null;
-  const moving = Math.abs(telemetry.speedKilometersPerHour) >= 5;
-
   useEffect(() => {
     renderCount.current += 1;
     if (hudRef.current) {
       hudRef.current.dataset.renderCount = String(renderCount.current);
     }
   });
-
-  if (!moving && presentationMode === 'stopped') return null;
 
   const reversing = vehicleIsReversing(telemetry.speedMetersPerSecond);
 
@@ -123,4 +119,17 @@ export function MobileDrivingHud() {
       </div>
     </aside>
   );
+}
+
+export function MobileDrivingHud() {
+  const isJournalOpen = useGameStore((state) => state.isJournalOpen);
+  const presentationMode = useGameStore((state) => state.presentationMode);
+  const moving = useGameStore(
+    (state) => Math.abs(state.telemetry.speedKilometersPerHour) >= 5,
+  );
+
+  if (isJournalOpen || (!moving && presentationMode === 'stopped')) {
+    return null;
+  }
+  return <MobileDrivingHudContent />;
 }

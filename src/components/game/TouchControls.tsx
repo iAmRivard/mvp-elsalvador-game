@@ -30,7 +30,7 @@ const cruiseGearLabels = {
   fast: 'RÁPIDO',
 } as const;
 
-export function TouchControls({ input }: TouchControlsProps) {
+function TouchControlsContent({ input }: TouchControlsProps) {
   const [viewportScale, setViewportScale] = useState(() =>
     typeof window === 'undefined'
       ? 1
@@ -86,10 +86,27 @@ export function TouchControls({ input }: TouchControlsProps) {
   }, []);
 
   useEffect(() => {
-    input.clearAllInput();
+    if (useGameStore.getState().isJournalOpen) {
+      input.suspendForOverlay();
+      return;
+    }
+    const hasPreservedCruiseTarget =
+      targetSpeedJoystick &&
+      input.getMobileCruiseTarget().targetSpeedKilometersPerHour > 0;
+    if (!hasPreservedCruiseTarget) input.clearAllInput();
     input.setMobileCruiseEnabled(targetSpeedJoystick);
-    return () => input.clearAllInput();
   }, [controlMode, input, targetSpeedJoystick]);
+
+  useEffect(
+    () => () => {
+      if (useGameStore.getState().isJournalOpen) {
+        input.suspendForOverlay();
+      } else {
+        input.clearAllInput();
+      }
+    },
+    [input],
+  );
 
   useEffect(() => {
     input.clearPointerActions();
@@ -111,6 +128,7 @@ export function TouchControls({ input }: TouchControlsProps) {
       className={`touch-controls touch-controls--${controlMode}`}
       aria-label="Controles táctiles"
       data-control-mode={controlMode}
+      data-interaction-label={interactionLabel ?? undefined}
       onContextMenu={(event) => event.preventDefault()}
     >
       {controlMode === 'classic-buttons' ? (
@@ -184,4 +202,14 @@ export function TouchControls({ input }: TouchControlsProps) {
       )}
     </div>
   );
+}
+
+export function TouchControls({ input }: TouchControlsProps) {
+  const isJournalOpen = useGameStore((state) => state.isJournalOpen);
+
+  useEffect(() => {
+    if (isJournalOpen) input.suspendForOverlay();
+  }, [input, isJournalOpen]);
+
+  return isJournalOpen ? null : <TouchControlsContent input={input} />;
 }

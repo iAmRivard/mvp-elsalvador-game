@@ -48,6 +48,7 @@ describe('CTA móvil de misión', () => {
     expect(
       screen.getByRole('button', { name: 'Cerrar bitácora' }),
     ).toBeTruthy();
+    expect(useGameStore.getState().isJournalOpen).toBe(true);
     expect(screen.queryByText('Continuar misión')).toBeNull();
 
     act(() => {
@@ -61,6 +62,7 @@ describe('CTA móvil de misión', () => {
       }));
     });
     expect(screen.getByTestId('mobile-mini-navigator')).toBeTruthy();
+    expect(useGameStore.getState().isJournalOpen).toBe(false);
     expect(
       screen.getByRole('button', {
         name: 'Ver objetivo de La transmisión',
@@ -81,6 +83,10 @@ describe('CTA móvil de misión', () => {
     const panel = screen.getByLabelText('Panel de misiones');
     expect(panel.getAttribute('data-mobile-sheet-state')).toBe('half');
     expect(panel.classList.contains('mission-panel--journal-sheet')).toBe(true);
+    expect(useGameStore.getState()).toMatchObject({
+      isJournalOpen: true,
+      journalSection: 'missions',
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Expandir bitácora' }));
     expect(panel.getAttribute('data-mobile-sheet-state')).toBe('expanded');
@@ -91,6 +97,7 @@ describe('CTA móvil de misión', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar bitácora' }));
     expect(panel.getAttribute('data-mobile-sheet-state')).toBe('compact');
     expect(screen.getByTestId('mobile-mini-navigator')).toBeTruthy();
+    expect(useGameStore.getState().isJournalOpen).toBe(false);
   });
 
   it('oculta la guía de avance real mientras la velocidad firmada es reversa', () => {
@@ -154,5 +161,26 @@ describe('CTA móvil de misión', () => {
     render(<MissionPanel />);
 
     expect(screen.getByRole('button', { name: 'Ir al inicio' })).toBeTruthy();
+  });
+
+  it('oculta la CTA de misión durante onboarding y expone solo acciones reales', () => {
+    useGameStore.setState({ onboardingState: 'driving-basics' });
+    const { rerender } = render(<MissionPanel />);
+
+    expect(screen.queryByTestId('mobile-mission-cta')).toBeNull();
+
+    act(() => {
+      useGameStore.setState({
+        onboardingState: 'completed',
+        activeMissionId: 'la-transmision',
+      });
+    });
+    rerender(<MissionPanel />);
+    expect(screen.getByRole('button', { name: 'Escuchar señal' })).toBeTruthy();
+    expect(
+      screen
+        .getByLabelText('Panel de misiones')
+        .getAttribute('data-context-action'),
+    ).toBe('Escuchar señal');
   });
 });

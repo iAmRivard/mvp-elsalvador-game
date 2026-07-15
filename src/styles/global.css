@@ -1513,7 +1513,7 @@ html[data-tutorial-target='vehicle'] .player-marker--fallback-hidden {
 }
 
 html[data-tutorial-target='route'] .map-canvas,
-html[data-tutorial-target='target'] .map-canvas {
+html[data-tutorial-target='objective'] .map-canvas {
   box-shadow: inset 0 0 0 3px rgb(76 220 238 / 78%);
 }
 
@@ -1524,7 +1524,7 @@ html[data-tutorial-target='target'] .map-canvas {
   left: 50%;
   display: grid;
   width: min(390px, calc(100vw - 24px));
-  max-height: min(25dvh, 190px);
+  max-height: min(15dvh, 190px);
   padding: 10px 12px;
   overflow-y: auto;
   border: 1px solid rgb(230 183 95 / 48%);
@@ -4859,7 +4859,7 @@ html[data-fullscreen='true'] .game-shell {
   }
 
   html[data-tutorial-target='route'] .mobile-tutorial-card,
-  html[data-tutorial-target='target'] .mobile-tutorial-card,
+  html[data-tutorial-target='objective'] .mobile-tutorial-card,
   html[data-tutorial-target='journal'] .mobile-tutorial-card {
     top: max(142px, calc(env(safe-area-inset-top) + 134px));
     bottom: auto;
@@ -4914,7 +4914,7 @@ html[data-fullscreen='true'] .game-shell {
     bottom: max(8px, env(safe-area-inset-bottom));
     left: max(142px, calc(env(safe-area-inset-left) + 136px));
     width: min(320px, 38vw);
-    max-height: 24dvh;
+    max-height: 15dvh;
   }
 }
 
@@ -6456,7 +6456,7 @@ html[data-reduced-motion='true'] *::after {
     top: max(54px, calc(env(safe-area-inset-top) + 48px));
     left: max(8px, env(safe-area-inset-left));
     width: min(320px, 38vw);
-    max-height: calc(100dvh - 66px);
+    max-height: 15dvh;
     transform: none;
   }
 }
@@ -6755,7 +6755,7 @@ html[data-reduced-motion='true'] *::after {
   }
 
   html[data-tutorial-target='route'] .mobile-tutorial-card,
-  html[data-tutorial-target='target'] .mobile-tutorial-card,
+  html[data-tutorial-target='objective'] .mobile-tutorial-card,
   html[data-tutorial-target='journal'] .mobile-tutorial-card {
     top: max(142px, calc(env(safe-area-inset-top) + 134px));
     bottom: auto;
@@ -6769,6 +6769,100 @@ html[data-reduced-motion='true'] *::after {
     bottom: max(8px, env(safe-area-inset-bottom));
     left: max(142px, calc(env(safe-area-inset-left) + 136px));
     width: min(320px, 38vw);
-    max-height: 24dvh;
+    max-height: 15dvh;
+  }
+}
+
+/* v0.2.5.1 — compact stopped HUD and non-blocking update notice. */
+.player-hud--compact-stopped {
+  width: min(292px, calc(100vw - 48px));
+  padding: 14px 16px;
+}
+
+.player-hud--compact-stopped .progress-readout,
+.player-hud--compact-stopped .telemetry-grid,
+.player-hud--compact-stopped .condition-readout > small,
+.player-hud--compact-stopped
+  .surface-readout
+  small:not(.surface-readout__warning) {
+  display: none;
+}
+
+.player-hud--compact-stopped .surface-readout {
+  min-height: 42px;
+  margin-top: 8px;
+  padding: 8px 10px;
+}
+
+.player-hud--compact-stopped .vehicle-readouts {
+  margin-top: 8px;
+}
+
+.service-worker-update {
+  position: fixed;
+  z-index: 46;
+  top: max(64px, calc(env(safe-area-inset-top) + 56px));
+  left: 50%;
+  display: flex;
+  width: min(440px, calc(100vw - 24px));
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid rgb(49 200 219 / 42%);
+  border-radius: 9px;
+  color: #dcefeb;
+  background: rgb(8 29 28 / 96%);
+  box-shadow: 0 10px 26px rgb(0 0 0 / 34%);
+  font-size: 0.66rem;
+  line-height: 1.35;
+  transform: translateX(-50%);
+}
+
+.service-worker-update button {
+  min-height: 30px;
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid rgb(49 200 219 / 40%);
+  border-radius: 6px;
+  color: #102422;
+  background: #73dce4;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.service-worker-update button:disabled {
+  color: #a8bbb5;
+  background: rgb(255 255 255 / 8%);
+  cursor: default;
+}
+
+@media (max-width: 600px),
+  (max-width: 900px) and (pointer: coarse),
+  (max-height: 560px) and (pointer: coarse) {
+  .player-hud.player-hud--compact-stopped {
+    display: block;
+    width: min(224px, calc(100vw - 24px));
+    padding: 9px 11px;
+  }
+
+  .service-worker-update {
+    top: max(48px, calc(env(safe-area-inset-top) + 42px));
+    gap: 8px;
+    font-size: 0.58rem;
+  }
+
+  .service-worker-update button {
+    min-height: 28px;
+    padding-inline: 7px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .service-worker-update,
+  .service-worker-update button {
+    transition: none;
   }
 }

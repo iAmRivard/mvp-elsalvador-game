@@ -12,7 +12,10 @@ import {
   estimateFuelRange,
   fuelSufficiency,
 } from '../../game/fuel';
-import { interactionLabelForObjective } from '../../game/interactions';
+import {
+  interactionLabelForObjective,
+  objectiveRequiresManualInteraction,
+} from '../../game/interactions';
 import { selectedMissionChoiceOption } from '../../game/missionChoices';
 import {
   getRecommendedMission,
@@ -29,6 +32,7 @@ import {
 } from '../../map/navigationGuidance';
 import { useGameStore, type StoryLogSection } from '../../store/gameStore';
 import type { NavigationInstructionType } from '../../types/navigation';
+import { onboardingIsActive } from '../../types/onboarding';
 import type { StoryLogEntry } from '../../types/progression';
 
 const compactViewportQuery =
@@ -164,10 +168,13 @@ export function MissionPanel() {
   const panelCommitCount = useRef(0);
   const sheetCommitCount = useRef(0);
   const [compactViewport, setCompactViewport] = useState(isCompactViewport);
-  const [collapsed, setCollapsed] = useState(isCompactViewport);
-  const [sheetState, setSheetState] = useState<MobileJournalSheetState>(() =>
-    isCompactViewport() ? 'compact' : 'closed',
+  const [collapsed, setCollapsed] = useState(
+    () => !useGameStore.getState().isJournalOpen,
   );
+  const [sheetState, setSheetState] = useState<MobileJournalSheetState>(() => {
+    if (useGameStore.getState().isJournalOpen) return 'half';
+    return isCompactViewport() ? 'compact' : 'closed';
+  });
   const autoCollapseAt = useRef<number | null>(null);
   const sheetDrag = useRef<{
     pointerId: number;
@@ -177,8 +184,12 @@ export function MissionPanel() {
   } | null>(null);
   const suppressSheetHandleClick = useRef(false);
   const [section, setSection] = useState<StoryLogSection>(
-    () => useGameStore.getState().storyLogRequest.section,
+    () => useGameStore.getState().journalSection,
   );
+  const isJournalOpen = useGameStore((state) => state.isJournalOpen);
+  const openJournalStore = useGameStore((state) => state.openJournal);
+  const closeJournalStore = useGameStore((state) => state.closeJournal);
+  const onboardingState = useGameStore((state) => state.onboardingState);
   const telemetry = useGameStore((state) => state.telemetry);
   const presentationMode = useGameStore((state) => state.presentationMode);
   const driving = useGameStore((state) => state.driving);
@@ -214,11 +225,9 @@ export function MissionPanel() {
     telemetry.longitude,
     telemetry.latitude,
   ];
-  const recommendation = getRecommendedMission(
-    completedMissionIds,
-    activeMissionId,
-    coordinates,
-  );
+  const recommendation = activeMissionId
+    ? null
+    : getRecommendedMission(completedMissionIds, activeMissionId, coordinates);
   const recommendedMission =
     recommendation && recommendation.reason !== 'resume'
       ? missionById.get(recommendation.missionId)
@@ -231,12 +240,14 @@ export function MissionPanel() {
     missionChoiceSelections,
   );
   const fuelAtDestination =
-    missionRoute.distanceMeters === null
+    collapsed || missionRoute.distanceMeters === null
       ? null
       : estimateFuelAtDestination(missionRoute.distanceMeters, telemetry.fuel, {
           fuelMultiplier: selectedChoice?.fuelMultiplier ?? 1,
         });
-  const rangeMeters = estimateFuelRange(telemetry.fuel, driving.surface);
+  const rangeMeters = collapsed
+    ? 0
+    : estimateFuelRange(telemetry.fuel, driving.surface);
   const reversing = vehicleIsReversing(telemetry.speedMetersPerSecond);
   const navigationGuidance = navigationGuidanceMessage(
     missionRoute.activeNavigation,
@@ -245,20 +256,31 @@ export function MissionPanel() {
     driving.roadDistanceMeters,
     reversing,
   );
-  const optionalMissions = missions.filter(
-    (mission) => mission.optional && !completedMissionIds.includes(mission.id),
-  );
-  const lockedMissions = missions.filter(
-    (mission) =>
-      !mission.optional &&
-      !completedMissionIds.includes(mission.id) &&
-      mission.id !== recommendedMission?.id &&
-      missionBlockExplanation(mission, completedMissionIds, coordinates) !==
-        null,
-  );
-  const completedMissions = missions.filter((mission) =>
-    completedMissionIds.includes(mission.id),
-  );
+  const optionalMissions =
+    !collapsed && !active
+      ? missions.filter(
+          (mission) =>
+            mission.optional && !completedMissionIds.includes(mission.id),
+        )
+      : [];
+  const lockedMissions =
+    !collapsed && !active
+      ? missions.filter(
+          (mission) =>
+            !mission.optional &&
+            !completedMissionIds.includes(mission.id) &&
+            mission.id !== recommendedMission?.id &&
+            missionBlockExplanation(
+              mission,
+              completedMissionIds,
+              coordinates,
+            ) !== null,
+        )
+      : [];
+  const completedMissions =
+    !collapsed && !active
+      ? missions.filter((mission) => completedMissionIds.includes(mission.id))
+      : [];
   const compactMission = active ?? recommendedMission;
   const miniNavigationText = reversing
     ? 'Reversa · guía pausada'
@@ -272,6 +294,13 @@ export function MissionPanel() {
         : 'Sigue la ruta hacia el objetivo'));
   const miniNavigationDistance =
     missionRoute.distanceMeters ?? next?.distanceMeters ?? null;
+  const contextActionLabel =
+    next &&
+    objectiveRequiresManualInteraction(next.objective) &&
+    next.distanceMeters <= next.objective.radiusMeters
+      ? interactionLabelForObjective(next.objective)
+      : null;
+  const onboardingActive = onboardingIsActive(onboardingState);
 
   useEffect(() => {
     panelCommitCount.current += 1;
@@ -288,15 +317,33 @@ export function MissionPanel() {
     () =>
       useGameStore.subscribe((state, previousState) => {
         if (
+          state.isJournalOpen === previousState.isJournalOpen &&
+          state.journalSection === previousState.journalSection
+        ) {
+          return;
+        }
+        setSection(state.journalSection);
+        if (state.isJournalOpen) {
+          setSheetState('half');
+          setCollapsed(false);
+        } else {
+          setSheetState(compactViewport ? 'compact' : 'closed');
+          setCollapsed(true);
+        }
+      }),
+    [compactViewport],
+  );
+
+  useEffect(
+    () =>
+      useGameStore.subscribe((state, previousState) => {
+        if (
           state.storyLogRequest.revision ===
           previousState.storyLogRequest.revision
         ) {
           return;
         }
-        setSection(state.storyLogRequest.section);
         autoCollapseAt.current = null;
-        setSheetState('half');
-        setCollapsed(false);
       }),
     [],
   );
@@ -305,8 +352,11 @@ export function MissionPanel() {
     const compactQuery = window.matchMedia(compactViewportQuery);
     const handleCompactChange = (event: MediaQueryListEvent) => {
       setCompactViewport(event.matches);
-      setSheetState(event.matches ? 'compact' : 'closed');
-      setCollapsed(event.matches);
+      const journalOpen = useGameStore.getState().isJournalOpen;
+      setSheetState(
+        journalOpen ? 'half' : event.matches ? 'compact' : 'closed',
+      );
+      setCollapsed(!journalOpen);
     };
     compactQuery.addEventListener('change', handleCompactChange);
     return () =>
@@ -323,14 +373,16 @@ export function MissionPanel() {
           return;
         }
         if (state.activeMissionId) {
-          setSection('missions');
-          setSheetState('half');
-          setCollapsed(false);
-          autoCollapseAt.current = performance.now() + 2_500;
+          if (onboardingIsActive(state.onboardingState)) {
+            state.closeJournal();
+            autoCollapseAt.current = null;
+          } else {
+            state.openJournal('missions');
+            autoCollapseAt.current = performance.now() + 2_500;
+          }
         } else {
           autoCollapseAt.current = null;
-          setSheetState('compact');
-          setCollapsed(true);
+          state.closeJournal();
         }
       }),
     [compactViewport],
@@ -345,11 +397,10 @@ export function MissionPanel() {
     }
     autoCollapseAt.current = null;
     const timer = window.setTimeout(() => {
-      setSheetState('compact');
-      setCollapsed(true);
+      closeJournalStore();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [compactViewport, presentationMode]);
+  }, [closeJournalStore, compactViewport, presentationMode]);
 
   useEffect(
     () =>
@@ -364,8 +415,7 @@ export function MissionPanel() {
           return;
         }
         autoCollapseAt.current = null;
-        setSheetState('compact');
-        setCollapsed(true);
+        state.closeJournal();
       }),
     [compactViewport],
   );
@@ -373,14 +423,11 @@ export function MissionPanel() {
   const openJournal = (requestedSection: StoryLogSection = 'missions') => {
     dismissDiscovery();
     autoCollapseAt.current = null;
-    setSection(requestedSection);
-    setSheetState('half');
-    setCollapsed(false);
+    openJournalStore(requestedSection);
   };
   const closeJournal = () => {
     autoCollapseAt.current = null;
-    setSheetState(compactViewport ? 'compact' : 'closed');
-    setCollapsed(true);
+    closeJournalStore();
   };
   const beginSheetDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!compactViewport || collapsed) return;
@@ -425,6 +472,8 @@ export function MissionPanel() {
       className={`mission-panel ${collapsed ? 'mission-panel--collapsed' : ''} ${compactViewport && !collapsed ? `mission-panel--journal-sheet mission-panel--sheet-${sheetState}` : ''}`}
       aria-label="Panel de misiones"
       data-mobile-sheet-state={compactViewport ? sheetState : 'closed'}
+      data-journal-open={isJournalOpen}
+      data-context-action={contextActionLabel ?? undefined}
       onPointerDown={(event) => event.stopPropagation()}
       onWheel={(event) => event.stopPropagation()}
     >
@@ -520,7 +569,7 @@ export function MissionPanel() {
         </section>
       )}
 
-      {collapsed && !active && compactMission && (
+      {collapsed && !active && compactMission && !onboardingActive && (
         <section
           className="mission-panel__collapsed-cta"
           aria-label="Siguiente misión"
@@ -562,7 +611,7 @@ export function MissionPanel() {
                 key={tab}
                 type="button"
                 aria-pressed={section === tab}
-                onClick={() => setSection(tab)}
+                onClick={() => openJournalStore(tab)}
               >
                 {tabLabels[tab]}
               </button>
@@ -702,20 +751,17 @@ export function MissionPanel() {
                 </ul>
               </section>
 
-              {next &&
-                ['interact', 'deliver', 'repair', 'refuel', 'choice'].includes(
-                  next.objective.type,
-                ) &&
-                next.distanceMeters <= next.objective.radiusMeters && (
-                  <button
-                    type="button"
-                    className="mission-context-action"
-                    onClick={() => advanceActiveMission(telemetry, true, 0)}
-                  >
-                    <kbd>E</kbd>
-                    <span>{interactionLabelForObjective(next.objective)}</span>
-                  </button>
-                )}
+              {contextActionLabel && (
+                <button
+                  type="button"
+                  className="mission-context-action"
+                  aria-label={contextActionLabel}
+                  onClick={() => advanceActiveMission(telemetry, true, 0)}
+                >
+                  <kbd>E</kbd>
+                  <span>{contextActionLabel}</span>
+                </button>
+              )}
 
               <section className="mission-rewards" aria-label="Recompensas">
                 <span className="mission-section-label">Recompensa</span>

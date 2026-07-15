@@ -2,10 +2,9 @@ import { useEffect, useRef } from 'react';
 import { narrativeEventById } from '../../data/chapter1';
 import { useGameStore } from '../../store/gameStore';
 
-const AUTO_CLOSE_MILLISECONDS = 12_000;
 const DRIVING_AUTO_CLOSE_MILLISECONDS = 10_000;
 
-export function RadioMessageOverlay() {
+function RadioMessageContent() {
   const compactMessageRef = useRef<HTMLButtonElement>(null);
   const fullMessageRef = useRef<HTMLElement>(null);
   const eventId = useGameStore((state) => state.activeRadioEventId);
@@ -21,11 +20,8 @@ export function RadioMessageOverlay() {
     Math.abs(speedKilometersPerHour) >= 5 && presentationMode !== 'stopped';
 
   useEffect(() => {
-    if (!event) return;
-    const timer = window.setTimeout(
-      dismiss,
-      compact ? DRIVING_AUTO_CLOSE_MILLISECONDS : AUTO_CLOSE_MILLISECONDS,
-    );
+    if (!event || !compact) return;
+    const timer = window.setTimeout(dismiss, DRIVING_AUTO_CLOSE_MILLISECONDS);
     return () => window.clearTimeout(timer);
   }, [compact, dismiss, event]);
 
@@ -106,4 +102,9 @@ export function RadioMessageOverlay() {
       </aside>
     </div>
   );
+}
+
+export function RadioMessageOverlay() {
+  const isJournalOpen = useGameStore((state) => state.isJournalOpen);
+  return isJournalOpen ? null : <RadioMessageContent />;
 }

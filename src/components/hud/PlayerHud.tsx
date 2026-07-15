@@ -4,9 +4,10 @@ import { experienceProgress } from '../../game/progression';
 import { conditionWarningCopy } from '../../game/conditionWarnings';
 import { triggerHaptic } from '../../game/haptics';
 import { useSettingsStore } from '../../store/settingsStore';
-import { roadSurfaceLabels } from '../../config/roadHandling.config';
 import { locations } from '../../data/locations';
 import { fuelStationConfig } from '../../config/fuelStations.config';
+import { onboardingIsActive } from '../../types/onboarding';
+import { effectiveDrivingSurfaceLabel } from '../../game/drivingPresentation';
 
 const compassPoints = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'] as const;
 
@@ -14,12 +15,26 @@ function compassPoint(heading: number): string {
   return compassPoints[Math.round(heading / 45) % compassPoints.length];
 }
 
-export function PlayerHud() {
+function PlayerHudContent() {
   const hudRef = useRef<HTMLElement>(null);
   const renderCount = useRef(0);
-  const [expandedWhileDriving, setExpandedWhileDriving] = useState(false);
+  const [expandedWhileStopped, setExpandedWhileStopped] = useState(false);
+  const [stoppedLongEnough, setStoppedLongEnough] = useState(false);
   const telemetry = useGameStore((state) => state.telemetry);
   const presentationMode = useGameStore((state) => state.presentationMode);
+  const onboardingState = useGameStore((state) => state.onboardingState);
+  const isPaused = useGameStore((state) => state.isPaused);
+  const recoveryReason = useGameStore((state) => state.recoveryReason);
+  const activeNarrativeEventId = useGameStore(
+    (state) => state.activeNarrativeEventId,
+  );
+  const activeRadioEventId = useGameStore((state) => state.activeRadioEventId);
+  const activeMissionChoiceObjectiveId = useGameStore(
+    (state) => state.activeMissionChoiceObjectiveId,
+  );
+  const lastDiscoveredLocationId = useGameStore(
+    (state) => state.lastDiscoveredLocationId,
+  );
   const isFollowingPlayer = useGameStore((state) => state.isFollowingPlayer);
   const discoveredCount = useGameStore(
     (state) => state.discoveredLocationIds.length,
@@ -29,6 +44,9 @@ export function PlayerHud() {
   const energy = useGameStore((state) => state.energy);
   const maxEnergy = useGameStore((state) => state.maxEnergy);
   const driving = useGameStore((state) => state.driving);
+  const insideValidObjectiveZone = useGameStore(
+    (state) => state.insideValidObjectiveZone,
+  );
   const vehicle = useGameStore((state) => state.vehicle);
   const conditionWarning = useGameStore((state) => state.conditionWarning);
   const dismissConditionWarning = useGameStore(
@@ -39,16 +57,40 @@ export function PlayerHud() {
     state.inventory.reduce((total, entry) => total + entry.quantity, 0),
   );
   const progress = experienceProgress(experience);
-  const compactDriving =
-    Math.abs(telemetry.speedKilometersPerHour) >= 5 &&
-    presentationMode !== 'stopped' &&
-    !expandedWhileDriving;
+  const stopped = Math.abs(telemetry.speedKilometersPerHour) < 3;
+  const expansionBlocked =
+    presentationMode !== 'stopped' ||
+    isPaused ||
+    onboardingIsActive(onboardingState) ||
+    Boolean(
+      recoveryReason ||
+      activeNarrativeEventId ||
+      activeRadioEventId ||
+      activeMissionChoiceObjectiveId ||
+      lastDiscoveredLocationId,
+    );
+  const canExpandWhileStopped =
+    stopped && stoppedLongEnough && !expansionBlocked;
+  const compactStopped = stopped && !expandedWhileStopped;
+  const compactDriving = !stopped;
 
   useEffect(() => {
-    if (presentationMode !== 'stopped') return;
-    const timer = window.setTimeout(() => setExpandedWhileDriving(false), 0);
+    if (!stopped) {
+      const resetTimer = window.setTimeout(() => {
+        setStoppedLongEnough(false);
+        setExpandedWhileStopped(false);
+      }, 0);
+      return () => window.clearTimeout(resetTimer);
+    }
+    const timer = window.setTimeout(() => setStoppedLongEnough(true), 3_000);
     return () => window.clearTimeout(timer);
-  }, [presentationMode]);
+  }, [stopped]);
+
+  useEffect(() => {
+    if (!expansionBlocked) return;
+    const timer = window.setTimeout(() => setExpandedWhileStopped(false), 0);
+    return () => window.clearTimeout(timer);
+  }, [expansionBlocked]);
 
   useEffect(() => {
     renderCount.current += 1;
@@ -68,23 +110,28 @@ export function PlayerHud() {
     <>
       <aside
         ref={hudRef}
-        className={`player-hud ${compactDriving ? 'player-hud--compact-driving' : ''} ${telemetry.fuel <= fuelStationConfig.lowFuelThreshold ? 'player-hud--fuel-low' : ''} ${telemetry.fuel <= fuelStationConfig.criticalFuelThreshold ? 'player-hud--fuel-critical' : ''}`}
+        className={`player-hud ${compactDriving ? 'player-hud--compact-driving' : ''} ${compactStopped ? 'player-hud--compact-stopped' : ''} ${telemetry.fuel <= fuelStationConfig.lowFuelThreshold ? 'player-hud--fuel-low' : ''} ${telemetry.fuel < fuelStationConfig.criticalFuelThreshold ? 'player-hud--fuel-critical' : ''}`}
         aria-label="Estado del jugador"
         data-presentation-mode={presentationMode}
+        data-stopped-for-three-seconds={stoppedLongEnough}
       >
-        {Math.abs(telemetry.speedKilometersPerHour) >= 5 && (
+        {stopped && (canExpandWhileStopped || expandedWhileStopped) && (
           <button
             type="button"
             className="player-hud__expand"
             aria-label={
-              expandedWhileDriving
-                ? 'Contraer información de conducción'
-                : 'Expandir información de conducción'
+              expandedWhileStopped
+                ? 'Contraer información del vehículo'
+                : 'Expandir información del vehículo'
             }
-            aria-expanded={expandedWhileDriving}
-            onClick={() => setExpandedWhileDriving((current) => !current)}
+            aria-expanded={expandedWhileStopped}
+            onClick={() =>
+              setExpandedWhileStopped((current) =>
+                current ? false : canExpandWhileStopped,
+              )
+            }
           >
-            {expandedWhileDriving ? '−' : '+'}
+            {expandedWhileStopped ? '−' : '+'}
           </button>
         )}
         <div className="progress-readout">
@@ -148,7 +195,10 @@ export function PlayerHud() {
                 ? 'Analizando vías'
                 : driving.roadNetworkStatus === 'unavailable'
                   ? 'Conducción libre'
-                  : roadSurfaceLabels[driving.surface]}
+                  : effectiveDrivingSurfaceLabel(
+                      driving.surface,
+                      insideValidObjectiveZone,
+                    )}
             </strong>
           </div>
           {driving.movementBlockedBy ? (
@@ -195,7 +245,7 @@ export function PlayerHud() {
             </div>
             {telemetry.fuel <= fuelStationConfig.lowFuelThreshold && (
               <small className="fuel-warning" role="status">
-                {telemetry.fuel <= fuelStationConfig.criticalFuelThreshold
+                {telemetry.fuel < fuelStationConfig.criticalFuelThreshold
                   ? 'Combustible crítico'
                   : 'Combustible bajo'}
               </small>
@@ -258,4 +308,9 @@ export function PlayerHud() {
       )}
     </>
   );
+}
+
+export function PlayerHud() {
+  const isJournalOpen = useGameStore((state) => state.isJournalOpen);
+  return isJournalOpen ? null : <PlayerHudContent />;
 }

@@ -1,12 +1,21 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NarrativeDialog } from '../src/components/story/NarrativeDialog';
 import { RadioMessageOverlay } from '../src/components/story/RadioMessageOverlay';
 import { useGameStore } from '../src/store/gameStore';
 
-afterEach(cleanup);
+afterEach(() => {
+  vi.useRealTimers();
+  cleanup();
+});
 
 describe('presentación narrativa', () => {
   beforeEach(() => {
@@ -38,6 +47,7 @@ describe('presentación narrativa', () => {
       section: 'transmissions',
       revision: 1,
     });
+    expect(useGameStore.getState().isJournalOpen).toBe(true);
     expect(useGameStore.getState().activeRadioEventId).toBeNull();
   });
 
@@ -64,6 +74,37 @@ describe('presentación narrativa', () => {
     expect(useGameStore.getState().storyLogRequest.section).toBe(
       'transmissions',
     );
+  });
+
+  it('auto-cierra la radio compacta a los 10 s pero conserva la completa detenida', () => {
+    vi.useFakeTimers();
+    useGameStore.setState({
+      activeRadioEventId: 'radio-ruta-occidental',
+    });
+    const { rerender } = render(<RadioMessageOverlay />);
+
+    act(() => {
+      vi.advanceTimersByTime(12_000);
+    });
+    expect(useGameStore.getState().activeRadioEventId).toBe(
+      'radio-ruta-occidental',
+    );
+
+    act(() => {
+      useGameStore.setState((state) => ({
+        presentationMode: 'fast',
+        telemetry: {
+          ...state.telemetry,
+          speedMetersPerSecond: 17,
+          speedKilometersPerHour: 61.2,
+        },
+      }));
+    });
+    rerender(<RadioMessageOverlay />);
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(useGameStore.getState().activeRadioEventId).toBeNull();
   });
 
   it('la introducción de capítulo pausa y lo comunica', () => {
