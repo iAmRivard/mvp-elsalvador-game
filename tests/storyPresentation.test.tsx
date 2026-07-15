@@ -32,7 +32,7 @@ describe('presentación narrativa', () => {
       activeRadioEventId: 'radio-ruta-occidental',
     });
     render(<RadioMessageOverlay />);
-    fireEvent.click(screen.getByRole('button', { name: 'Abrir bitácora' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bitácora' }));
 
     expect(useGameStore.getState().storyLogRequest).toMatchObject({
       section: 'transmissions',
