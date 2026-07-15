@@ -24,9 +24,13 @@ describe('CTA móvil de misión', () => {
     });
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+  });
 
-  it('reemplaza la tarjeta activa por el mini navegador', () => {
+  it('muestra el resumen y lo colapsa al moverse tras 2.5 segundos', () => {
+    vi.useFakeTimers();
     render(<MissionPanel />);
 
     expect(screen.getByTestId('mobile-mission-cta')).toBeTruthy();
@@ -36,6 +40,26 @@ describe('CTA móvil de misión', () => {
     act(() => {
       useGameStore.setState({ activeMissionId: 'la-transmision' });
     });
+    expect(
+      screen
+        .getByLabelText('Panel de misiones')
+        .getAttribute('data-mobile-sheet-state'),
+    ).toBe('half');
+    expect(
+      screen.getByRole('button', { name: 'Cerrar bitácora' }),
+    ).toBeTruthy();
+    expect(screen.queryByText('Continuar misión')).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(2_600);
+      useGameStore.setState((state) => ({
+        telemetry: {
+          ...state.telemetry,
+          speedMetersPerSecond: 2,
+          speedKilometersPerHour: 7.2,
+        },
+      }));
+    });
     expect(screen.getByTestId('mobile-mini-navigator')).toBeTruthy();
     expect(
       screen.getByRole('button', {
@@ -43,6 +67,30 @@ describe('CTA móvil de misión', () => {
       }),
     ).toBeTruthy();
     expect(screen.queryByText('Continuar misión')).toBeNull();
+  });
+
+  it('abre la bitácora como bottom sheet y alterna 55%/85%', () => {
+    useGameStore.setState({ activeMissionId: 'la-transmision' });
+    render(<MissionPanel />);
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Ver objetivo de La transmisión',
+      }),
+    );
+    const panel = screen.getByLabelText('Panel de misiones');
+    expect(panel.getAttribute('data-mobile-sheet-state')).toBe('half');
+    expect(panel.classList.contains('mission-panel--journal-sheet')).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expandir bitácora' }));
+    expect(panel.getAttribute('data-mobile-sheet-state')).toBe('expanded');
+    expect(panel.classList.contains('mission-panel--sheet-expanded')).toBe(
+      true,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar bitácora' }));
+    expect(panel.getAttribute('data-mobile-sheet-state')).toBe('compact');
+    expect(screen.getByTestId('mobile-mini-navigator')).toBeTruthy();
   });
 
   it('oculta la guía de avance real mientras la velocidad firmada es reversa', () => {

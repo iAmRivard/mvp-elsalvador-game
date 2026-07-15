@@ -5823,6 +5823,10 @@ html[data-reduced-motion='true'] *::after {
   text-transform: uppercase;
 }
 
+.mission-panel__drag-handle {
+  display: none;
+}
+
 .mission-panel__collapsed-cta {
   display: grid;
   gap: 3px;
@@ -5896,6 +5900,98 @@ html[data-reduced-motion='true'] *::after {
     position: sticky;
     bottom: 0;
     z-index: 2;
+  }
+}
+
+@media (max-width: 600px), (max-height: 560px) and (pointer: coarse) {
+  .mission-panel--journal-sheet {
+    position: fixed;
+    top: auto !important;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: 0;
+    display: flex;
+    width: min(520px, calc(100% - 24px));
+    height: min(55dvh, 520px);
+    max-height: 55dvh;
+    flex-direction: column;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -18px 54px rgb(0 0 0 / 48%);
+    touch-action: pan-y;
+  }
+
+  .mission-panel--journal-sheet.mission-panel--sheet-expanded {
+    height: 85dvh;
+    max-height: 85dvh;
+  }
+
+  .mission-panel--journal-sheet .mission-panel__drag-handle {
+    display: grid;
+    width: 100%;
+    height: 22px;
+    flex: 0 0 auto;
+    padding: 0;
+    place-items: center;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    cursor: ns-resize;
+    touch-action: none;
+  }
+
+  .mission-panel__drag-handle > span {
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgb(225 237 229 / 38%);
+  }
+
+  .mission-panel--journal-sheet .mission-panel__header {
+    position: sticky;
+    z-index: 5;
+    top: 0;
+    flex: 0 0 auto;
+    padding: 7px 12px 9px 14px;
+    background: rgb(12 28 26 / 98%);
+  }
+
+  .mission-panel--journal-sheet .mission-tabs {
+    position: sticky;
+    z-index: 4;
+    top: 0;
+    flex: 0 0 auto;
+    background: rgb(12 28 26 / 98%);
+  }
+
+  .mission-panel--journal-sheet .mission-panel__body {
+    min-height: 0;
+    max-height: none !important;
+    flex: 1 1 auto;
+    overscroll-behavior: contain;
+    overflow-y: auto;
+    touch-action: pan-y;
+  }
+
+  .mission-panel--journal-sheet .mission-route-summary {
+    position: sticky;
+    z-index: 3;
+    top: 0;
+    background: rgb(22 36 29 / 98%);
+    backdrop-filter: blur(12px);
+  }
+
+  .mission-panel--journal-sheet .mission-context-action,
+  .mission-panel--journal-sheet .mission-button--primary {
+    position: sticky;
+    z-index: 4;
+    bottom: 0;
+  }
+}
+
+@media (max-width: 600px) and (orientation: portrait) {
+  .mission-panel--journal-sheet {
+    right: 0;
+    left: 0;
+    width: 100%;
   }
 }
 
@@ -5987,5 +6083,161 @@ html[data-reduced-motion='true'] *::after {
 
   .game-shell:has(.fuel-assist) .gameplay-toast {
     bottom: max(160px, calc(env(safe-area-inset-bottom) + 154px));
+  }
+}
+
+.overlay-manager {
+  display: contents;
+}
+
+@media (max-width: 900px), (pointer: coarse) {
+  .discovery-toast--compact {
+    top: auto;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(184px, calc(env(safe-area-inset-bottom) + 174px));
+    left: auto;
+    grid-template-columns: 24px minmax(0, 1fr) 24px;
+    gap: 7px;
+    width: min(230px, calc(100% - 24px));
+    padding: 6px 7px;
+    border-radius: 9px;
+  }
+
+  .discovery-toast--compact .discovery-toast__icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .discovery-toast--compact div > span,
+  .discovery-toast--compact small {
+    display: none;
+  }
+
+  .discovery-toast--compact strong {
+    margin: 0;
+    font-family: inherit;
+    font-size: 0.66rem;
+    font-weight: 750;
+  }
+
+  .discovery-toast--compact button {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+@media (max-width: 600px) and (orientation: portrait) {
+  .radio-message {
+    top: max(270px, calc(env(safe-area-inset-top) + 260px));
+    right: max(12px, env(safe-area-inset-right));
+    bottom: auto;
+    left: max(12px, env(safe-area-inset-left));
+    width: auto;
+    max-height: 25dvh;
+    padding: 9px 10px;
+    overflow: hidden;
+  }
+
+  .radio-message__speaker {
+    margin-top: 6px;
+  }
+
+  .radio-message > p:not(.radio-message__objective) {
+    display: -webkit-box;
+    overflow: hidden;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .radio-message__objective {
+    display: none;
+  }
+
+  .radio-message footer {
+    margin-top: 7px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 560px) and (pointer: coarse) {
+  .radio-message {
+    top: max(54px, calc(env(safe-area-inset-top) + 48px));
+    right: max(12px, env(safe-area-inset-right));
+    bottom: auto;
+    left: auto;
+    width: min(310px, calc(100% - 420px));
+    max-height: 25dvh;
+    padding: 6px 8px;
+    overflow: hidden;
+  }
+
+  .radio-message header {
+    grid-template-columns: 22px minmax(0, 1fr) 22px;
+    gap: 6px;
+  }
+
+  .radio-message header > span,
+  .radio-message header > button {
+    width: 22px;
+    height: 22px;
+  }
+
+  .radio-message__speaker {
+    margin-top: 3px;
+  }
+
+  .radio-message > p:not(.radio-message__objective) {
+    display: -webkit-box;
+    margin-top: 2px;
+    overflow: hidden;
+    line-height: 1.25;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .radio-message__objective {
+    display: none;
+  }
+
+  .radio-message footer {
+    margin-top: 4px;
+  }
+
+  .radio-message footer button {
+    min-height: 24px;
+    padding: 3px 7px;
+  }
+
+  .discovery-toast--compact {
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 600px) and (orientation: portrait) {
+  .touch-controls--single-drive-joystick .touch-button--interact,
+  .touch-controls--target-speed-joystick .touch-button--interact {
+    position: fixed;
+    bottom: max(172px, calc(env(safe-area-inset-bottom) + 162px));
+    left: max(18px, calc(env(safe-area-inset-left) + 8px));
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 7px;
+    width: 132px;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 10px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 560px) and (pointer: coarse) {
+  .touch-controls--single-drive-joystick .touch-button--interact,
+  .touch-controls--target-speed-joystick .touch-button--interact {
+    position: fixed;
+    bottom: max(126px, calc(env(safe-area-inset-bottom) + 118px));
+    left: max(12px, calc(env(safe-area-inset-left) + 6px));
+    width: 116px;
+    height: 36px;
+    border-radius: 9px;
   }
 }
