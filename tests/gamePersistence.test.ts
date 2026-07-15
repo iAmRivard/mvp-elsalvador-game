@@ -126,6 +126,7 @@ const game: PersistedGameData = {
   currentChapterId: 'chapter-1',
   completedChapterIds: [],
   roadNetworkVersion: 1,
+  navigationTarget: null,
   isPaused: false,
   isFollowingPlayer: true,
 };
@@ -209,6 +210,59 @@ describe('guardado versionado', () => {
         'camino-hacia-santa-ana': 'north',
       });
       expect(result.save.game.storyLogEntries).toHaveLength(1);
+    }
+  });
+
+  it('persiste únicamente la identidad del destino temporal', () => {
+    const result = parseGameSave(
+      JSON.stringify(
+        createGameSave({
+          ...game,
+          navigationTarget: {
+            kind: 'fuel-station',
+            id: 'abastecimiento-san-salvador',
+          },
+        }),
+      ),
+    );
+
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.save.game.navigationTarget).toEqual({
+        kind: 'fuel-station',
+        id: 'abastecimiento-san-salvador',
+      });
+    }
+  });
+
+  it('migra v3 sin destino y descarta destinos mal formados', () => {
+    const versionThree = createGameSave(game) as unknown as {
+      version: number;
+      game: Record<string, unknown>;
+    };
+    versionThree.version = 3;
+    delete versionThree.game.navigationTarget;
+    const migrated = parseGameSave(JSON.stringify(versionThree));
+    const malformed = parseGameSave(
+      JSON.stringify(
+        createGameSave({
+          ...game,
+          navigationTarget: {
+            kind: 'fuel-station',
+            id: 'abastecimiento-san-salvador',
+          },
+        }),
+      ).replace('"kind":"fuel-station"', '"kind":"external"'),
+    );
+
+    expect(migrated.status).toBe('loaded');
+    if (migrated.status === 'loaded') {
+      expect(migrated.migrated).toBe(true);
+      expect(migrated.save.game.navigationTarget).toBeNull();
+    }
+    expect(malformed.status).toBe('loaded');
+    if (malformed.status === 'loaded') {
+      expect(malformed.save.game.navigationTarget).toBeNull();
     }
   });
 

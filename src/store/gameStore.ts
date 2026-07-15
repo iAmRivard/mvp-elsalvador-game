@@ -69,6 +69,7 @@ import {
   clearGameSave,
   loadGameFromStorage,
   type PersistedGameData,
+  type PersistedNavigationTarget,
   writeGameSave,
 } from './gamePersistence';
 
@@ -155,12 +156,12 @@ interface GameData {
   currentChapterId: string;
   completedChapterIds: string[];
   roadNetworkVersion: number;
+  navigationTarget: NavigationTarget | null;
 }
 
 interface GameStore extends GameData {
   driving: DrivingRuntimeState;
   missionRoute: MissionRouteRuntimeState;
-  navigationTarget: NavigationTarget | null;
   temporarilyClosedRoadEdgeIds: number[];
   recoveryReason: RecoveryReason | null;
   conditionWarning: ConditionWarningLevel | null;
@@ -426,10 +427,51 @@ function defaultGameData(): GameData {
     currentChapterId: 'chapter-1',
     completedChapterIds: [],
     roadNetworkVersion: 2,
+    navigationTarget: null,
+  };
+}
+
+function restoreNavigationTarget(
+  target: PersistedNavigationTarget | null,
+  chapterId: string,
+  unlockedLocationIds: readonly string[],
+): NavigationTarget | null {
+  if (!target) return null;
+  if (target.kind === 'fuel-station') {
+    const station = fuelStationById.get(target.id);
+    return station && isFuelStationAvailable(station, chapterId)
+      ? {
+          kind: target.kind,
+          id: station.id,
+          label: station.name,
+          coordinates: station.coordinates,
+        }
+      : null;
+  }
+  const location = locationById.get(target.id);
+  if (
+    !location ||
+    (target.kind === 'location' && !unlockedLocationIds.includes(location.id))
+  ) {
+    return null;
+  }
+  return {
+    kind: target.kind,
+    id: location.id,
+    label:
+      target.kind === 'mission-start'
+        ? `Inicio: ${location.name}`
+        : location.name,
+    coordinates: location.coordinates,
   };
 }
 
 function gameDataFromPersistence(game: PersistedGameData): GameData {
+  const navigationTarget = restoreNavigationTarget(
+    game.navigationTarget,
+    game.currentChapterId,
+    game.unlockedLocationIds,
+  );
   return {
     telemetry: telemetryFromPlayer(game.player),
     isPaused: game.isPaused,
@@ -463,6 +505,7 @@ function gameDataFromPersistence(game: PersistedGameData): GameData {
     currentChapterId: game.currentChapterId,
     completedChapterIds: [...game.completedChapterIds],
     roadNetworkVersion: game.roadNetworkVersion,
+    navigationTarget,
   };
 }
 
@@ -500,6 +543,12 @@ function persistableGame(state: GameData): PersistedGameData {
     currentChapterId: state.currentChapterId,
     completedChapterIds: [...state.completedChapterIds],
     roadNetworkVersion: state.roadNetworkVersion,
+    navigationTarget: state.navigationTarget
+      ? {
+          kind: state.navigationTarget.kind,
+          id: state.navigationTarget.id,
+        }
+      : null,
     isPaused: state.isPaused,
     isFollowingPlayer: state.isFollowingPlayer,
   };
@@ -555,7 +604,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   isPaused: initialRecoveryReason ? true : initialGameData.isPaused,
   driving: defaultDrivingState,
   missionRoute: defaultMissionRouteState,
-  navigationTarget: null,
+  navigationTarget: initialGameData.navigationTarget,
   temporarilyClosedRoadEdgeIds: initialClosedRoadEdgeIds,
   recoveryReason: initialRecoveryReason,
   conditionWarning: null,
@@ -1702,6 +1751,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set((state) => {
       const game = gameDataFromPersistence(loaded.save.game);
       const recoveryReason = recoveryReasonForGame(game);
+      const navigationRestoreFailed =
+        loaded.save.game.navigationTarget !== null &&
+        game.navigationTarget === null;
       return {
         ...game,
         isPaused: recoveryReason ? true : game.isPaused,
@@ -1716,7 +1768,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeRadioEventId: null,
         activeMissionChoiceObjectiveId: null,
         missionTimerCountdownSeconds: 0,
-        gameplayFeedback: null,
+        gameplayFeedback: navigationRestoreFailed
+          ? feedback(
+              state,
+              'La ruta temporal ya no está disponible. Volviste al objetivo de misión.',
+              'warning',
+            )
+          : null,
         needsInitialRoadAlignment: false,
         temporarilyClosedRoadEdgeIds: chapterRoadClosureEdgeIds(
           loaded.save.game.activeMissionId,
@@ -1724,7 +1782,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
           loaded.save.game.missionChoiceSelections,
         ),
         missionRoute: defaultMissionRouteState,
-        navigationTarget: null,
       };
     });
     if (loaded.migrated) writeGameSave(loaded.save.game);
