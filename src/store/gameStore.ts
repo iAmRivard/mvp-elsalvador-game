@@ -2001,6 +2001,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 let synchronizingPresentation = false;
 useGameStore.subscribe((state) => {
   if (synchronizingPresentation) return;
+  if (presentationController.getMode() !== state.presentationMode) {
+    presentationController.reset(state.presentationMode);
+  }
   const presentationMode = presentationModeFor(
     state,
     state.telemetry,
