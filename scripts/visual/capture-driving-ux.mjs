@@ -365,7 +365,26 @@ try {
   };
   metrics.timeToSelect58KphTargetMilliseconds =
     timeToSelect58KphTargetMilliseconds;
-  metrics.inputVisualLatencyMilliseconds = null;
+  const inputVisualLatency = Number(
+    metrics.mapDataset.inputVisualLatencyMs ?? Number.NaN,
+  );
+  const inputStoredLatency = Number(
+    metrics.mapDataset.inputStoredLatencyMs ?? Number.NaN,
+  );
+  const inputConsumptionLatency = Number(
+    metrics.mapDataset.inputConsumptionLatencyMs ?? Number.NaN,
+  );
+  metrics.inputVisualLatencyMilliseconds = Number.isFinite(inputVisualLatency)
+    ? inputVisualLatency
+    : null;
+  metrics.inputStoredLatencyMilliseconds = Number.isFinite(inputStoredLatency)
+    ? inputStoredLatency
+    : null;
+  metrics.inputConsumptionLatencyMilliseconds = Number.isFinite(
+    inputConsumptionLatency,
+  )
+    ? inputConsumptionLatency
+    : null;
   await writeFile(
     resolve(outputDirectory, 'v0.2.5.2-mobile-metrics.json'),
     `${JSON.stringify(metrics, null, 2)}\n`,
