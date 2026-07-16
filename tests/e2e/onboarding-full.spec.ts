@@ -52,6 +52,7 @@ async function steerTowardRoute(
   session: CDPSession,
   joystickCenter: Awaited<ReturnType<typeof centerOf>>,
   touchId: number,
+  direction: 'toward' | 'away' = 'toward',
 ): Promise<void> {
   const gameMap = page.getByTestId('game-map');
   const recommended = Number(
@@ -60,7 +61,8 @@ async function steerTowardRoute(
   const physical = Number(
     await gameMap.getAttribute('data-navigation-physical-heading'),
   );
-  const headingDelta = ((recommended - physical + 540) % 360) - 180;
+  const target = direction === 'away' ? (recommended + 180) % 360 : recommended;
+  const headingDelta = ((target - physical + 540) % 360) - 180;
   if (!Number.isFinite(headingDelta) || Math.abs(headingDelta) <= 4) {
     await page.waitForTimeout(180);
     return;
@@ -175,6 +177,24 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   );
   center = await centerOf(joystick);
 
+  const objectiveAdvice = page.locator('[data-contextual-advice="objective"]');
+  const interaction = page.getByRole('button', { name: 'Escuchar señal' });
+  let objectiveAdviceObserved = false;
+  const objectiveAdviceChecks = Promise.all([
+    expect(objectiveAdvice).toBeVisible({ timeout: 50_000 }),
+    expect(objectiveAdvice).toContainText('Objetivo a la vista', {
+      timeout: 50_000,
+    }),
+    expect(objectiveAdvice).toHaveCSS('pointer-events', 'none', {
+      timeout: 50_000,
+    }),
+    expect(
+      objectiveAdvice.getByRole('button', { name: 'Ocultar consejo' }),
+    ).toHaveCSS('pointer-events', 'auto', { timeout: 50_000 }),
+  ]).then(() => {
+    objectiveAdviceObserved = true;
+  });
+
   await touchStart(session, 4, center.x, center.y);
   await touchMove(session, 4, center.x, center.y - center.width * 0.44);
   await expect(page.getByTestId('game-map')).toHaveAttribute(
@@ -245,23 +265,23 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
     .toBeGreaterThan(50);
   await touchEnd(session);
 
-  const objectiveAdvice = page.locator('[data-contextual-advice="objective"]');
-  const objectiveDeadline = Date.now() + 50_000;
+  await page.waitForTimeout(400);
+  const retreatDeadline = Date.now() + 20_000;
   while (
-    !(await objectiveAdvice.isVisible()) &&
-    Date.now() < objectiveDeadline
+    !objectiveAdviceObserved &&
+    (await interaction.isVisible()) &&
+    Date.now() < retreatDeadline
   ) {
+    steeringTouchId += 1;
+    await steerTowardRoute(page, session, center, steeringTouchId, 'away');
+  }
+  const objectiveDeadline = Date.now() + 30_000;
+  while (!objectiveAdviceObserved && Date.now() < objectiveDeadline) {
     steeringTouchId += 1;
     await steerTowardRoute(page, session, center, steeringTouchId);
   }
-  await expect(objectiveAdvice).toBeVisible();
-  await expect(objectiveAdvice).toContainText('Objetivo a la vista');
-  await expect(objectiveAdvice).toHaveCSS('pointer-events', 'none');
-  await expect(
-    objectiveAdvice.getByRole('button', { name: 'Ocultar consejo' }),
-  ).toHaveCSS('pointer-events', 'auto');
+  await objectiveAdviceChecks;
 
-  const interaction = page.getByRole('button', { name: 'Escuchar señal' });
   const interactionDeadline = Date.now() + 35_000;
   while (!(await interaction.isVisible()) && Date.now() < interactionDeadline) {
     steeringTouchId += 1;
