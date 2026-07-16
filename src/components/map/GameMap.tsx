@@ -1,6 +1,7 @@
 import maplibregl, { type ErrorEvent } from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TouchControls } from '../game/TouchControls';
+import { FuelStationLegend } from '../hud/FuelStationLegend';
 import { gameConfig } from '../../config/game.config';
 import {
   diagnosticsEnabled,
@@ -675,6 +676,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             try {
               threeLayer = addThreeGameLayer(map, {
                 quality: deviceProfile.quality,
+                mobile: deviceProfile.isCompact,
                 reducedMotion: deviceProfile.reducedMotion,
                 onPlayerReady: () => {
                   if (!effectActive) return;
@@ -963,6 +965,20 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             containerRef.current.dataset.inputInteract = String(
               inputDiagnostics.interact,
             );
+            if (performanceMetricsEnabled) {
+              const inputLatency =
+                inputController.getInputLatencyDiagnostics();
+              containerRef.current.dataset.inputLatencySequence = String(
+                inputLatency.sequence,
+              );
+              containerRef.current.dataset.inputStoredLatencyMs =
+                inputLatency.eventToStoredMilliseconds?.toFixed(3) ?? '';
+              containerRef.current.dataset.inputVisualLatencyMs =
+                inputLatency.inputVisualLatencyMilliseconds?.toFixed(3) ?? '';
+              containerRef.current.dataset.inputConsumptionLatencyMs =
+                inputLatency.inputConsumptionLatencyMilliseconds?.toFixed(3) ??
+                '';
+            }
             containerRef.current.dataset.inputPointerActive = String(
               inputDiagnostics.pointerActive,
             );
@@ -1338,10 +1354,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       )}
 
       {status === 'ready' && (
-        <div className="map-fuel-legend" aria-label="Leyenda de combustible">
-          <span aria-hidden="true">⛽</span>
-          Combustible
-        </div>
+        <FuelStationLegend />
       )}
 
       {threeStatus === 'ready' && (
