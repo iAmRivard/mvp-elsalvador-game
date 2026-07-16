@@ -285,4 +285,40 @@ describe('overlay manager', () => {
     });
     expect(container.querySelector('.radio-message--compact')).not.toBeNull();
   });
+
+  it('restarts expanded when the same radio returns in a new occurrence', () => {
+    vi.useFakeTimers();
+    setMobileViewport(true);
+    useGameStore.setState({
+      activeRadioEventId: 'radio-ruta-occidental',
+    });
+    const { container } = render(<OverlayManager />);
+    advanceRadioPreview();
+    expect(container.querySelector('.radio-message--compact')).not.toBeNull();
+
+    act(() => {
+      useGameStore.setState({ activeRadioEventId: null });
+    });
+    expect(container.querySelector('.radio-message')).toBeNull();
+
+    act(() => {
+      useGameStore.setState({
+        activeRadioEventId: 'radio-ruta-occidental',
+      });
+    });
+    expect(container.querySelector('.radio-message--compact')).toBeNull();
+    expect(
+      container
+        .querySelector('.overlay-manager')
+        ?.getAttribute('data-radio-display-mode'),
+    ).toBe('expanded');
+    act(() => {
+      vi.advanceTimersByTime(RADIO_FULL_PREVIEW_MILLISECONDS - 1);
+    });
+    expect(container.querySelector('.radio-message--compact')).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(container.querySelector('.radio-message--compact')).not.toBeNull();
+  });
 });

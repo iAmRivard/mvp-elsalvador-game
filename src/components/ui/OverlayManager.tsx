@@ -60,11 +60,16 @@ export function OverlayManager({
   const initialStoryLogEntryCount = useRef(storyLogEntryCount);
   const [journalAdvicePending, setJournalAdvicePending] = useState(false);
   const mobileRadioViewport = useMobileRadioViewport();
+  const [previousRadioId, setPreviousRadioId] = useState(radioId);
   const [radioPresentation, setRadioPresentation] =
     useState<RadioPresentationState>(() => ({
       eventId: radioId,
       mode: 'expanded',
     }));
+  if (previousRadioId !== radioId) {
+    setPreviousRadioId(radioId);
+    setRadioPresentation({ eventId: radioId, mode: 'expanded' });
+  }
   const storedRadioMode =
     radioPresentation.eventId === radioId
       ? radioPresentation.mode
