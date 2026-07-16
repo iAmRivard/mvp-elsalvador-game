@@ -6641,6 +6641,7 @@ html[data-reduced-motion='true'] *::after {
   background: rgb(7 31 31 / 92%);
   box-shadow: 0 12px 30px rgb(0 0 0 / 34%);
   backdrop-filter: blur(10px);
+  pointer-events: none;
 }
 
 .contextual-advice > div {
@@ -6676,6 +6677,7 @@ html[data-reduced-motion='true'] *::after {
   font: inherit;
   font-size: 0.62rem;
   font-weight: 800;
+  pointer-events: auto;
 }
 
 .contextual-advice .contextual-advice__dismiss {

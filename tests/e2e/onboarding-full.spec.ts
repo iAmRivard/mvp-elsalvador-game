@@ -124,10 +124,7 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   await touchMove(session, 1, center.x + center.width * 0.6, center.y);
   await expect
     .poll(() =>
-      page
-        .getByTestId('game-map')
-        .getAttribute('data-input-turn')
-        .then(Number),
+      page.getByTestId('game-map').getAttribute('data-input-turn').then(Number),
     )
     .toBeGreaterThan(0.4);
   await expect(page.locator('html')).toHaveAttribute(
@@ -137,12 +134,7 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   await touchEnd(session);
 
   await touchStart(session, 2, center.x, center.y);
-  await touchMove(
-    session,
-    2,
-    center.x,
-    center.y - center.width * 0.44,
-  );
+  await touchMove(session, 2, center.x, center.y - center.width * 0.44);
   await expect
     .poll(() =>
       page
@@ -163,12 +155,7 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   );
 
   await touchStart(session, 3, center.x, center.y);
-  await touchMove(
-    session,
-    3,
-    center.x,
-    center.y + center.width * 0.44,
-  );
+  await touchMove(session, 3, center.x, center.y + center.width * 0.44);
   await expect(page.locator('html')).toHaveAttribute(
     'data-tutorial-target',
     'route',
@@ -189,24 +176,14 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   center = await centerOf(joystick);
 
   await touchStart(session, 4, center.x, center.y);
-  await touchMove(
-    session,
-    4,
-    center.x,
-    center.y - center.width * 0.44,
-  );
+  await touchMove(session, 4, center.x, center.y - center.width * 0.44);
   await expect(page.getByTestId('game-map')).toHaveAttribute(
     'data-input-cruise-reverse-state',
     'forward',
   );
   await touchEnd(session);
   await touchStart(session, 5, center.x, center.y);
-  await touchMove(
-    session,
-    5,
-    center.x,
-    center.y - center.width * 0.44,
-  );
+  await touchMove(session, 5, center.x, center.y - center.width * 0.44);
   await expect
     .poll(() =>
       page
@@ -268,16 +245,21 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
     .toBeGreaterThan(50);
   await touchEnd(session);
 
-  const objectiveAdvice = page.locator(
-    '[data-contextual-advice="objective"]',
-  );
+  const objectiveAdvice = page.locator('[data-contextual-advice="objective"]');
   const objectiveDeadline = Date.now() + 50_000;
-  while (!(await objectiveAdvice.isVisible()) && Date.now() < objectiveDeadline) {
+  while (
+    !(await objectiveAdvice.isVisible()) &&
+    Date.now() < objectiveDeadline
+  ) {
     steeringTouchId += 1;
     await steerTowardRoute(page, session, center, steeringTouchId);
   }
   await expect(objectiveAdvice).toBeVisible();
   await expect(objectiveAdvice).toContainText('Objetivo a la vista');
+  await expect(objectiveAdvice).toHaveCSS('pointer-events', 'none');
+  await expect(
+    objectiveAdvice.getByRole('button', { name: 'Ocultar consejo' }),
+  ).toHaveCSS('pointer-events', 'auto');
 
   const interaction = page.getByRole('button', { name: 'Escuchar señal' });
   const interactionDeadline = Date.now() + 35_000;
@@ -292,7 +274,9 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   ).toBeVisible();
   await interaction.click();
 
-  await expect(page.locator('.radio-message:not(.radio-message--compact)')).toBeVisible();
+  await expect(
+    page.locator('.radio-message:not(.radio-message--compact)'),
+  ).toBeVisible();
   const compactRadio = page.getByRole('button', {
     name: 'Expandir transmisión de radio',
   });
@@ -318,10 +302,10 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
 
   const journalAdvice = page.locator('[data-contextual-advice="journal"]');
   await expect(journalAdvice).toBeVisible({ timeout: 8_000 });
-  await journalAdvice
-    .getByRole('button', { name: 'Abrir bitácora' })
-    .click();
-  await expect(page.getByRole('button', { name: 'Cerrar bitácora' })).toBeVisible();
+  await journalAdvice.getByRole('button', { name: 'Abrir bitácora' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Cerrar bitácora' }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Cerrar bitácora' }).click();
 
   await expect(page.locator('[data-tutorial-card="mobile"]')).toHaveCount(0);
