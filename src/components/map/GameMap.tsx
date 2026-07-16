@@ -1167,6 +1167,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               interactionStarted,
               sample.deltaTimeSeconds,
             );
+            if (interactionStarted) {
+              inputController.releasePointerAction('interact');
+            }
             if (
               useGameStore.getState().activeMissionCompletedObjectiveIds
                 .length > completedBefore

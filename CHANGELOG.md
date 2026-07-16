@@ -19,6 +19,8 @@
   frenar y seguir la línea cian. Objetivo, interacción, Turbo y bitácora pasan a consejos compactos.
 - La superficie decorativa de los consejos deja pasar clics a controles y bitácora; únicamente sus
   botones explícitos capturan interacción.
+- Las acciones táctiles de misión se consumen como pulsos one-shot, permitiendo dos interacciones
+  consecutivas sin perder la segunda durante la ventana de liberación.
 - La radio móvil se contrae después de una vista previa y puede reabrirse sin perder el evento.
 - Estaciones de combustible con nivel suficiente quedan como iconos discretos; la ayuda completa se
   reserva para combustible bajo o para un objetivo seleccionado.
