@@ -1,7 +1,7 @@
 import maplibregl, { type AddProtocolAction } from 'maplibre-gl';
 import { Protocol } from 'pmtiles';
 
-const protocol = new Protocol();
+let protocol = new Protocol();
 let consumerCount = 0;
 const failureListeners = new Set<(failure: PmtilesProtocolFailure) => void>();
 
@@ -15,6 +15,9 @@ export function registerPmtilesProtocol(): () => void {
     consumerCount = Math.max(0, consumerCount - 1);
     if (consumerCount === 0) {
       maplibregl.removeProtocol('pmtiles');
+      // Protocol caches archive instances and their header promises. A fresh
+      // instance makes manual retry issue a new read after a rejected header.
+      protocol = new Protocol();
     }
   };
 }

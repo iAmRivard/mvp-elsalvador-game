@@ -326,6 +326,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     ) => {
       const container = containerRef.current;
       if (!container) return;
+      if (fatalMapErrorHandled && classification.severity !== 'fatal') {
+        container.dataset.mapLastNonfatalError = classification.details;
+        return;
+      }
       container.dataset.mapLastErrorSeverity = classification.severity;
       container.dataset.mapLastErrorReason = classification.reason;
       container.dataset.mapLastErrorResource = classification.resourceKind;

@@ -83,6 +83,47 @@ test('reintenta un fallo fatal sin recargar ni perder el estado de sesión', asy
   expect(spriteRequests).toEqual([]);
 });
 
+test('reintenta PMTiles con una lectura nueva después de un 503 inicial', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop');
+  let archiveRequests = 0;
+  await page.route('**/maps/el-salvador.pmtiles*', async (route) => {
+    archiveRequests += 1;
+    if (archiveRequests === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/octet-stream',
+        headers: { 'cache-control': 'no-store' },
+        body: '',
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.addInitScript(() => window.localStorage.clear());
+  await page.goto('/');
+  await launch(page);
+
+  const gameMap = page.getByTestId('game-map');
+  await expect(gameMap).toHaveAttribute(
+    'data-map-last-error-severity',
+    'fatal',
+  );
+  await expect(page.locator('.map-message--error > strong')).toBeVisible();
+  expect(archiveRequests).toBe(1);
+
+  await page.getByRole('button', { name: 'Reintentar' }).click();
+
+  await expect.poll(() => archiveRequests).toBeGreaterThan(1);
+  await expect(page.getByText('El mapa local está listo.')).toBeAttached({
+    timeout: 20_000,
+  });
+  await expect(gameMap).toHaveAttribute('data-road-network-status', 'ready', {
+    timeout: 20_000,
+  });
+});
+
 test('un fallo tardío del PMTiles principal corta el input activo', async ({
   page,
 }, testInfo) => {
