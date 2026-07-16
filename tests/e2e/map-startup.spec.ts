@@ -184,9 +184,10 @@ test('la carga vial tardía no sobrescribe un error fatal', async ({
     releaseRoadRequest = resolve;
   });
   await page.route('**/data/roads/western-corridor.json', async (route) => {
+    const response = await route.fetch();
     markRoadRequestStarted();
     await roadRequestRelease;
-    await route.continue();
+    await route.fulfill({ response });
   });
 
   let failArchiveRequests = false;
