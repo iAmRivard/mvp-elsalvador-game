@@ -80,9 +80,9 @@ describe('overlay manager', () => {
     useGameStore.setState({ recoveryReason: 'fuel', isPaused: true });
     const { container } = render(<OverlayManager />);
 
-    expect(screen.getByRole('alertdialog')).toBeTruthy();
-    expect(screen.getByText('Sin combustible')).toBeTruthy();
-    expect(screen.queryByText(/Una señal de auxilio apareció/)).toBeNull();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.queryByText('Sin combustible')).toBeNull();
+    expect(screen.getByText(/Una señal de auxilio apareció/)).toBeTruthy();
     expect(
       container.querySelectorAll('[role="dialog"], [role="alertdialog"]'),
     ).toHaveLength(1);

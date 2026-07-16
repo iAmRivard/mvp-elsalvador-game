@@ -24,6 +24,13 @@ describe('arranque recuperable del mapa', () => {
     );
   });
 
+  it('degrada fallos tardíos sin desmontar el mapa listo', () => {
+    expect(
+      isFatalMapError(new Error('/maps/el-salvador.pmtiles (503)'), true),
+    ).toBe(false);
+    expect(isFatalMapError(new Error('WebGL context lost'), true)).toBe(true);
+  });
+
   it('mantiene los detalles separados del mensaje amigable', () => {
     expect(mapErrorDetails(new Error('AJAXError interno'))).toBe(
       'AJAXError interno',

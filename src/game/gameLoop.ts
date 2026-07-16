@@ -80,6 +80,7 @@ export function startPlayerGameLoop(
         deltaTimeSeconds,
       );
       const input = options.input.snapshot();
+      options.input.markInputConsumed(performance.now());
       const result = stepPlayerDetailed(
         player,
         input,

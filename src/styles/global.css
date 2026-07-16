@@ -2303,6 +2303,16 @@ html[data-tutorial-target='objective'] .map-canvas {
   content: none;
 }
 
+.map-frame[data-device-layout='compact'] .player-marker__pulse {
+  width: 34px;
+  height: 34px;
+}
+
+.map-frame[data-device-layout='compact'] .player-marker__vehicle {
+  width: 24px;
+  height: 30px;
+}
+
 .location-marker {
   position: relative;
   display: grid;
@@ -2509,6 +2519,40 @@ html[data-tutorial-target='objective'] .map-canvas {
   line-height: 1;
 }
 
+.fuel-station-marker small {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  width: max-content;
+  max-width: 170px;
+  padding: 3px 5px;
+  overflow: hidden;
+  border-radius: 4px;
+  color: #e9f5ec;
+  background: rgb(7 30 23 / 86%);
+  font-size: 0.54rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.fuel-station-marker--icon {
+  width: 26px;
+  height: 26px;
+  border-width: 1px;
+  opacity: 0.72;
+  box-shadow: 0 4px 10px rgb(0 0 0 / 30%);
+}
+
+.fuel-station-marker--icon small {
+  display: none;
+}
+
+.fuel-station-marker--compact small {
+  max-width: 86px;
+}
+
 .fuel-station-marker:hover,
 .fuel-station-marker:focus-visible {
   outline: none;
@@ -2611,6 +2655,24 @@ html[data-tutorial-target='objective'] .map-canvas {
   color: #09271d;
   background: #4ebf8b;
   font-size: 0.66rem;
+}
+
+.map-fuel-legend--icon {
+  padding: 3px;
+  border-color: transparent;
+  background: rgb(9 27 23 / 54%);
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.map-fuel-legend--icon span {
+  width: 18px;
+  height: 18px;
+  font-size: 0.56rem;
+}
+
+.map-fuel-legend strong {
+  font: inherit;
 }
 
 .discovery-toast {
@@ -4613,8 +4675,9 @@ html[data-tutorial-target='objective'] .map-canvas {
 }
 
 .radio-message--compact {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  gap: 7px;
+  align-items: center;
   max-height: 18dvh;
   padding: 9px 11px;
   overflow: hidden;
@@ -4635,12 +4698,14 @@ html[data-tutorial-target='objective'] .map-canvas {
 }
 
 .radio-message--compact > strong {
+  flex: 0 0 auto;
   color: #ffe08a;
   font-size: 0.62rem;
   letter-spacing: 0.05em;
 }
 
 .radio-message--compact > span {
+  min-width: 0;
   font-size: 0.68rem;
 }
 
@@ -6559,6 +6624,69 @@ html[data-reduced-motion='true'] *::after {
   display: contents;
 }
 
+.contextual-advice {
+  position: absolute;
+  z-index: 17;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(116px, calc(env(safe-area-inset-bottom) + 106px));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  width: min(330px, calc(100% - 28px));
+  padding: 9px 10px;
+  border: 1px solid rgb(83 218 226 / 38%);
+  border-radius: 9px;
+  color: #effcfa;
+  background: rgb(7 31 31 / 92%);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 34%);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.contextual-advice > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.contextual-advice strong,
+.contextual-advice span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contextual-advice strong {
+  color: #75e6ec;
+  font-size: 0.72rem;
+}
+
+.contextual-advice span {
+  color: #cde1df;
+  font-size: 0.62rem;
+}
+
+.contextual-advice button {
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid rgb(83 218 226 / 36%);
+  border-radius: 6px;
+  color: #effcfa;
+  background: rgb(29 91 91 / 48%);
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 800;
+  pointer-events: auto;
+}
+
+.contextual-advice .contextual-advice__dismiss {
+  width: 28px;
+  padding: 0;
+  color: #b9ccca;
+  background: transparent;
+}
+
 @media (max-width: 900px), (pointer: coarse) {
   .discovery-toast--compact {
     top: auto;
@@ -6885,6 +7013,10 @@ html[data-reduced-motion='true'] *::after {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .contextual-advice {
+    transition: none;
+  }
+
   .service-worker-update,
   .service-worker-update button {
     transition: none;

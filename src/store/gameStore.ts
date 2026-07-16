@@ -1912,13 +1912,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
         game.onboardingState === 'introducing' &&
         game.activeMissionId === 'la-transmision' &&
         !game.completedMissionIds.includes('la-transmision');
+      const restoredOnboardingState =
+        game.onboardingState === 'interaction-basics'
+          ? 'completed'
+          : game.onboardingState === 'introducing' &&
+              !resumesOnboardingIntroduction
+            ? 'completed'
+            : game.onboardingState;
       return {
         ...game,
-        onboardingState:
-          game.onboardingState === 'introducing' &&
-          !resumesOnboardingIntroduction
-            ? 'driving-basics'
-            : game.onboardingState,
+        onboardingState: restoredOnboardingState,
         isPaused:
           recoveryReason || resumesOnboardingIntroduction ? true : game.isPaused,
         playerRuntimeRevision: state.playerRuntimeRevision + 1,
@@ -1998,6 +2001,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 let synchronizingPresentation = false;
 useGameStore.subscribe((state) => {
   if (synchronizingPresentation) return;
+  if (presentationController.getMode() !== state.presentationMode) {
+    presentationController.reset(state.presentationMode);
+  }
   const presentationMode = presentationModeFor(
     state,
     state.telemetry,

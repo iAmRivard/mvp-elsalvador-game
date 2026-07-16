@@ -884,21 +884,15 @@ export function MissionPanel() {
   if (
     compactViewport &&
     !isJournalOpen &&
-    (onboardingState === 'introducing' ||
-      onboardingState === 'driving-basics')
+    onboardingIsActive(onboardingState)
   ) {
     return null;
   }
 
-  const onboardingMissionPanelAllowed =
-    onboardingState === 'navigation-basics' ||
-    onboardingState === 'interaction-basics';
-
   if (
     compactViewport &&
     !isJournalOpen &&
-    presentationMode !== 'stopped' &&
-    !onboardingMissionPanelAllowed
+    presentationMode !== 'stopped'
   ) {
     return null;
   }

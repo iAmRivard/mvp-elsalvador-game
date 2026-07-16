@@ -1,9 +1,17 @@
-import maplibregl, { type ErrorEvent } from 'maplibre-gl';
+import maplibregl, { type ErrorEvent, type JumpToOptions } from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TouchControls } from '../game/TouchControls';
+import { FuelStationLegend } from '../hud/FuelStationLegend';
 import { gameConfig } from '../../config/game.config';
-import { diagnosticsEnabled } from '../../config/diagnostics.config';
-import { followCameraConfig } from '../../config/followCamera.config';
+import {
+  diagnosticsEnabled,
+  performanceMetricsEnabled,
+  performanceProfilingEnabled,
+} from '../../config/diagnostics.config';
+import {
+  followCameraConfig,
+  followCameraTolerances,
+} from '../../config/followCamera.config';
 import { mapSourceConfig, mapViewConfig } from '../../config/map.config';
 import { roadAssistConfig } from '../../config/roadHandling.config';
 import { autoThrottleConfig } from '../../config/mobileControls.config';
@@ -12,10 +20,17 @@ import { missionById } from '../../data/missions';
 import { restrictedAreaTypeAt } from '../../data/restrictedAreas';
 import { detectDeviceProfile } from '../../game/deviceProfile';
 import {
+  cameraProfileSpeedChangedSignificantly,
   drivingCameraProfile,
   followCameraOffset,
   followCameraTarget,
+  followCameraUpdateIsSignificant,
+  mobileCameraModeForSpeed,
+  mobileCameraTransitionCandidate,
+  settledMobileCameraModeForSpeed,
   smoothFollowBearing,
+  type FollowCameraOptions,
+  type MobileCameraMode,
 } from '../../game/followCamera';
 import {
   effectiveDrivingSurfaceLabel,
@@ -85,6 +100,14 @@ function supportsWebGl(): boolean {
   } catch {
     return false;
   }
+}
+
+function percentile95(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[
+    Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)
+  ];
 }
 
 function syncInteractiveSignal(layer: ThreeGameLayerController): void {
@@ -247,12 +270,22 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let lastFollowedLongitude = Number.NaN;
     let lastFollowedLatitude = Number.NaN;
     let lastFollowedHeading = Number.NaN;
-    let lastFollowedSpeed = Number.NaN;
+    let lastFollowedSpeedKilometersPerHour = Number.NaN;
+    let lastAppliedCameraOptions: FollowCameraOptions | null = null;
     let wasFollowing = false;
     let recenterUntil = 0;
     let lastCameraBearing = Number.NaN;
-    let cameraUpdateCount = 0;
+    let mobileCameraMode: MobileCameraMode = 'stopped';
+    let mobileCameraCandidateMode: MobileCameraMode = 'stopped';
+    let mobileCameraCandidateSince = performance.now();
+    let cameraRequestedUpdates = 0;
+    let cameraAppliedUpdates = 0;
+    let cameraSkippedByInterval = 0;
+    let cameraSkippedByTolerance = 0;
+    let cameraWindowRequestedUpdates = 0;
+    let cameraWindowAppliedUpdates = 0;
     let cameraUpdateDurationTotal = 0;
+    const cameraUpdateDurations: number[] = [];
     let cameraMetricsStartedAt = performance.now();
     let cameraInterruptedTransitions = 0;
     let effectActive = true;
@@ -320,11 +353,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       );
       const container = containerRef.current;
       if (container) {
-        container.dataset.currentMissionObjectiveId =
-          next?.objective.id ?? '';
-        container.dataset.currentMissionObjectiveVisible = String(
-          objectiveVisible,
-        );
+        container.dataset.currentMissionObjectiveId = next?.objective.id ?? '';
+        container.dataset.currentMissionObjectiveVisible =
+          String(objectiveVisible);
         container.dataset.insideValidObjectiveZone = String(inside);
         container.dataset.drivingSurfaceLabel = effectiveDrivingSurfaceLabel(
           state.driving.surface,
@@ -356,12 +387,63 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       timestampMilliseconds,
     });
 
-    const cameraForPlayer = (player: PlayerRuntime) => {
+    const mobileCameraModeForPlayer = (
+      speedKilometersPerHour: number,
+      presentationMode: DrivingPresentationMode,
+      timestampMilliseconds: number,
+      settleImmediately: boolean,
+    ): MobileCameraMode => {
+      const input = {
+        speedKilometersPerHour,
+        previousMode: mobileCameraMode,
+        timeInStateMilliseconds: 0,
+        hasAlert: presentationMode === 'alert',
+        hasInteraction: presentationMode === 'interaction',
+      };
+      if (settleImmediately) {
+        mobileCameraMode = settledMobileCameraModeForSpeed(input);
+        mobileCameraCandidateMode = mobileCameraMode;
+        mobileCameraCandidateSince = timestampMilliseconds;
+        return mobileCameraMode;
+      }
+      const candidate = mobileCameraTransitionCandidate(input);
+      if (candidate !== mobileCameraCandidateMode) {
+        mobileCameraCandidateMode = candidate;
+        mobileCameraCandidateSince = timestampMilliseconds;
+      }
+      const nextMode = mobileCameraModeForSpeed({
+        ...input,
+        timeInStateMilliseconds: settleImmediately
+          ? Number.POSITIVE_INFINITY
+          : Math.max(0, timestampMilliseconds - mobileCameraCandidateSince),
+      });
+      if (nextMode !== mobileCameraMode) {
+        mobileCameraMode = nextMode;
+        mobileCameraCandidateMode = mobileCameraTransitionCandidate({
+          ...input,
+          previousMode: nextMode,
+        });
+        mobileCameraCandidateSince = timestampMilliseconds;
+      }
+      return mobileCameraMode;
+    };
+
+    const cameraForPlayer = (
+      player: PlayerRuntime,
+      timestampMilliseconds = performance.now(),
+      settleMobileModeImmediately = false,
+    ) => {
       const presentationMode = useGameStore.getState().presentationMode;
       const speedKilometersPerHour =
         Math.abs(player.speedMetersPerSecond) * 3.6;
-      const cameraMode: DrivingPresentationMode =
-        presentationMode === 'alert' || presentationMode === 'interaction'
+      const cameraMode: DrivingPresentationMode = deviceProfile.isTouch
+        ? mobileCameraModeForPlayer(
+            speedKilometersPerHour,
+            presentationMode,
+            timestampMilliseconds,
+            settleMobileModeImmediately,
+          )
+        : presentationMode === 'alert' || presentationMode === 'interaction'
           ? speedKilometersPerHour > 55
             ? 'fast'
             : speedKilometersPerHour >= 5
@@ -404,6 +486,49 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       container.dataset.followPitch = camera.options.pitch.toFixed(1);
       container.dataset.followOffsetY = String(camera.options.offset[1]);
       container.dataset.currentCameraProfile = camera.profileName;
+    };
+    const exposeCameraMetrics = (timestampMilliseconds: number) => {
+      const metricsDuration = timestampMilliseconds - cameraMetricsStartedAt;
+      if (
+        metricsDuration < followCameraConfig.metricWindowMilliseconds ||
+        !containerRef.current
+      ) {
+        return;
+      }
+      const container = containerRef.current;
+      container.dataset.cameraRequestedUpdates = String(cameraRequestedUpdates);
+      container.dataset.cameraAppliedUpdates = String(cameraAppliedUpdates);
+      container.dataset.cameraSkippedByInterval = String(
+        cameraSkippedByInterval,
+      );
+      container.dataset.cameraSkippedByTolerance = String(
+        cameraSkippedByTolerance,
+      );
+      container.dataset.cameraInterruptedTransitions = String(
+        cameraInterruptedTransitions,
+      );
+      container.dataset.cameraRequestedUpdatesPerSecond = (
+        (cameraWindowRequestedUpdates * 1_000) /
+        metricsDuration
+      ).toFixed(1);
+      container.dataset.cameraAppliedUpdatesPerSecond = (
+        (cameraWindowAppliedUpdates * 1_000) /
+        metricsDuration
+      ).toFixed(1);
+      container.dataset.cameraUpdatesPerSecond =
+        container.dataset.cameraAppliedUpdatesPerSecond;
+      container.dataset.cameraAverageUpdateMs = (
+        cameraUpdateDurationTotal / Math.max(1, cameraAppliedUpdates)
+      ).toFixed(3);
+      if (performanceMetricsEnabled) {
+        const cameraP95 = percentile95(cameraUpdateDurations);
+        if (cameraP95 !== null) {
+          container.dataset.cameraP95UpdateMs = cameraP95.toFixed(3);
+        }
+      }
+      cameraWindowRequestedUpdates = 0;
+      cameraWindowAppliedUpdates = 0;
+      cameraMetricsStartedAt = timestampMilliseconds;
     };
     const unbindKeyboard = inputController.bindKeyboard(
       window,
@@ -562,6 +687,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             try {
               threeLayer = addThreeGameLayer(map, {
                 quality: deviceProfile.quality,
+                mobile: deviceProfile.isCompact,
                 reducedMotion: deviceProfile.reducedMotion,
                 onPlayerReady: () => {
                   if (!effectActive) return;
@@ -600,15 +726,22 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           });
       }
 
-      const initialCamera = cameraForPlayer(initialPlayer);
+      const initialCameraTimestamp = performance.now();
+      const initialCamera = cameraForPlayer(
+        initialPlayer,
+        initialCameraTimestamp,
+        true,
+      );
       map.jumpTo(initialCamera.options);
       exposeCameraTarget(initialCamera);
+      lastAppliedCameraOptions = initialCamera.options;
       lastCameraBearing = initialPlayer.heading;
-      lastCameraUpdate = performance.now();
+      lastCameraUpdate = initialCameraTimestamp;
       lastFollowedLongitude = initialPlayer.longitude;
       lastFollowedLatitude = initialPlayer.latitude;
       lastFollowedHeading = initialPlayer.heading;
-      lastFollowedSpeed = initialPlayer.speedMetersPerSecond;
+      lastFollowedSpeedKilometersPerHour =
+        Math.abs(initialPlayer.speedMetersPerSecond) * 3.6;
       wasFollowing = useGameStore.getState().isFollowingPlayer;
 
       gameLoop = startPlayerGameLoop({
@@ -711,22 +844,36 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             player.longitude !== lastFollowedLongitude ||
             player.latitude !== lastFollowedLatitude ||
             player.heading !== lastFollowedHeading;
-          const speedChanged =
-            Math.abs(player.speedMetersPerSecond - lastFollowedSpeed) >= 0.05;
-          if (!wasFollowing || positionChanged || speedChanged) {
-            const cameraStartedAt = performance.now();
-            const camera = cameraForPlayer(player);
+          const speedKilometersPerHour =
+            Math.abs(player.speedMetersPerSecond) * 3.6;
+          const speedChanged = cameraProfileSpeedChangedSignificantly(
+            lastFollowedSpeedKilometersPerHour,
+            speedKilometersPerHour,
+            followCameraTolerances,
+          );
+          const mobileCameraTransitionPending =
+            deviceProfile.isTouch &&
+            mobileCameraCandidateMode !== mobileCameraMode;
+          if (
+            !wasFollowing ||
+            positionChanged ||
+            speedChanged ||
+            mobileCameraTransitionPending
+          ) {
+            cameraRequestedUpdates += 1;
+            cameraWindowRequestedUpdates += 1;
             if (
               timestamp - lastCameraUpdate <
-              Math.max(
-                deviceProfile.cameraUpdateIntervalMilliseconds,
-                camera.profile.updateIntervalMilliseconds,
-              )
+              deviceProfile.cameraUpdateIntervalMilliseconds
             ) {
+              cameraSkippedByInterval += 1;
+              exposeCameraMetrics(timestamp);
               wasFollowing = true;
               return;
             }
             const isRecentering = !wasFollowing;
+            const cameraStartedAt = performance.now();
+            const camera = cameraForPlayer(player, timestamp);
             const duration = deviceProfile.reducedMotion
               ? 0
               : isRecentering
@@ -739,9 +886,42 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 ? 360
                 : followCameraConfig.maximumBearingChangeDegrees,
             );
+            if (
+              !isRecentering &&
+              !followCameraUpdateIsSignificant(
+                lastAppliedCameraOptions,
+                camera.options,
+                followCameraTolerances,
+              )
+            ) {
+              cameraSkippedByTolerance += 1;
+              lastCameraUpdate = timestamp;
+              exposeCameraMetrics(timestamp);
+              wasFollowing = true;
+              return;
+            }
             if (!isRecentering || duration === 0) {
               if (map.isEasing()) cameraInterruptedTransitions += 1;
-              map.jumpTo(camera.options);
+              const jumpOptions: JumpToOptions = {
+                center: camera.options.center,
+                bearing: camera.options.bearing,
+              };
+              if (
+                !lastAppliedCameraOptions ||
+                Math.abs(camera.options.zoom - lastAppliedCameraOptions.zoom) >=
+                  followCameraTolerances.minimumZoomDelta
+              ) {
+                jumpOptions.zoom = camera.options.zoom;
+              }
+              if (
+                !lastAppliedCameraOptions ||
+                Math.abs(
+                  camera.options.pitch - lastAppliedCameraOptions.pitch,
+                ) >= followCameraTolerances.minimumPitchDeltaDegrees
+              ) {
+                jumpOptions.pitch = camera.options.pitch;
+              }
+              map.jumpTo(jumpOptions);
             } else {
               map.easeTo({
                 ...camera.options,
@@ -753,33 +933,30 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             exposeCameraTarget(camera);
             recenterUntil = isRecentering ? timestamp + duration : 0;
             lastCameraUpdate = timestamp;
+            lastAppliedCameraOptions = camera.options;
             lastFollowedLongitude = player.longitude;
             lastFollowedLatitude = player.latitude;
             lastFollowedHeading = player.heading;
-            lastFollowedSpeed = player.speedMetersPerSecond;
+            lastFollowedSpeedKilometersPerHour = speedKilometersPerHour;
             lastCameraBearing = camera.options.bearing;
             const cameraUpdateDuration = performance.now() - cameraStartedAt;
-            cameraUpdateCount += 1;
+            cameraAppliedUpdates += 1;
+            cameraWindowAppliedUpdates += 1;
             cameraUpdateDurationTotal += cameraUpdateDuration;
+            if (performanceMetricsEnabled) {
+              cameraUpdateDurations.push(cameraUpdateDuration);
+              if (
+                cameraUpdateDurations.length >
+                followCameraConfig.maximumDurationSamples
+              ) {
+                cameraUpdateDurations.shift();
+              }
+            }
             if (containerRef.current) {
               containerRef.current.dataset.cameraUpdateMs =
                 cameraUpdateDuration.toFixed(3);
-              containerRef.current.dataset.cameraAverageUpdateMs = (
-                cameraUpdateDurationTotal / cameraUpdateCount
-              ).toFixed(3);
-              containerRef.current.dataset.cameraInterruptedTransitions =
-                String(cameraInterruptedTransitions);
-              const cameraMetricsDuration = timestamp - cameraMetricsStartedAt;
-              if (cameraMetricsDuration >= 1_000) {
-                containerRef.current.dataset.cameraUpdatesPerSecond = (
-                  (cameraUpdateCount * 1_000) /
-                  cameraMetricsDuration
-                ).toFixed(1);
-                cameraUpdateCount = 0;
-                cameraUpdateDurationTotal = 0;
-                cameraMetricsStartedAt = timestamp;
-              }
             }
+            exposeCameraMetrics(timestamp);
           }
           wasFollowing = true;
         },
@@ -796,11 +973,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           const state = useGameStore.getState();
           state.setTelemetry(player);
           if (state.isJournalOpen && !state.isPaused) {
-            state.advanceActiveMission(
-              player,
-              false,
-              elapsedRealTimeSeconds,
-            );
+            state.advanceActiveMission(player, false, elapsedRealTimeSeconds);
           }
           if (containerRef.current) {
             const inputDiagnostics = inputController.getDiagnostics();
@@ -830,6 +1003,21 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             containerRef.current.dataset.inputInteract = String(
               inputDiagnostics.interact,
             );
+            if (performanceMetricsEnabled) {
+              const inputLatency = inputController.getInputLatencyDiagnostics();
+              containerRef.current.dataset.inputLatencySequence = String(
+                inputLatency.sequence,
+              );
+              containerRef.current.dataset.inputStoredLatencyMs =
+                inputLatency.eventToStoredMilliseconds?.toFixed(3) ?? '';
+              containerRef.current.dataset.inputNextAnimationFrameLatencyMs =
+                inputLatency.eventToNextAnimationFrameMilliseconds?.toFixed(
+                  3,
+                ) ?? '';
+              containerRef.current.dataset.inputConsumptionLatencyMs =
+                inputLatency.inputConsumptionLatencyMilliseconds?.toFixed(3) ??
+                '';
+            }
             containerRef.current.dataset.inputPointerActive = String(
               inputDiagnostics.pointerActive,
             );
@@ -979,6 +1167,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               interactionStarted,
               sample.deltaTimeSeconds,
             );
+            if (interactionStarted) {
+              inputController.releasePointerAction('interact');
+            }
             if (
               useGameStore.getState().activeMissionCompletedObjectiveIds
                 .length > completedBefore
@@ -1065,14 +1256,22 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         playerMarker
           ?.setLngLat([restoredPlayer.longitude, restoredPlayer.latitude])
           .setRotation(restoredPlayer.heading);
-        const restoredCamera = cameraForPlayer(restoredPlayer);
+        const restoredCameraTimestamp = performance.now();
+        const restoredCamera = cameraForPlayer(
+          restoredPlayer,
+          restoredCameraTimestamp,
+          true,
+        );
         map.jumpTo(restoredCamera.options);
         exposeCameraTarget(restoredCamera);
+        lastAppliedCameraOptions = restoredCamera.options;
+        lastCameraUpdate = restoredCameraTimestamp;
         lastCameraBearing = restoredPlayer.heading;
         lastFollowedLongitude = restoredPlayer.longitude;
         lastFollowedLatitude = restoredPlayer.latitude;
         lastFollowedHeading = restoredPlayer.heading;
-        lastFollowedSpeed = restoredPlayer.speedMetersPerSecond;
+        lastFollowedSpeedKilometersPerHour =
+          Math.abs(restoredPlayer.speedMetersPerSecond) * 3.6;
         wasFollowing = state.isFollowingPlayer;
         recenterUntil = 0;
       });
@@ -1085,17 +1284,35 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     const handleResize = () => {
       const player = gameLoop?.getPlayer();
       if (!player || !useGameStore.getState().isFollowingPlayer) return;
-      const camera = cameraForPlayer(player);
+      const camera = cameraForPlayer(player, performance.now());
+      if (
+        !followCameraUpdateIsSignificant(
+          lastAppliedCameraOptions,
+          camera.options,
+          followCameraTolerances,
+        )
+      ) {
+        return;
+      }
       map.jumpTo(camera.options);
       exposeCameraTarget(camera);
+      lastAppliedCameraOptions = camera.options;
+      lastCameraUpdate = performance.now();
+      lastCameraBearing = camera.options.bearing;
     };
     const handleError = (event: ErrorEvent) => {
-      if (!isFatalMapError(event.error)) return;
+      const details = mapErrorDetails(event.error);
+      if (!isFatalMapError(event.error, startupReady)) {
+        if (containerRef.current) {
+          containerRef.current.dataset.mapLastNonfatalError = details;
+        }
+        return;
+      }
       startupReady = false;
       useGameStore.getState().setInsideValidObjectiveZone(false);
       inputController.clearAllInput();
       inputController.resetMobileBoostCompletely();
-      setErrorMessage(mapErrorDetails(event.error));
+      setErrorMessage(details);
       setStatus('error');
     };
 
@@ -1168,7 +1385,13 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       data-device-layout={deviceProfile.isCompact ? 'compact' : 'full'}
       data-player-renderer={threeStatus}
     >
-      <div ref={containerRef} className="map-canvas" data-testid="game-map" />
+      <div
+        ref={containerRef}
+        className="map-canvas"
+        data-testid="game-map"
+        data-performance-profiling-enabled={String(performanceProfilingEnabled)}
+        data-diagnostics-enabled={String(diagnosticsEnabled)}
+      />
 
       <div className="map-vignette" aria-hidden="true" />
       {ambientFog && <div className="map-atmosphere" aria-hidden="true" />}
@@ -1184,12 +1407,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         <span className="sr-only">El mapa local está listo.</span>
       )}
 
-      {status === 'ready' && (
-        <div className="map-fuel-legend" aria-label="Leyenda de combustible">
-          <span aria-hidden="true">⛽</span>
-          Combustible
-        </div>
-      )}
+      {status === 'ready' && <FuelStationLegend />}
 
       {threeStatus === 'ready' && (
         <span className="sr-only">Vehículo 3D activo.</span>

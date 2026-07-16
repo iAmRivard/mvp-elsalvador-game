@@ -8,10 +8,6 @@ export const onboardingStepIds = [
   'coast',
   'brake',
   'route',
-  'objective',
-  'interact',
-  'boost',
-  'journal',
 ] as const;
 
 export type OnboardingStepId = (typeof onboardingStepIds)[number];
@@ -27,12 +23,24 @@ export function onboardingStateForStep(
     case 'brake':
       return 'driving-basics';
     case 'route':
-    case 'objective':
       return 'navigation-basics';
-    case 'interact':
-    case 'boost':
-    case 'journal':
-      return 'interaction-basics';
+  }
+}
+
+export function onboardingStepIndexForState(
+  state: OnboardingState,
+): number | null {
+  switch (state) {
+    case 'driving-basics':
+      return 0;
+    case 'navigation-basics':
+      return onboardingStepIds.indexOf('route');
+    case 'not-started':
+    case 'introducing':
+    case 'interaction-basics':
+    case 'completed':
+    case 'skipped':
+      return null;
   }
 }
 

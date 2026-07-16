@@ -19,9 +19,13 @@ export function mercatorScaleForScreenSize(
   return safePixels / worldSize / safeLength;
 }
 
-export function threePlayerTargetPixels(quality: GraphicsQuality): number {
-  if (quality === 'high') return 42;
-  if (quality === 'medium') return 34;
+export function threePlayerTargetPixels(
+  quality: GraphicsQuality,
+  mobile = false,
+): number {
+  const mobileMultiplier = mobile ? 1.12 : 1;
+  if (quality === 'high') return 42 * mobileMultiplier;
+  if (quality === 'medium') return 34 * mobileMultiplier;
   return 0;
 }
 

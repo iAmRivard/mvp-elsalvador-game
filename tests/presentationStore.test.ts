@@ -48,4 +48,18 @@ describe('presentación central del store', () => {
     useGameStore.getState().restoreFuel(30);
     expect(useGameStore.getState().presentationMode).toBe('fast');
   });
+
+  it('realinea la histéresis al restablecer el store', () => {
+    enterFastPresentation();
+
+    useGameStore.setState(useGameStore.getInitialState(), true);
+
+    expect(useGameStore.getState().presentationMode).toBe('stopped');
+    useGameStore.getState().setTelemetry({
+      ...INITIAL_PLAYER,
+      speedMetersPerSecond: -1,
+      fuel: 75,
+    });
+    expect(useGameStore.getState().presentationMode).toBe('stopped');
+  });
 });

@@ -1,5 +1,7 @@
 import { fuelStationConfig } from '../config/fuelStations.config';
 import { fuelStations, type FuelStationDefinition } from '../data/fuelStations';
+import { locationById } from '../data/locations';
+import { missionById } from '../data/missions';
 import { distanceBetweenMeters } from './discovery';
 
 export interface NearbyFuelStation {
@@ -8,6 +10,14 @@ export interface NearbyFuelStation {
 }
 
 export type FuelAlertLevel = 'low' | 'critical' | null;
+export type FuelStationPresentation = 'icon' | 'compact' | 'full';
+
+export interface FuelStationPresentationContext {
+  fuelPercent: number;
+  hasActiveMission: boolean;
+  selected: boolean;
+  requiredByMission: boolean;
+}
 
 export function isFuelStationAvailable(
   station: FuelStationDefinition,
@@ -55,4 +65,44 @@ export function fuelAlertLevel(fuelPercent: number): FuelAlertLevel {
   if (fuelPercent < fuelStationConfig.criticalFuelThreshold) return 'critical';
   if (fuelPercent <= fuelStationConfig.lowFuelThreshold) return 'low';
   return null;
+}
+
+export function fuelStationPresentation({
+  fuelPercent,
+  hasActiveMission,
+  selected,
+  requiredByMission,
+}: FuelStationPresentationContext): FuelStationPresentation {
+  if (
+    selected ||
+    requiredByMission ||
+    fuelPercent < fuelStationConfig.criticalFuelThreshold
+  ) {
+    return 'full';
+  }
+  if (fuelPercent <= fuelStationConfig.lowFuelThreshold) return 'compact';
+  return hasActiveMission ? 'icon' : 'compact';
+}
+
+export function requiredFuelStationForMission(
+  activeMissionId: string | null,
+  completedObjectiveIds: readonly string[],
+  stations: readonly FuelStationDefinition[] = fuelStations,
+): FuelStationDefinition | null {
+  const mission = activeMissionId ? missionById.get(activeMissionId) : null;
+  const objective = mission?.objectives.find(
+    (candidate) =>
+      candidate.type === 'refuel' &&
+      !completedObjectiveIds.includes(candidate.id),
+  );
+  const targetCoordinates = objective?.targetLocationId
+    ? locationById.get(objective.targetLocationId)?.coordinates
+    : objective?.coordinates;
+  if (!targetCoordinates) return null;
+  return (
+    stations.find(
+      (station) =>
+        distanceBetweenMeters(station.coordinates, targetCoordinates) <= 20,
+    ) ?? null
+  );
 }

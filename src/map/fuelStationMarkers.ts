@@ -2,7 +2,11 @@ import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl';
 import { fuelStationConfig } from '../config/fuelStations.config';
 import { fuelStations, type FuelStationDefinition } from '../data/fuelStations';
 import { distanceBetweenMeters } from '../game/discovery';
-import { isFuelStationAvailable } from '../game/fuelStations';
+import {
+  fuelStationPresentation,
+  isFuelStationAvailable,
+  requiredFuelStationForMission,
+} from '../game/fuelStations';
 import { useGameStore } from '../store/gameStore';
 
 interface FuelStationMarkerEntry {
@@ -66,12 +70,40 @@ function updateEntry(entry: FuelStationMarkerEntry): void {
   const isTarget =
     state.navigationTarget?.kind === 'fuel-station' &&
     state.navigationTarget.id === entry.station.id;
+  const requiredStation = requiredFuelStationForMission(
+    state.activeMissionId,
+    state.activeMissionCompletedObjectiveIds,
+  );
+  const presentation = fuelStationPresentation({
+    fuelPercent: state.telemetry.fuel,
+    hasActiveMission: state.activeMissionId !== null,
+    selected: isTarget,
+    requiredByMission: requiredStation?.id === entry.station.id,
+  });
   entry.element.disabled = !available;
   entry.element.classList.toggle(
     'fuel-station-marker--unavailable',
     !available,
   );
   entry.element.classList.toggle('fuel-station-marker--target', isTarget);
+  entry.element.dataset.fuelPresentation = presentation;
+  entry.element.classList.toggle(
+    'fuel-station-marker--icon',
+    presentation === 'icon',
+  );
+  entry.element.classList.toggle(
+    'fuel-station-marker--compact',
+    presentation === 'compact',
+  );
+  entry.element.classList.toggle(
+    'fuel-station-marker--full',
+    presentation === 'full',
+  );
+  const label = entry.element.querySelector('small');
+  if (label) {
+    label.textContent =
+      presentation === 'full' ? entry.station.name : 'Combustible';
+  }
   entry.element.setAttribute(
     'aria-label',
     `${entry.station.name}, ${available ? 'disponible' : 'no disponible'}`,
@@ -97,7 +129,9 @@ export function addFuelStationMarkers(map: MapLibreMap): () => void {
     const symbol = document.createElement('span');
     symbol.setAttribute('aria-hidden', 'true');
     symbol.textContent = '⛽';
-    element.append(symbol);
+    const label = document.createElement('small');
+    label.textContent = 'Combustible';
+    element.append(symbol, label);
 
     const marker = new maplibregl.Marker({ element, anchor: 'center' })
       .setLngLat(station.coordinates)
@@ -117,7 +151,22 @@ export function addFuelStationMarkers(map: MapLibreMap): () => void {
   const unsubscribe = useGameStore.subscribe((state, previousState) => {
     if (
       state.currentChapterId !== previousState.currentChapterId ||
-      state.navigationTarget !== previousState.navigationTarget
+      state.navigationTarget !== previousState.navigationTarget ||
+      state.activeMissionId !== previousState.activeMissionId ||
+      state.activeMissionCompletedObjectiveIds !==
+        previousState.activeMissionCompletedObjectiveIds ||
+      fuelStationPresentation({
+        fuelPercent: state.telemetry.fuel,
+        hasActiveMission: state.activeMissionId !== null,
+        selected: false,
+        requiredByMission: false,
+      }) !==
+        fuelStationPresentation({
+          fuelPercent: previousState.telemetry.fuel,
+          hasActiveMission: previousState.activeMissionId !== null,
+          selected: false,
+          requiredByMission: false,
+        })
     ) {
       entries.forEach(updateEntry);
     }

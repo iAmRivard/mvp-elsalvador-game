@@ -1,9 +1,11 @@
 import { fuelStationConfig } from '../../config/fuelStations.config';
 import { fuelStationById } from '../../data/fuelStations';
 import {
+  fuelAlertLevel,
   isFuelStationAvailable,
   isWithinFuelStationRange,
   nearestAvailableFuelStation,
+  requiredFuelStationForMission,
 } from '../../game/fuelStations';
 import { inventoryQuantity } from '../../game/inventory';
 import { useGameStore } from '../../store/gameStore';
@@ -20,6 +22,9 @@ export function FuelAssist() {
   const currentChapterId = useGameStore((state) => state.currentChapterId);
   const navigationTarget = useGameStore((state) => state.navigationTarget);
   const activeMissionId = useGameStore((state) => state.activeMissionId);
+  const completedObjectiveIds = useGameStore(
+    (state) => state.activeMissionCompletedObjectiveIds,
+  );
   const canisterCount = useGameStore((state) =>
     inventoryQuantity(state.inventory, 'bidon-combustible'),
   );
@@ -51,7 +56,22 @@ export function FuelAssist() {
             ])?.distanceMeters ?? Number.POSITIVE_INFINITY,
         }
       : null;
-  const destination = selected ?? nearest;
+  const requiredStation = requiredFuelStationForMission(
+    activeMissionId,
+    completedObjectiveIds,
+  );
+  const required =
+    requiredStation &&
+    isFuelStationAvailable(requiredStation, currentChapterId)
+      ? {
+          station: requiredStation,
+          distanceMeters:
+            nearestAvailableFuelStation(playerCoordinates, currentChapterId, [
+              requiredStation,
+            ])?.distanceMeters ?? Number.POSITIVE_INFINITY,
+        }
+      : null;
+  const destination = selected ?? required ?? nearest;
   const hasFuelRoute = navigationTarget?.kind === 'fuel-station';
   const selectedNearby =
     selected && isWithinFuelStationRange(selected.distanceMeters)
@@ -62,20 +82,15 @@ export function FuelAssist() {
     (!selected && nearest && isWithinFuelStationRange(nearest.distanceMeters)
       ? nearest
       : null);
-  const alertLevel =
-    telemetry.fuel < fuelStationConfig.criticalFuelThreshold
-      ? 'critical'
-      : telemetry.fuel <= 35
-        ? 'low'
-        : null;
+  const alertLevel = fuelAlertLevel(telemetry.fuel);
   const canRefuel =
     telemetry.speedKilometersPerHour <=
     fuelStationConfig.maximumRefuelSpeedKilometersPerHour;
 
-  if (!alertLevel && !hasFuelRoute) return null;
+  if (!alertLevel && !hasFuelRoute && !required) return null;
 
   if (nearby && telemetry.fuel < vehicle.maximumFuel) {
-    if (alertLevel === 'critical' || hasFuelRoute) {
+    if (alertLevel === 'critical' || hasFuelRoute || required) {
       return (
         <aside
           className="fuel-assist fuel-assist--station"
@@ -146,6 +161,20 @@ export function FuelAssist() {
             {activeMissionId ? 'Volver a misión' : 'Cancelar ruta'}
           </button>
         </div>
+      </aside>
+    );
+  }
+
+  if (required) {
+    return (
+      <aside
+        className="fuel-assist fuel-assist--mission"
+        aria-label="Combustible requerido por la misión"
+        data-testid="fuel-assist"
+      >
+        <span className="fuel-assist__eyebrow">Objetivo de misión</span>
+        <strong>{required.station.name}</strong>
+        <small>{formatDistance(required.distanceMeters)}</small>
       </aside>
     );
   }

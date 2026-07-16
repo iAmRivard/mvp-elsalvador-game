@@ -78,9 +78,26 @@ async function installSave(page: Page, options: SeedOptions) {
   });
 }
 
-async function pressInteraction(page: Page, holdMilliseconds = 35) {
+async function pressInteraction(
+  page: Page,
+  options: { label: string; holdMilliseconds?: number },
+) {
+  const touchControls = page.getByLabel('Controles táctiles');
+  if (await touchControls.isVisible()) {
+    await expect(page.getByTestId('game-map')).toHaveAttribute(
+      'data-input-interact',
+      'false',
+    );
+    const touchAction = touchControls.getByRole('button', {
+      name: options.label,
+    });
+    await expect(touchAction).toBeVisible();
+    await expect(touchAction).toBeEnabled();
+    await touchAction.click();
+    return;
+  }
   await page.keyboard.down('e');
-  await page.waitForTimeout(holdMilliseconds);
+  await page.waitForTimeout(options.holdMilliseconds ?? 35);
   await page.keyboard.up('e');
 }
 
@@ -191,7 +208,7 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
   const skipTutorial = page.getByRole('button', { name: 'Omitir' });
   if (await skipTutorial.isVisible()) await skipTutorial.click();
 
-  await pressInteraction(page);
+  await pressInteraction(page, { label: 'Escuchar señal' });
   const radio = page.locator('.radio-message');
   await expect(radio).toContainText('La señal continúa al oeste');
   await expect(page.locator('.radio-overlay')).toHaveCSS(
@@ -212,7 +229,10 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
     position: repeater,
     fuel: 61,
   });
-  await pressInteraction(page, 80);
+  await pressInteraction(page, {
+    label: 'Registrar señal',
+    holdMilliseconds: 80,
+  });
   const completion = page.locator('.mission-toast');
   await expect(completion).toContainText('Misión completada');
   await expect(completion).toContainText('La señal continúa hacia Santa Ana');
@@ -233,11 +253,11 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
     position: blockage,
     fuel: 45,
   });
-  await pressInteraction(page);
+  await pressInteraction(page, { label: 'Inspeccionar bloqueo' });
   const blockageRadio = page.locator('.radio-message');
   await expect(blockageRadio).toContainText('Dos desvíos disponibles');
   await page.getByRole('button', { name: 'Cerrar transmisión' }).click();
-  await pressInteraction(page);
+  await pressInteraction(page, { label: 'Elegir desvío' });
   const routeChoice = page.getByRole('dialog', { name: 'Elige el desvío' });
   await expect(routeChoice).toContainText('JUEGO EN PAUSA');
   await expect(routeChoice).toContainText('Ruta norte');

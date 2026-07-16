@@ -4,6 +4,7 @@ import { fuelStations } from '../src/data/fuelStations';
 import {
   availableFuelStations,
   fuelAlertLevel,
+  fuelStationPresentation,
   isWithinFuelStationRange,
   nearestAvailableFuelStation,
 } from '../src/game/fuelStations';
@@ -42,5 +43,39 @@ describe('puntos narrativos de combustible', () => {
     expect(
       isWithinFuelStationRange(fuelStationConfig.interactionRadiusMeters + 0.1),
     ).toBe(false);
+  });
+  it('uses icon, compact and full presentations at the three fuel bands', () => {
+    expect(
+      fuelStationPresentation({
+        fuelPercent: 75,
+        hasActiveMission: true,
+        selected: false,
+        requiredByMission: false,
+      }),
+    ).toBe('icon');
+    expect(
+      fuelStationPresentation({
+        fuelPercent: 30,
+        hasActiveMission: true,
+        selected: false,
+        requiredByMission: false,
+      }),
+    ).toBe('compact');
+    expect(
+      fuelStationPresentation({
+        fuelPercent: 20,
+        hasActiveMission: true,
+        selected: false,
+        requiredByMission: false,
+      }),
+    ).toBe('full');
+    expect(
+      fuelStationPresentation({
+        fuelPercent: 75,
+        hasActiveMission: true,
+        selected: true,
+        requiredByMission: false,
+      }),
+    ).toBe('full');
   });
 });

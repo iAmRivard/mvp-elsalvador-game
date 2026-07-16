@@ -9,7 +9,7 @@ export const missionRouteColors = {
 export const missionRouteStyle = {
   casingWidth: 10,
   roadWidth: 6,
-  immediateWidth: 8,
+  immediateWidth: 8.5,
   fallbackWidth: 5,
   casingOpacity: 0.9,
   roadOpacity: 0.95,

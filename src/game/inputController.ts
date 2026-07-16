@@ -48,6 +48,13 @@ export interface InputDiagnostics extends InputSources {
   mobileCruise: MobileCruiseTarget;
 }
 
+export interface InputLatencyDiagnostics {
+  sequence: number;
+  eventToStoredMilliseconds: number | null;
+  eventToNextAnimationFrameMilliseconds: number | null;
+  inputConsumptionLatencyMilliseconds: number | null;
+}
+
 export interface MobileBoostAvailability {
   fuel: number;
   condition: number;
@@ -113,6 +120,14 @@ export class InputController {
     remainingMilliseconds: 0,
     cooldownRemainingMilliseconds: 0,
   };
+  private inputLatencySequence = 0;
+  private inputLatencySample: {
+    sequence: number;
+    eventTimestamp: number;
+    storedTimestamp: number;
+    animationFrameTimestamp: number | null;
+    consumedTimestamp: number | null;
+  } | null = null;
 
   bindKeyboard(
     target: Window,
@@ -179,6 +194,74 @@ export class InputController {
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  recordInputStored(eventTimestamp: number): number {
+    const storedTimestamp = performance.now();
+    const normalizedEventTimestamp =
+      Number.isFinite(eventTimestamp) &&
+      Math.abs(storedTimestamp - eventTimestamp) <= 60_000
+        ? eventTimestamp
+        : storedTimestamp;
+    const sequence = ++this.inputLatencySequence;
+    this.inputLatencySample = {
+      sequence,
+      eventTimestamp: normalizedEventTimestamp,
+      storedTimestamp,
+      animationFrameTimestamp: null,
+      consumedTimestamp: null,
+    };
+    return sequence;
+  }
+
+  markInputAnimationFrame(sequence: number, timestamp: number): void {
+    if (
+      this.inputLatencySample?.sequence !== sequence ||
+      this.inputLatencySample.animationFrameTimestamp !== null
+    ) {
+      return;
+    }
+    this.inputLatencySample.animationFrameTimestamp = timestamp;
+  }
+
+  markInputConsumed(timestamp: number): void {
+    if (
+      !this.inputLatencySample ||
+      this.inputLatencySample.consumedTimestamp !== null
+    ) {
+      return;
+    }
+    this.inputLatencySample.consumedTimestamp = timestamp;
+  }
+
+  getInputLatencyDiagnostics(): InputLatencyDiagnostics {
+    const sample = this.inputLatencySample;
+    if (!sample) {
+      return {
+        sequence: 0,
+        eventToStoredMilliseconds: null,
+        eventToNextAnimationFrameMilliseconds: null,
+        inputConsumptionLatencyMilliseconds: null,
+      };
+    }
+    return {
+      sequence: sample.sequence,
+      eventToStoredMilliseconds: Math.max(
+        0,
+        sample.storedTimestamp - sample.eventTimestamp,
+      ),
+      eventToNextAnimationFrameMilliseconds:
+        sample.animationFrameTimestamp === null
+          ? null
+          : Math.max(
+              0,
+              sample.animationFrameTimestamp - sample.eventTimestamp,
+            ),
+      inputConsumptionLatencyMilliseconds:
+        sample.consumedTimestamp === null
+          ? null
+          : Math.max(0, sample.consumedTimestamp - sample.eventTimestamp),
+    };
   }
 
   setPointerAction(action: InputAction, active: boolean): void {

@@ -14,7 +14,6 @@ import { MobileDrivingHud } from '../components/hud/MobileDrivingHud';
 import { PauseMenu } from '../components/menu/PauseMenu';
 import { RecommendedControlsPrompt } from '../components/menu/RecommendedControlsPrompt';
 import { StartScreen } from '../components/menu/StartScreen';
-import { TutorialOverlay } from '../components/menu/TutorialOverlay';
 import { ServiceWorkerUpdatePrompt } from '../components/pwa/ServiceWorkerUpdatePrompt';
 import { OverlayManager } from '../components/ui/OverlayManager';
 import { gameConfig } from '../config/game.config';
@@ -134,27 +133,31 @@ export function App() {
         </Suspense>
 
         {!isJournalOpen && <PlayerHud />}
-        {!isJournalOpen && <MobileDrivingHud />}
+        {!isJournalOpen &&
+          !showTutorial &&
+          !recoveryReason &&
+          !activeNarrativeEventId &&
+          !activeMissionChoiceObjectiveId && <MobileDrivingHud />}
         {!isJournalOpen && !showTutorial && <FuelAssist />}
         <MissionTimer />
         <MissionPanel />
         <MissionToast />
         <GameplayToast />
         <OverlayManager
+          input={inputController}
+          showTutorial={showTutorial}
+          showContextualAdvice={
+            onboardingState === 'completed' || onboardingState === 'skipped'
+          }
           allowDiscovery={!showTutorial}
-          allowStory={!showTutorial && !isJournalOpen}
+          allowStory={!isJournalOpen}
+          onTutorialComplete={() => setPaused(false)}
+          onTutorialSkip={() => setPaused(false)}
         />
         <LevelUpToast />
         {diagnosticsEnabled && <DiagnosticsPanel input={inputController} />}
       </section>
 
-      {showTutorial && (
-        <TutorialOverlay
-          input={inputController}
-          onComplete={() => setPaused(false)}
-          onSkip={() => setPaused(false)}
-        />
-      )}
       {isPaused &&
         !showTutorial &&
         !isJournalOpen &&

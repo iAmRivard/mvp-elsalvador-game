@@ -152,9 +152,10 @@ describe('integración de onboarding con la primera misión', () => {
       screen.getByRole('button', { name: 'Comenzar expedición' }),
     );
 
-    expect(await screen.findByText('Gira el vehículo')).toBeTruthy();
+    expect(await screen.findByTestId('game-map')).toBeTruthy();
+    expect(screen.queryByText(/Gira el/)).toBeNull();
     expect(useGameStore.getState()).toMatchObject({
-      onboardingState: 'driving-basics',
+      onboardingState: 'completed',
       activeMissionId: null,
       activeNarrativeEventId: null,
       isPaused: false,
