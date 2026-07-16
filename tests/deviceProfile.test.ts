@@ -41,9 +41,25 @@ describe('perfil de dispositivo', () => {
     expect(profile.antialias).toBe(false);
     expect(profile.pixelRatio).toBe(1);
     expect(profile.mapDataUpdateIntervalMilliseconds).toBe(250);
-    expect(profile.cameraUpdateIntervalMilliseconds).toBe(66);
+    expect(profile.cameraUpdateIntervalMilliseconds).toBe(50);
     expect(profile.cameraDurationMilliseconds).toBe(50);
     expect(profile.maximumInitialPitch).toBe(58);
+  });
+
+  it('actualiza cámara táctil media aproximadamente a 30 Hz', () => {
+    const profile = resolveDeviceProfile({
+      width: 392,
+      height: 850,
+      coarsePointer: true,
+      reducedMotion: false,
+      hardwareConcurrency: 8,
+      deviceMemoryGigabytes: 8,
+      devicePixelRatio: 3,
+      configuredQuality: 'medium',
+    });
+
+    expect(profile.quality).toBe('medium');
+    expect(profile.cameraUpdateIntervalMilliseconds).toBe(33);
   });
 
   it('respeta movimiento reducido y una selección explícita alta', () => {
@@ -63,7 +79,7 @@ describe('perfil de dispositivo', () => {
     expect(profile.cameraDurationMilliseconds).toBe(0);
     expect(profile.fadeDurationMilliseconds).toBe(0);
     expect(profile.pixelRatio).toBe(2);
-    expect(profile.cameraUpdateIntervalMilliseconds).toBe(50);
+    expect(profile.cameraUpdateIntervalMilliseconds).toBe(33);
     expect(profile.maximumInitialPitch).toBe(61);
   });
 });

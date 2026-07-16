@@ -4,7 +4,7 @@ import { chromium, devices } from '@playwright/test';
 
 const baseUrl = process.argv[2] ?? 'http://127.0.0.1:5173';
 const outputDirectory = resolve(
-  process.argv[3] ?? 'test-results/driving-ux-v0.2.5.1',
+  process.argv[3] ?? 'test-results/driving-ux-v0.2.5.2',
 );
 const observationMilliseconds = 30_000;
 const warmupMilliseconds = 10_000;
@@ -123,14 +123,14 @@ try {
       Number.parseFloat(map.dataset.inputTargetSpeed ?? '0') >= 58
     );
   });
-  const inputResponseMilliseconds = Date.now() - inputStartedAt;
+  const timeToSelect58KphTargetMilliseconds = Date.now() - inputStartedAt;
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',
     touchPoints: [],
   });
   await page.getByTestId('game-map').waitFor({ state: 'visible' });
   await page.screenshot({
-    path: resolve(outputDirectory, 'v0.2.5.1-mobile-after.png'),
+    path: resolve(outputDirectory, 'v0.2.5.2-mobile-after.png'),
   });
 
   await page.waitForTimeout(warmupMilliseconds);
@@ -217,6 +217,22 @@ try {
       missionPanel: count('.mission-panel'),
       missionPanelHeavy: count('.mission-panel', 'sheetRenderCount'),
       radio: count('.radio-message'),
+      cameraRequestedUpdates:
+        map instanceof HTMLElement
+          ? Number(map.dataset.cameraRequestedUpdates ?? 0)
+          : 0,
+      cameraAppliedUpdates:
+        map instanceof HTMLElement
+          ? Number(map.dataset.cameraAppliedUpdates ?? 0)
+          : 0,
+      cameraSkippedByInterval:
+        map instanceof HTMLElement
+          ? Number(map.dataset.cameraSkippedByInterval ?? 0)
+          : 0,
+      cameraSkippedByTolerance:
+        map instanceof HTMLElement
+          ? Number(map.dataset.cameraSkippedByTolerance ?? 0)
+          : 0,
     };
   });
 
@@ -260,6 +276,22 @@ try {
         missionPanel: count('.mission-panel'),
         missionPanelHeavy: count('.mission-panel', 'sheetRenderCount'),
         radio: count('.radio-message'),
+        cameraRequestedUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraRequestedUpdates ?? 0)
+            : 0,
+        cameraAppliedUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraAppliedUpdates ?? 0)
+            : 0,
+        cameraSkippedByInterval:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraSkippedByInterval ?? 0)
+            : 0,
+        cameraSkippedByTolerance:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraSkippedByTolerance ?? 0)
+            : 0,
       },
       declutterChanges: window.__v0251DeclutterChanges ?? 0,
       samples: {
@@ -283,11 +315,32 @@ try {
     };
   });
   metrics.renderDeltas = Object.fromEntries(
-    Object.entries(metrics.counters).map(([key, value]) => [
-      key,
-      value - initial[key],
-    ]),
+    [
+      'mobileDrivingHud',
+      'playerHud',
+      'missionPanel',
+      'missionPanelHeavy',
+      'radio',
+    ].map((key) => [key, metrics.counters[key] - initial[key]]),
   );
+  metrics.cameraCounterDeltas = {
+    requested:
+      metrics.counters.cameraRequestedUpdates - initial.cameraRequestedUpdates,
+    applied:
+      metrics.counters.cameraAppliedUpdates - initial.cameraAppliedUpdates,
+    skippedByInterval:
+      metrics.counters.cameraSkippedByInterval -
+      initial.cameraSkippedByInterval,
+    skippedByTolerance:
+      metrics.counters.cameraSkippedByTolerance -
+      initial.cameraSkippedByTolerance,
+  };
+  metrics.cameraCounterDeltas.requestedPerSecond =
+    metrics.cameraCounterDeltas.requested /
+    (metrics.observationMilliseconds / 1_000);
+  metrics.cameraCounterDeltas.appliedPerSecond =
+    metrics.cameraCounterDeltas.applied /
+    (metrics.observationMilliseconds / 1_000);
   const frameDurations = metrics.samples.frameDurations;
   metrics.frameTimeMilliseconds = {
     ...summarize(frameDurations),
@@ -310,9 +363,11 @@ try {
     initial: memoryMegabytes.at(0) ?? null,
     final: memoryMegabytes.at(-1) ?? null,
   };
-  metrics.inputResponseMilliseconds = inputResponseMilliseconds;
+  metrics.timeToSelect58KphTargetMilliseconds =
+    timeToSelect58KphTargetMilliseconds;
+  metrics.inputVisualLatencyMilliseconds = null;
   await writeFile(
-    resolve(outputDirectory, 'v0.2.5.1-mobile-metrics.json'),
+    resolve(outputDirectory, 'v0.2.5.2-mobile-metrics.json'),
     `${JSON.stringify(metrics, null, 2)}\n`,
     'utf8',
   );
@@ -330,7 +385,7 @@ try {
     });
     await page.waitForTimeout(250);
     await page.screenshot({
-      path: resolve(outputDirectory, `v0.2.5.1-mobile-${viewport.name}.png`),
+      path: resolve(outputDirectory, `v0.2.5.2-mobile-${viewport.name}.png`),
     });
   }
   await session.detach();

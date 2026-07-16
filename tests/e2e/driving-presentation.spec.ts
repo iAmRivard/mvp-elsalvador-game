@@ -104,12 +104,28 @@ for (const viewport of viewports) {
       'mobileFast',
     );
     await expect(gameMap).toHaveAttribute(
-      'data-camera-update-ms',
+      'data-camera-average-update-ms',
       /^\d+\.\d{3}$/,
     );
     await expect(gameMap).toHaveAttribute(
-      'data-camera-average-update-ms',
-      /^\d+\.\d{3}$/,
+      'data-camera-requested-updates',
+      /^[1-9]\d*$/,
+    );
+    await expect(gameMap).toHaveAttribute(
+      'data-camera-applied-updates',
+      /^[1-9]\d*$/,
+    );
+    await expect(gameMap).toHaveAttribute(
+      'data-camera-skipped-by-interval',
+      /^\d+$/,
+    );
+    await expect(gameMap).toHaveAttribute(
+      'data-camera-skipped-by-tolerance',
+      /^\d+$/,
+    );
+    await expect(gameMap).not.toHaveAttribute(
+      'data-camera-p95-update-ms',
+      /.+/,
     );
     await expect(gameMap).not.toHaveAttribute(
       'data-rendered-symbol-count',
@@ -155,7 +171,7 @@ for (const viewport of viewports) {
     expect(visibleLayers).toBeGreaterThan(0);
     expect(visibleLayers).toBeLessThan(totalLayers);
 
-    await testInfo.attach(`v0.2.5-${viewport.name}`, {
+    await testInfo.attach(`v0.2.5.2-${viewport.name}`, {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
