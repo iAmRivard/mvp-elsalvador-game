@@ -9,8 +9,27 @@ import {
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NarrativeDialog } from '../src/components/story/NarrativeDialog';
-import { RadioMessageOverlay } from '../src/components/story/RadioMessageOverlay';
+import {
+  RADIO_FULL_PREVIEW_MILLISECONDS,
+  RadioMessageOverlay,
+} from '../src/components/story/RadioMessageOverlay';
 import { useGameStore } from '../src/store/gameStore';
+
+function setMobileViewport(matches: boolean): void {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: vi.fn((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -19,6 +38,7 @@ afterEach(() => {
 
 describe('presentación narrativa', () => {
   beforeEach(() => {
+    setMobileViewport(false);
     useGameStore.setState(useGameStore.getInitialState(), true);
   });
 
@@ -51,60 +71,65 @@ describe('presentación narrativa', () => {
     expect(useGameStore.getState().activeRadioEventId).toBeNull();
   });
 
-  it('reduce la radio a tres líneas mientras conduce', () => {
-    useGameStore.setState((state) => ({
-      activeRadioEventId: 'radio-ruta-occidental',
-      presentationMode: 'fast',
-      telemetry: {
-        ...state.telemetry,
-        speedMetersPerSecond: 17,
-        speedKilometersPerHour: 61.2,
-      },
-    }));
-    const { container } = render(<RadioMessageOverlay />);
-
-    expect(container.querySelector('.radio-message--compact')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Bitácora' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Cerrar' })).toBeNull();
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Abrir transmisión en la bitácora',
-      }),
-    );
-    expect(useGameStore.getState().storyLogRequest.section).toBe(
-      'transmissions',
-    );
-  });
-
-  it('auto-cierra la radio compacta a los 10 s pero conserva la completa detenida', () => {
+  it('colapsa la radio móvil después de la vista completa y puede reabrirse', () => {
     vi.useFakeTimers();
+    setMobileViewport(true);
     useGameStore.setState({
       activeRadioEventId: 'radio-ruta-occidental',
     });
-    const { rerender } = render(<RadioMessageOverlay />);
+    const { container } = render(<RadioMessageOverlay />);
+
+    expect(screen.getByRole('button', { name: 'Bitácora' })).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(RADIO_FULL_PREVIEW_MILLISECONDS - 1);
+    });
+    expect(container.querySelector('.radio-message--compact')).toBeNull();
 
     act(() => {
-      vi.advanceTimersByTime(12_000);
+      vi.advanceTimersByTime(1);
     });
+    expect(container.querySelector('.radio-message--compact')).toBeTruthy();
     expect(useGameStore.getState().activeRadioEventId).toBe(
       'radio-ruta-occidental',
     );
 
-    act(() => {
-      useGameStore.setState((state) => ({
-        presentationMode: 'fast',
-        telemetry: {
-          ...state.telemetry,
-          speedMetersPerSecond: 17,
-          speedKilometersPerHour: 61.2,
-        },
-      }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expandir transmisión de radio' }),
+    );
+    expect(screen.getByText('La señal continúa al oeste')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Bitácora' })).toBeTruthy();
+  });
+
+  it('compactar nunca descarta ni marca leída la transmisión', () => {
+    vi.useFakeTimers();
+    setMobileViewport(true);
+    useGameStore.setState({
+      activeRadioEventId: 'radio-ruta-occidental',
     });
-    rerender(<RadioMessageOverlay />);
+    render(<RadioMessageOverlay />);
+
     act(() => {
-      vi.advanceTimersByTime(10_000);
+      vi.advanceTimersByTime(RADIO_FULL_PREVIEW_MILLISECONDS * 4);
     });
-    expect(useGameStore.getState().activeRadioEventId).toBeNull();
+    expect(useGameStore.getState()).toMatchObject({
+      activeRadioEventId: 'radio-ruta-occidental',
+      isJournalOpen: false,
+      storyLogRequest: { revision: 0 },
+    });
+  });
+
+  it('la radio de escritorio conserva la presentación completa', () => {
+    vi.useFakeTimers();
+    useGameStore.setState({
+      activeRadioEventId: 'radio-ruta-occidental',
+    });
+    const { container } = render(<RadioMessageOverlay />);
+
+    act(() => {
+      vi.advanceTimersByTime(RADIO_FULL_PREVIEW_MILLISECONDS * 2);
+    });
+    expect(container.querySelector('.radio-message--compact')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Bitácora' })).toBeTruthy();
   });
 
   it('la introducción de capítulo pausa y lo comunica', () => {
