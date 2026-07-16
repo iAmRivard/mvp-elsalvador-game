@@ -265,7 +265,7 @@ for (const viewport of viewports) {
     expect(visibleLayers).toBeGreaterThan(0);
     expect(visibleLayers).toBeLessThan(totalLayers);
 
-    await testInfo.attach(`v0.2.5.2-${viewport.name}`, {
+    await testInfo.attach(`v0.2.5.3-${viewport.name}`, {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
