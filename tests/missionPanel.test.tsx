@@ -157,7 +157,7 @@ describe('CTA móvil de misión', () => {
       useGameStore.setState({ onboardingState: 'navigation-basics' });
     });
     rerender(<MissionPanel />);
-    expect(screen.getByLabelText('Panel de misiones')).toBeTruthy();
+    expect(screen.queryByLabelText('Panel de misiones')).toBeNull();
 
     act(() => {
       useGameStore.setState({

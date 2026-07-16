@@ -1,23 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { missionById } from '../../data/missions';
 import { routingConfig } from '../../config/routing.config';
-import {
-  interactionLabelForObjective,
-  objectiveRequiresManualInteraction,
-} from '../../game/interactions';
 import type {
   InputController,
   InputDiagnostics,
 } from '../../game/inputController';
-import { nearestPendingObjective } from '../../game/missions';
 import {
-  boostContextIsSafe,
   brakeConditionIsMet,
   brakeIntentIsActive,
   coastConditionIsMet,
   conventionalThrottleIntent,
-  objectiveRecognitionIsMet,
   onboardingStateForStep,
+  onboardingStepIndexForState,
   routeFollowingIsValid,
   type OnboardingStepId,
 } from '../../game/onboarding';
@@ -41,7 +34,6 @@ interface TutorialStep {
 
 const STEP_ADVANCE_DELAY_MILLISECONDS = 420;
 const COAST_HOLD_MILLISECONDS = 600;
-const OBJECTIVE_MARKER_HOLD_MILLISECONDS = 1_500;
 const ROUTE_FOLLOW_HOLD_MILLISECONDS = 900;
 
 export function TutorialOverlay({
@@ -49,24 +41,20 @@ export function TutorialOverlay({
   onComplete,
   onSkip,
 }: TutorialOverlayProps) {
-  const [stepIndex, setStepIndex] = useState(0);
+  const onboardingState = useGameStore((state) => state.onboardingState);
+  const [stepIndex, setStepIndex] = useState(
+    () => onboardingStepIndexForState(onboardingState) ?? 0,
+  );
   const [diagnostics, setDiagnostics] = useState<InputDiagnostics>(() =>
     input.getDiagnostics(),
   );
   const [coastCompleted, setCoastCompleted] = useState(false);
   const [brakeCompleted, setBrakeCompleted] = useState(false);
   const [routeFollowCompleted, setRouteFollowCompleted] = useState(false);
-  const [markerRecognized, setMarkerRecognized] = useState(false);
-  const [interactionCompleted, setInteractionCompleted] = useState(false);
   const brakePeakSpeed = useRef(0);
   const brakeIntentObserved = useRef(false);
-  const interactionObjectiveId = useRef<string | null>(null);
-  const [initialStoryLogRevision] = useState(
-    () => useGameStore.getState().storyLogRequest.revision,
-  );
   const controlMode = useSettingsStore((state) => state.controlMode);
   const telemetry = useGameStore((state) => state.telemetry);
-  const vehicleCondition = useGameStore((state) => state.vehicle.condition);
   const routeStatus = useGameStore((state) => state.missionRoute.status);
   const routeOffRoute = useGameStore((state) => state.missionRoute.offRoute);
   const activeNavigation = useGameStore(
@@ -77,13 +65,6 @@ export function TutorialOverlay({
     (state) => state.driving.roadNetworkStatus,
   );
   const activeMissionId = useGameStore((state) => state.activeMissionId);
-  const completedObjectiveIds = useGameStore(
-    (state) => state.activeMissionCompletedObjectiveIds,
-  );
-  const navigationTarget = useGameStore((state) => state.navigationTarget);
-  const objectiveVisibility = useGameStore(
-    (state) => state.currentMissionObjectiveVisibility,
-  );
   const isPaused = useGameStore((state) => state.isPaused);
   const isJournalOpen = useGameStore((state) => state.isJournalOpen);
   const recoveryReason = useGameStore((state) => state.recoveryReason);
@@ -93,10 +74,6 @@ export function TutorialOverlay({
   const activeMissionChoiceObjectiveId = useGameStore(
     (state) => state.activeMissionChoiceObjectiveId,
   );
-  const storyLogRevision = useGameStore(
-    (state) => state.storyLogRequest.revision,
-  );
-  const onboardingState = useGameStore((state) => state.onboardingState);
   const setOnboardingState = useGameStore((state) => state.setOnboardingState);
   const [usesCompactCard] = useState(
     () =>
@@ -110,82 +87,34 @@ export function TutorialOverlay({
     [input],
   );
 
-  const activeMission = activeMissionId
-    ? missionById.get(activeMissionId)
-    : null;
-  const nearestObjective = useMemo(
-    () =>
-      activeMission
-        ? nearestPendingObjective(activeMission, completedObjectiveIds, [
-            telemetry.longitude,
-            telemetry.latitude,
-          ])
-        : null,
-    [
-      activeMission,
-      completedObjectiveIds,
-      telemetry.latitude,
-      telemetry.longitude,
-    ],
-  );
-  const routeVisible = routeStatus === 'road';
-  const interactionObjective = nearestObjective?.objective;
-  const interactionLabel =
-    interactionObjective &&
-    objectiveRequiresManualInteraction(interactionObjective) &&
-    nearestObjective.distanceMeters <= interactionObjective.radiusMeters
-      ? interactionLabelForObjective(interactionObjective)
-      : null;
   const hasBlockingOverlay = Boolean(
     recoveryReason ||
-    activeNarrativeEventId ||
-    activeMissionChoiceObjectiveId ||
-    isJournalOpen,
+      activeNarrativeEventId ||
+      activeMissionChoiceObjectiveId ||
+      isJournalOpen,
   );
-  const safeBoost =
-    telemetry.speedMetersPerSecond > 0 &&
-    boostContextIsSafe({
-      speedKilometersPerHour: telemetry.speedKilometersPerHour,
-      fuel: telemetry.fuel,
-      condition: vehicleCondition,
-      isPaused,
-      hasBlockingOverlay,
-      distanceToObjectiveMeters: nearestObjective?.distanceMeters ?? null,
-    });
   const coastEligible =
     !hasBlockingOverlay &&
     !isPaused &&
     telemetry.speedMetersPerSecond > 0 &&
     coastConditionIsMet(diagnostics, telemetry.speedKilometersPerHour);
-  const objectiveTargetKey =
-    activeMissionId && nearestObjective
-      ? `${activeMissionId}:${nearestObjective.objective.id}`
-      : null;
-  const missionTargetIsActive = navigationTarget === null;
-  const markerVisible = Boolean(
-    !hasBlockingOverlay &&
-      !isPaused &&
-    missionTargetIsActive &&
-      nearestObjective &&
-      objectiveVisibility.objectiveId === nearestObjective.objective.id &&
-      objectiveVisibility.isVisible,
-  );
+  const routeVisible = routeStatus === 'road';
   const routeFollowingValid =
     !hasBlockingOverlay &&
     !isPaused &&
     routeFollowingIsValid({
-    routeVisible,
-    speedKilometersPerHour: telemetry.speedKilometersPerHour,
-    forwardSpeedMetersPerSecond: telemetry.speedMetersPerSecond,
-    offRoute: routeOffRoute,
-    requiresRejoin: activeNavigation?.requiresRejoin ?? true,
-    surface: drivingSurface,
-    roadNetworkReady: roadNetworkStatus === 'ready',
-    distanceToRouteMeters: activeNavigation?.distanceToRouteMeters ?? null,
-    maximumDistanceToRouteMeters: routingConfig.routeRejoinDistanceMeters,
-    reversing:
-      diagnostics.mobileCruise.reversing ||
-      telemetry.speedMetersPerSecond < -0.14,
+      routeVisible,
+      speedKilometersPerHour: telemetry.speedKilometersPerHour,
+      forwardSpeedMetersPerSecond: telemetry.speedMetersPerSecond,
+      offRoute: routeOffRoute,
+      requiresRejoin: activeNavigation?.requiresRejoin ?? true,
+      surface: drivingSurface,
+      roadNetworkReady: roadNetworkStatus === 'ready',
+      distanceToRouteMeters: activeNavigation?.distanceToRouteMeters ?? null,
+      maximumDistanceToRouteMeters: routingConfig.routeRejoinDistanceMeters,
+      reversing:
+        diagnostics.mobileCruise.reversing ||
+        telemetry.speedMetersPerSecond < -0.14,
     });
 
   useEffect(() => {
@@ -224,7 +153,12 @@ export function TutorialOverlay({
   ]);
 
   useEffect(() => {
-    if (stepIndex !== 4 || !routeFollowingValid || !objectiveTargetKey) return;
+    if (
+      stepIndex !== 4 ||
+      !routeFollowingValid ||
+      activeMissionId === null
+    )
+      return;
     const timeout = window.setTimeout(
       () => setRouteFollowCompleted(true),
       ROUTE_FOLLOW_HOLD_MILLISECONDS,
@@ -233,40 +167,7 @@ export function TutorialOverlay({
       window.clearTimeout(timeout);
       setRouteFollowCompleted(false);
     };
-  }, [objectiveTargetKey, routeFollowingValid, stepIndex]);
-
-  useEffect(() => {
-    if (stepIndex !== 5 || !markerVisible || !objectiveTargetKey) return;
-    const timeout = window.setTimeout(
-      () => setMarkerRecognized(true),
-      OBJECTIVE_MARKER_HOLD_MILLISECONDS,
-    );
-    return () => {
-      window.clearTimeout(timeout);
-      setMarkerRecognized(false);
-    };
-  }, [markerVisible, objectiveTargetKey, stepIndex]);
-
-  useEffect(() => {
-    if (stepIndex !== 6) return;
-    if (!interactionObjectiveId.current && nearestObjective) {
-      interactionObjectiveId.current = nearestObjective.objective.id;
-    }
-    if (
-      (interactionObjectiveId.current !== null &&
-        (completedObjectiveIds.includes(interactionObjectiveId.current) ||
-          nearestObjective?.objective.id !== interactionObjectiveId.current)) ||
-      Boolean(interactionLabel && diagnostics.interact)
-    ) {
-      setInteractionCompleted(true);
-    }
-  }, [
-    completedObjectiveIds,
-    diagnostics.interact,
-    interactionLabel,
-    nearestObjective,
-    stepIndex,
-  ]);
+  }, [activeMissionId, routeFollowingValid, stepIndex]);
 
   const steps = useMemo<TutorialStep[]>(() => {
     const speedDescription = !usesCompactCard
@@ -316,67 +217,15 @@ export function TutorialOverlay({
         completed: routeFollowCompleted && routeFollowingValid,
         available: routeVisible,
       },
-      {
-        id: 'objective',
-        title: 'Reconoce el objetivo',
-        description: 'El círculo brillante marca tu próxima acción.',
-        completed: objectiveRecognitionIsMet({
-          distanceMeters: nearestObjective?.distanceMeters ?? null,
-          markerVisibleMilliseconds: markerRecognized && markerVisible
-            ? OBJECTIVE_MARKER_HOLD_MILLISECONDS
-            : 0,
-          isMissionTarget: missionTargetIsActive,
-        }),
-        available: Boolean(nearestObjective),
-      },
-      {
-        id: 'interact',
-        title: interactionLabel ?? 'Acércate para interactuar',
-        description: interactionLabel
-          ? !usesCompactCard
-            ? `Pulsa E o Espacio para ${interactionLabel.toLocaleLowerCase()}.`
-            : `Toca “${interactionLabel}”.`
-          : 'La acción aparecerá cuando estés en el lugar correcto.',
-        completed: interactionCompleted,
-        available: interactionCompleted || interactionLabel !== null,
-      },
-      {
-        id: 'boost',
-        title: 'Usa Turbo con espacio libre',
-        description: safeBoost
-          ? !usesCompactCard
-            ? 'Mantén Shift durante la marcha.'
-            : 'Toca Turbo ahora.'
-          : 'Aléjate del objetivo y mantén una marcha estable.',
-        completed: safeBoost && diagnostics.boost,
-        available: safeBoost,
-      },
-      {
-        id: 'journal',
-        title: 'Abre la bitácora',
-        description: 'Abre la bitácora para revisar la misión y las señales.',
-        completed: isJournalOpen || storyLogRevision > initialStoryLogRevision,
-        available: true,
-      },
     ];
   }, [
     brakeCompleted,
     coastCompleted,
     controlMode,
     diagnostics,
-    interactionLabel,
-    interactionCompleted,
-    initialStoryLogRevision,
-    isJournalOpen,
-    markerRecognized,
-    markerVisible,
-    nearestObjective,
-    missionTargetIsActive,
     routeFollowCompleted,
     routeFollowingValid,
     routeVisible,
-    safeBoost,
-    storyLogRevision,
     usesCompactCard,
   ]);
   const current = steps[stepIndex];

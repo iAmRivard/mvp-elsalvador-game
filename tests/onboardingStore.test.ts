@@ -40,7 +40,7 @@ describe('estado global de onboarding y diario', () => {
     useGameStore.getState().setOnboardingState('skipped');
     expect(useGameStore.getState().loadGame()).toBe(true);
     expect(useGameStore.getState()).toMatchObject({
-      onboardingState: 'interaction-basics',
+      onboardingState: 'completed',
       isJournalOpen: false,
       journalSection: 'missions',
     });

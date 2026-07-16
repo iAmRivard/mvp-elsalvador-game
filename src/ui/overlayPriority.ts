@@ -1,8 +1,20 @@
 export type OverlayPriority =
-  'critical' | 'narrative' | 'radio' | 'discovery' | 'information';
+  | 'narrative'
+  | 'critical'
+  | 'interaction'
+  | 'tutorial'
+  | 'radio'
+  | 'information'
+  | 'discovery';
 
 export type OverlayKind =
-  'recovery' | 'mission-choice' | 'narrative' | 'radio' | 'discovery';
+  | 'recovery'
+  | 'mission-choice'
+  | 'narrative'
+  | 'tutorial'
+  | 'radio'
+  | 'contextual-advice'
+  | 'discovery';
 
 export interface OverlayCandidate {
   id: string;
@@ -19,11 +31,13 @@ export interface OverlayQueueResolution {
 }
 
 const priorityOrder: Readonly<Record<OverlayPriority, number>> = {
-  critical: 0,
-  narrative: 1,
-  radio: 2,
-  discovery: 3,
-  information: 4,
+  narrative: 0,
+  critical: 1,
+  interaction: 2,
+  tutorial: 3,
+  radio: 4,
+  information: 5,
+  discovery: 6,
 };
 
 export function resolveOverlayQueue(

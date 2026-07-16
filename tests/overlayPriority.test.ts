@@ -69,7 +69,9 @@ describe('overlay priority queue', () => {
       },
     ]);
 
-    expect(result.activeLarge?.kind).toBe('recovery');
-    expect(result.queuedLarge[0]?.kind).toBe('mission-choice');
+    expect(result.activeLarge?.kind).toBe('narrative');
+    expect(
+      result.queuedLarge.slice(0, 2).map((candidate) => candidate.kind),
+    ).toEqual(['recovery', 'mission-choice']);
   });
 });

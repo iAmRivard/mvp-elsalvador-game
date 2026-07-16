@@ -7,6 +7,8 @@ import {
   coastConditionIsMet,
   objectiveRecognitionIsMet,
   onboardingStateForStep,
+  onboardingStepIds,
+  onboardingStepIndexForState,
   routeFollowingIsValid,
 } from '../src/game/onboarding';
 
@@ -46,15 +48,21 @@ function diagnostics(values: Partial<InputDiagnostics> = {}): InputDiagnostics {
 
 describe('reglas de onboarding', () => {
   it('mapea los nueve pasos a estados persistibles', () => {
+    expect(onboardingStepIds).toEqual([
+      'steer',
+      'select-speed',
+      'coast',
+      'brake',
+      'route',
+    ]);
     expect(onboardingStateForStep('steer')).toBe('driving-basics');
     expect(onboardingStateForStep('select-speed')).toBe('driving-basics');
     expect(onboardingStateForStep('coast')).toBe('driving-basics');
     expect(onboardingStateForStep('brake')).toBe('driving-basics');
     expect(onboardingStateForStep('route')).toBe('navigation-basics');
-    expect(onboardingStateForStep('objective')).toBe('navigation-basics');
-    expect(onboardingStateForStep('interact')).toBe('interaction-basics');
-    expect(onboardingStateForStep('boost')).toBe('interaction-basics');
-    expect(onboardingStateForStep('journal')).toBe('interaction-basics');
+    expect(onboardingStepIndexForState('driving-basics')).toBe(0);
+    expect(onboardingStepIndexForState('navigation-basics')).toBe(4);
+    expect(onboardingStepIndexForState('interaction-basics')).toBeNull();
   });
 
   it('detecta coast por intención cruda y no por AUTO calculado', () => {
