@@ -68,6 +68,7 @@ import {
   type MapLoadingStage,
 } from '../../map/mapStartup';
 import { createPlayerMarkerElement } from '../../map/playerMarker';
+import { PlayerVisualUpdateCoordinator } from '../../map/playerVisualUpdates';
 import { registerPmtilesProtocol } from '../../map/pmtilesProtocol';
 import { addRoadDebugLayer } from '../../map/roadDebugLayer';
 import { addPlayableRoadSurfaceLayer } from '../../map/roadSurfaceLayer';
@@ -260,6 +261,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
 
     let playerMarker: maplibregl.Marker | null = null;
     let threeLayer: ThreeGameLayerController | null = null;
+    let playerVisualUpdates: PlayerVisualUpdateCoordinator | null = null;
     let gameLoop: PlayerGameLoop | null = null;
     let removeLocationMarkers: (() => void) | null = null;
     let removeFuelStationMarkers: (() => void) | null = null;
@@ -295,6 +297,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let cameraInterruptedTransitions = 0;
     let cameraOffsetAppliedUpdates = 0;
     let cameraProfileTransitions = 0;
+    let cameraFallbackMarkerUpdates = 0;
+    let cameraThreePlayerUpdates = 0;
+    let threeDrivingEffectsUpdates = 0;
     let effectActive = true;
     let roadTracker: RoadTracker | null = null;
     let roadContact: RoadContact | null = null;
@@ -763,6 +768,31 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         .setLngLat([initialPlayer.longitude, initialPlayer.latitude])
         .setRotation(initialPlayer.heading)
         .addTo(map);
+      playerVisualUpdates = new PlayerVisualUpdateCoordinator({
+        updateFallback: (player) => {
+          if (!playerMarker) return;
+          playerMarker
+            .setLngLat([player.longitude, player.latitude])
+            .setRotation(player.heading);
+          cameraFallbackMarkerUpdates += 1;
+        },
+        updateThree: (player) => {
+          if (!threeLayer) return;
+          threeLayer.updatePlayer(player);
+          cameraThreePlayerUpdates += 1;
+        },
+        setDrivingEffects: (offroad) => {
+          if (!threeLayer) return false;
+          threeLayer.setDrivingEffects(offroad);
+          threeDrivingEffectsUpdates += 1;
+          return true;
+        },
+      });
+      if (containerRef.current) {
+        containerRef.current.dataset.cameraFallbackMarkerUpdates = '0';
+        containerRef.current.dataset.cameraThreePlayerUpdates = '0';
+        containerRef.current.dataset.threeDrivingEffectsUpdates = '0';
+      }
       removeLocationMarkers = addLocationMarkers(map);
       removeFuelStationMarkers = addFuelStationMarkers(map);
       removeMissionRoute = addMissionRoute(
@@ -799,6 +829,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 reducedMotion: deviceProfile.reducedMotion,
                 onPlayerReady: () => {
                   if (!effectActive) return;
+                  playerVisualUpdates?.setFallbackHidden(true);
                   playerMarker
                     ?.getElement()
                     .classList.add('player-marker--fallback-hidden');
@@ -809,6 +840,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 },
                 onPlayerError: () => {
                   if (effectActive) {
+                    playerVisualUpdates?.setFallbackHidden(false);
+                    playerMarker
+                      ?.getElement()
+                      .classList.remove('player-marker--fallback-hidden');
                     setThreeResult({
                       profileKey: threeProfileKey,
                       status: 'fallback',
@@ -816,7 +851,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                   }
                 },
               });
-              threeLayer.updatePlayer(gameLoop?.getPlayer() ?? initialPlayer);
+              playerVisualUpdates?.update(
+                gameLoop?.getPlayer() ?? initialPlayer,
+                gameLoop?.getSurface() === 'offroad',
+              );
               syncInteractiveSignal(threeLayer);
             } catch {
               setThreeResult({
@@ -894,6 +932,15 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               (visualFrameCount * 1_000) /
               frameSampleDuration
             ).toFixed(1);
+            containerRef.current.dataset.cameraFallbackMarkerUpdates = String(
+              cameraFallbackMarkerUpdates,
+            );
+            containerRef.current.dataset.cameraThreePlayerUpdates = String(
+              cameraThreePlayerUpdates,
+            );
+            containerRef.current.dataset.threeDrivingEffectsUpdates = String(
+              threeDrivingEffectsUpdates,
+            );
             if (diagnosticsEnabled) {
               const memory = (
                 performance as Performance & {
@@ -925,13 +972,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             visualFrameCount = 0;
             lastFrameSampleTimestamp = timestamp;
           }
-          playerMarker
-            ?.setLngLat([player.longitude, player.latitude])
-            .setRotation(player.heading);
-          threeLayer?.updatePlayer(player);
-          threeLayer?.setDrivingEffects({
-            offroad: gameLoop?.getEnvironment().surface === 'offroad',
-          });
+          playerVisualUpdates?.update(
+            player,
+            gameLoop?.getSurface() === 'offroad',
+          );
 
           const isFollowing = useGameStore.getState().isFollowingPlayer;
           if (!isFollowing) {
@@ -1322,9 +1366,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             roadContextFor(restoredPlayer),
           ) ?? null;
         gameLoop?.replacePlayer(restoredPlayer);
-        playerMarker
-          ?.setLngLat([restoredPlayer.longitude, restoredPlayer.latitude])
-          .setRotation(restoredPlayer.heading);
+        playerVisualUpdates?.update(
+          restoredPlayer,
+          gameLoop?.getSurface() === 'offroad',
+        );
         const restoredCameraTimestamp = performance.now();
         const restoredCamera = cameraForPlayer(
           restoredPlayer,
@@ -1410,7 +1455,6 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       window.removeEventListener('orientationchange', clearInterruptedInput);
       window.removeEventListener(CLEAR_GAME_INPUT_EVENT, clearInterruptedInput);
       window.removeEventListener(RESET_GAME_INPUT_EVENT, resetInput);
-      window.removeEventListener('resize', handleResize);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       inputController.clearAllInput();
       map.remove();

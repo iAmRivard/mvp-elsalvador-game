@@ -332,6 +332,46 @@ test('recalcula y aplica el offset al cambiar el viewport', async ({
   await expectAppliedCameraOffset(gameMap, 133);
 });
 
+test('no actualiza continuamente el marcador fallback oculto', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-mobile');
+  await page.addInitScript(() => window.localStorage.clear());
+  await enterExpedition(page);
+
+  const mapFrame = page.locator('.map-frame');
+  await expect(mapFrame).toHaveAttribute('data-player-renderer', 'ready', {
+    timeout: 20_000,
+  });
+  await expect(page.locator('.player-marker')).toHaveClass(
+    /player-marker--fallback-hidden/,
+  );
+  const gameMap = page.getByTestId('game-map');
+  await page.waitForTimeout(1_100);
+  const initialFallbackUpdates = Number(
+    await gameMap.getAttribute('data-camera-fallback-marker-updates'),
+  );
+  const initialThreeUpdates = Number(
+    await gameMap.getAttribute('data-camera-three-player-updates'),
+  );
+  const initialEffectsUpdates = Number(
+    await gameMap.getAttribute('data-three-driving-effects-updates'),
+  );
+
+  await page.waitForTimeout(1_100);
+  expect(
+    Number(
+      await gameMap.getAttribute('data-camera-fallback-marker-updates'),
+    ),
+  ).toBe(initialFallbackUpdates);
+  expect(
+    Number(await gameMap.getAttribute('data-camera-three-player-updates')),
+  ).toBeGreaterThan(initialThreeUpdates);
+  expect(
+    Number(await gameMap.getAttribute('data-three-driving-effects-updates')),
+  ).toBe(initialEffectsUpdates);
+});
+
 test('mantiene HUD compacto y cámara de escritorio al conducir', async ({
   page,
 }, testInfo) => {

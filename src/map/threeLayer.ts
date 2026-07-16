@@ -40,7 +40,7 @@ export interface ThreeGameLayerOptions {
 
 export interface ThreeGameLayerController {
   updatePlayer: (player: PlayerRuntime) => void;
-  setDrivingEffects: (state: ThreeDrivingEffectsState) => void;
+  setDrivingEffects: (offroad: boolean) => void;
   setInteractiveSignal: (state: InteractiveSignalState) => void;
   remove: () => void;
 }
@@ -180,9 +180,9 @@ class ThreeGameLayer implements CustomLayerInterface {
     this.map?.triggerRepaint();
   }
 
-  setDrivingEffects(state: ThreeDrivingEffectsState): void {
-    if (this.drivingEffects.offroad === state.offroad) return;
-    this.drivingEffects = state;
+  setDrivingEffects(offroad: boolean): void {
+    if (this.drivingEffects.offroad === offroad) return;
+    this.drivingEffects = { offroad };
     this.map?.triggerRepaint();
   }
 
@@ -468,7 +468,7 @@ export function addThreeGameLayer(
 
   return {
     updatePlayer: (player) => layer.updatePlayer(player),
-    setDrivingEffects: (state) => layer.setDrivingEffects(state),
+    setDrivingEffects: (offroad) => layer.setDrivingEffects(offroad),
     setInteractiveSignal: (state) => layer.setInteractiveSignal(state),
     remove: () => {
       if (map.getLayer(layer.id)) map.removeLayer(layer.id);
