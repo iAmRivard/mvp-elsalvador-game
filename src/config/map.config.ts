@@ -1,4 +1,5 @@
 export interface MapSourceConfig {
+  sourceId: string;
   archiveUrl: string;
   styleUrl: string;
   attribution: string;
@@ -16,6 +17,7 @@ function sameOriginPath(value: string | undefined, fallback: string): string {
 }
 
 export const mapSourceConfig: MapSourceConfig = {
+  sourceId: 'el-salvador',
   archiveUrl: sameOriginPath(
     import.meta.env.VITE_MAP_ARCHIVE_URL,
     '/maps/el-salvador.pmtiles',

@@ -62,14 +62,20 @@ import { addFuelStationMarkers } from '../../map/fuelStationMarkers';
 import { addLocationMarkers } from '../../map/locationMarkers';
 import { addMissionRoute } from '../../map/missionRoute';
 import {
-  isFatalMapError,
+  classifyMapRuntimeError,
   mapErrorDetails,
+  mapErrorResourceUrl,
   mapLoadingLabels,
+  mapRuntimeErrorStopsGameplay,
+  type MapRuntimeErrorClassification,
   type MapLoadingStage,
 } from '../../map/mapStartup';
 import { createPlayerMarkerElement } from '../../map/playerMarker';
 import { PlayerVisualUpdateCoordinator } from '../../map/playerVisualUpdates';
-import { registerPmtilesProtocol } from '../../map/pmtilesProtocol';
+import {
+  registerPmtilesProtocol,
+  subscribePmtilesProtocolFailures,
+} from '../../map/pmtilesProtocol';
 import { addRoadDebugLayer } from '../../map/roadDebugLayer';
 import { addPlayableRoadSurfaceLayer } from '../../map/roadSurfaceLayer';
 import { createStyleResourceTransform } from '../../map/styleResources';
@@ -313,6 +319,33 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let previousHapticSurface = useGameStore.getState().driving.surface;
     let interactionWasActive = false;
     let startupReady = false;
+    let fatalMapErrorHandled = false;
+
+    const recordMapErrorClassification = (
+      classification: MapRuntimeErrorClassification,
+    ) => {
+      const container = containerRef.current;
+      if (!container) return;
+      container.dataset.mapLastErrorSeverity = classification.severity;
+      container.dataset.mapLastErrorReason = classification.reason;
+      container.dataset.mapLastErrorResource = classification.resourceKind;
+      container.dataset.mapLastErrorDetails = classification.details;
+      if (classification.severity !== 'fatal') {
+        container.dataset.mapLastNonfatalError = classification.details;
+      }
+    };
+    const stopForFatalMapError = (
+      classification: MapRuntimeErrorClassification,
+    ) => {
+      if (fatalMapErrorHandled) return;
+      fatalMapErrorHandled = true;
+      startupReady = false;
+      useGameStore.getState().setInsideValidObjectiveZone(false);
+      inputController.clearAllInput();
+      inputController.resetMobileBoostCompletely();
+      setErrorMessage(classification.details);
+      setStatus('error');
+    };
 
     const updateObjectiveZonePresentation = (
       state = useGameStore.getState(),
@@ -750,10 +783,19 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             finishStartup();
           },
         )
-        .catch(() => {
+        .catch((error: unknown) => {
           if (!effectActive) return;
           roadNetworkEnabled = false;
           useGameStore.getState().setRoadNetworkStatus('unavailable');
+          recordMapErrorClassification(
+            classifyMapRuntimeError(error, {
+              startupComplete: startupReady,
+              resourceKind: 'road-network',
+              primaryStyleUrl: mapSourceConfig.styleUrl,
+              primaryArchiveUrl: mapSourceConfig.archiveUrl,
+              primarySourceId: mapSourceConfig.sourceId,
+            }),
+          );
           if (containerRef.current) {
             containerRef.current.dataset.roadNetworkStatus = 'unavailable';
           }
@@ -816,7 +858,17 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           if (effectActive) removeRoadDebugLayer = removeLayer;
           else removeLayer();
         })
-        .catch(() => undefined);
+        .catch((error: unknown) => {
+          recordMapErrorClassification(
+            classifyMapRuntimeError(error, {
+              startupComplete: startupReady,
+              resourceKind: 'decorative',
+              primaryStyleUrl: mapSourceConfig.styleUrl,
+              primaryArchiveUrl: mapSourceConfig.archiveUrl,
+              primarySourceId: mapSourceConfig.sourceId,
+            }),
+          );
+        });
 
       if (threeEnabled) {
         void import('../../map/threeLayer')
@@ -1401,20 +1453,58 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       lastCameraUpdate = performance.now();
     };
     const handleError = (event: ErrorEvent) => {
-      const details = mapErrorDetails(event.error);
-      if (!isFatalMapError(event.error, startupReady)) {
-        if (containerRef.current) {
-          containerRef.current.dataset.mapLastNonfatalError = details;
-        }
+      const runtimeEvent = event as ErrorEvent & {
+        sourceId?: string;
+        source?: { url?: unknown };
+      };
+      const sourceUrl =
+        typeof runtimeEvent.source?.url === 'string'
+          ? runtimeEvent.source.url
+          : null;
+      const classification = classifyMapRuntimeError(event.error, {
+        startupComplete: startupReady,
+        resourceUrl: mapErrorResourceUrl(event.error) ?? sourceUrl,
+        sourceId: runtimeEvent.sourceId,
+        primaryStyleUrl: mapSourceConfig.styleUrl,
+        primaryArchiveUrl: mapSourceConfig.archiveUrl,
+        primarySourceId: mapSourceConfig.sourceId,
+      });
+      recordMapErrorClassification(classification);
+      if (!mapRuntimeErrorStopsGameplay(classification)) {
         return;
       }
-      startupReady = false;
-      useGameStore.getState().setInsideValidObjectiveZone(false);
-      inputController.clearAllInput();
-      inputController.resetMobileBoostCompletely();
-      setErrorMessage(details);
-      setStatus('error');
+      stopForFatalMapError(classification);
     };
+    const handleWebglContextLost = () => {
+      const classification = classifyMapRuntimeError(
+        new Error('WebGL context lost'),
+        {
+          startupComplete: startupReady,
+          resourceKind: 'webgl',
+          primaryStyleUrl: mapSourceConfig.styleUrl,
+          primaryArchiveUrl: mapSourceConfig.archiveUrl,
+          primarySourceId: mapSourceConfig.sourceId,
+        },
+      );
+      recordMapErrorClassification(classification);
+      stopForFatalMapError(classification);
+    };
+    const unsubscribePmtilesFailures = subscribePmtilesProtocolFailures(
+      ({ error, requestUrl }) => {
+        const classification = classifyMapRuntimeError(error, {
+          startupComplete: startupReady,
+          resourceKind: 'primary-source',
+          resourceUrl: requestUrl,
+          sourceId: mapSourceConfig.sourceId,
+          persistent: true,
+          primaryStyleUrl: mapSourceConfig.styleUrl,
+          primaryArchiveUrl: mapSourceConfig.archiveUrl,
+          primarySourceId: mapSourceConfig.sourceId,
+        });
+        recordMapErrorClassification(classification);
+        stopForFatalMapError(classification);
+      },
+    );
 
     map.on('load', handleLoad);
     map.on('dragstart', handleManualCameraStart);
@@ -1423,6 +1513,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     map.on('pitchstart', handleManualCameraStart);
     map.on('resize', handleResize);
     map.on('error', handleError);
+    map.on('webglcontextlost', handleWebglContextLost);
     map.setStyle(mapSourceConfig.styleUrl, {
       transformStyle: createStyleResourceTransform(window.location.href),
     });
@@ -1437,6 +1528,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       map.off('pitchstart', handleManualCameraStart);
       map.off('resize', handleResize);
       map.off('error', handleError);
+      map.off('webglcontextlost', handleWebglContextLost);
+      unsubscribePmtilesFailures();
       gameLoop?.stop();
       unsubscribeRuntime?.();
       unsubscribeSettings?.();

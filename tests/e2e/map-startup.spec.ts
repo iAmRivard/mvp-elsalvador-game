@@ -65,6 +65,66 @@ test('reintenta un fallo fatal sin recargar ni perder el estado de sesión', asy
   expect(spriteRequests).toEqual([]);
 });
 
+test('un fallo tardío del PMTiles principal corta el input activo', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-desktop');
+  let failArchiveRequests = false;
+  let failedArchiveRequests = 0;
+  await page.route('**/maps/el-salvador.pmtiles*', async (route) => {
+    if (!failArchiveRequests) {
+      await route.continue();
+      return;
+    }
+    failedArchiveRequests += 1;
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/octet-stream',
+      headers: { 'cache-control': 'no-store' },
+      body: '',
+    });
+  });
+  await page.addInitScript(() => window.localStorage.clear());
+  await page.goto('/');
+  await launch(page);
+
+  const gameMap = page.getByTestId('game-map');
+  await expect(page.getByText('El mapa local está listo.')).toBeAttached({
+    timeout: 20_000,
+  });
+  await page.keyboard.down('w');
+  await expect
+    .poll(async () => Number(await gameMap.getAttribute('data-input-throttle')))
+    .toBeGreaterThan(0);
+
+  failArchiveRequests = true;
+  const canvas = page.locator('.maplibregl-canvas');
+  const canvasBounds = await canvas.boundingBox();
+  if (!canvasBounds) throw new Error('No se pudo localizar el canvas del mapa.');
+  await page.mouse.move(
+    canvasBounds.x + canvasBounds.width / 2,
+    canvasBounds.y + canvasBounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    canvasBounds.x + canvasBounds.width * 0.8,
+    canvasBounds.y + canvasBounds.height * 0.8,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await expect.poll(() => failedArchiveRequests).toBeGreaterThan(0);
+
+  await expect(gameMap).toHaveAttribute(
+    'data-map-last-error-severity',
+    'fatal',
+  );
+  await expect(page.locator('.map-message--error > strong')).toBeVisible();
+  expect(failedArchiveRequests).toBeGreaterThan(0);
+  await expect(gameMap).toHaveAttribute('data-input-throttle', '0.000');
+  await expect(gameMap).toHaveAttribute('data-input-mobile-boost', 'off');
+  await page.keyboard.up('w');
+});
+
 for (const deviceScaleFactor of [2, 3]) {
   test(`inicia con DPR ${deviceScaleFactor} sin solicitar sprites`, async ({
     browser,
