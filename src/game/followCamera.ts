@@ -147,6 +147,22 @@ export function mobileCameraModeForSpeed(
     : input.previousMode;
 }
 
+export function settledMobileCameraModeForSpeed(
+  input: MobileCameraModeInput,
+  hysteresis: MobileCameraHysteresis = mobileCameraHysteresis,
+): MobileCameraMode {
+  let mode = input.previousMode;
+  for (let index = 0; index < 3; index += 1) {
+    const candidate = mobileCameraTransitionCandidate(
+      { ...input, previousMode: mode },
+      hysteresis,
+    );
+    if (candidate === mode) return mode;
+    mode = candidate;
+  }
+  return mode;
+}
+
 export function drivingCameraProfile(
   mode: DrivingPresentationMode,
   mobile: boolean,

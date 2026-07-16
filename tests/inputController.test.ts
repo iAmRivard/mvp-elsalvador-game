@@ -279,20 +279,32 @@ describe('keyboard route controls', () => {
     unbind();
   });
 
-  it('separa almacenamiento, frame visual y consumo del input', () => {
+  it('separa almacenamiento, próximo RAF y consumo del input', () => {
     const input = new InputController();
     const eventTimestamp = performance.now() - 2;
     const sequence = input.recordInputStored(eventTimestamp);
     input.markInputConsumed(eventTimestamp + 8);
-    input.markInputVisualUpdate(sequence, eventTimestamp + 12);
+    input.markInputAnimationFrame(sequence, eventTimestamp + 12);
 
     expect(input.getInputLatencyDiagnostics()).toMatchObject({
       sequence,
-      inputVisualLatencyMilliseconds: 12,
+      eventToNextAnimationFrameMilliseconds: 12,
       inputConsumptionLatencyMilliseconds: 8,
     });
     expect(
       input.getInputLatencyDiagnostics().eventToStoredMilliseconds,
     ).not.toBeNull();
+  });
+
+  it('no confunde un RAF tardío con presentación visual confirmada', () => {
+    const input = new InputController();
+    const eventTimestamp = performance.now() - 1;
+    const sequence = input.recordInputStored(eventTimestamp);
+    input.markInputAnimationFrame(sequence, eventTimestamp + 80);
+
+    expect(input.getInputLatencyDiagnostics()).toMatchObject({
+      eventToNextAnimationFrameMilliseconds: 80,
+      inputConsumptionLatencyMilliseconds: null,
+    });
   });
 });

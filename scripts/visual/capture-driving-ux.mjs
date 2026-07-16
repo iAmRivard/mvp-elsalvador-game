@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium, devices } from '@playwright/test';
@@ -8,6 +9,16 @@ const outputDirectory = resolve(
 );
 const observationMilliseconds = 30_000;
 const warmupMilliseconds = 10_000;
+const captureSchemaVersion = 2;
+const measuredSha = (() => {
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+    }).trim();
+  } catch {
+    return null;
+  }
+})();
 await mkdir(outputDirectory, { recursive: true });
 
 function percentile(sortedValues, percentage) {
@@ -348,9 +359,17 @@ try {
     over50Milliseconds: frameDurations.filter((value) => value > 50).length,
     over100Milliseconds: frameDurations.filter((value) => value > 100).length,
   };
-  metrics.framesPerSecond = summarize(
+  metrics.instantaneousFramesPerSecond = summarize(
     frameDurations.filter((value) => value > 0).map((value) => 1_000 / value),
   );
+  const observedFrameTimeMilliseconds = frameDurations.reduce(
+    (total, value) => total + value,
+    0,
+  );
+  metrics.framesPerSecondThroughput =
+    observedFrameTimeMilliseconds > 0
+      ? (frameDurations.length * 1_000) / observedFrameTimeMilliseconds
+      : null;
   metrics.cameraMilliseconds = summarize(metrics.samples.cameraDurations);
   metrics.roadTrackerMilliseconds = summarize(
     metrics.samples.roadTrackerDurations,
@@ -365,8 +384,8 @@ try {
   };
   metrics.timeToSelect58KphTargetMilliseconds =
     timeToSelect58KphTargetMilliseconds;
-  const inputVisualLatency = Number(
-    metrics.mapDataset.inputVisualLatencyMs ?? Number.NaN,
+  const inputNextAnimationFrameLatency = Number(
+    metrics.mapDataset.inputNextAnimationFrameLatencyMs ?? Number.NaN,
   );
   const inputStoredLatency = Number(
     metrics.mapDataset.inputStoredLatencyMs ?? Number.NaN,
@@ -374,9 +393,12 @@ try {
   const inputConsumptionLatency = Number(
     metrics.mapDataset.inputConsumptionLatencyMs ?? Number.NaN,
   );
-  metrics.inputVisualLatencyMilliseconds = Number.isFinite(inputVisualLatency)
-    ? inputVisualLatency
+  metrics.inputNextAnimationFrameMilliseconds = Number.isFinite(
+    inputNextAnimationFrameLatency,
+  )
+    ? inputNextAnimationFrameLatency
     : null;
+  metrics.inputVisualLatencyMilliseconds = null;
   metrics.inputStoredLatencyMilliseconds = Number.isFinite(inputStoredLatency)
     ? inputStoredLatency
     : null;
@@ -385,6 +407,23 @@ try {
   )
     ? inputConsumptionLatency
     : null;
+  metrics.captureMetadata = {
+    schemaVersion: captureSchemaVersion,
+    measuredSha,
+    baseUrl,
+    capturedAt: new Date().toISOString(),
+    buildMode:
+      metrics.mapDataset.performanceProfilingEnabled === 'true'
+        ? 'production-profiling'
+        : 'production-normal',
+    performanceProfilingEnabled:
+      metrics.mapDataset.performanceProfilingEnabled === 'true',
+    diagnosticsEnabled: metrics.mapDataset.diagnosticsEnabled === 'true',
+    cameraTimingScope:
+      'map camera call, exposeCameraTarget and follow-state bookkeeping',
+    inputTimingScope:
+      'event to stored, next game-loop consumption and next animation frame; presentation latency unavailable',
+  };
   await writeFile(
     resolve(outputDirectory, 'v0.2.5.2-mobile-metrics.json'),
     `${JSON.stringify(metrics, null, 2)}\n`,

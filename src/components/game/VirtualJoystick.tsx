@@ -180,14 +180,14 @@ export function VirtualJoystick({
     if (performanceMetricsEnabled) {
       const sequence = input.recordInputStored(event.timeStamp);
       window.requestAnimationFrame(() => {
-        input.markInputVisualUpdate(sequence, performance.now());
+        input.markInputAnimationFrame(sequence, performance.now());
         const diagnostics = input.getInputLatencyDiagnostics();
         if (
           surfaceRef.current &&
-          diagnostics.inputVisualLatencyMilliseconds !== null
+          diagnostics.eventToNextAnimationFrameMilliseconds !== null
         ) {
-          surfaceRef.current.dataset.inputVisualLatencyMs =
-            diagnostics.inputVisualLatencyMilliseconds.toFixed(3);
+          surfaceRef.current.dataset.inputNextAnimationFrameLatencyMs =
+            diagnostics.eventToNextAnimationFrameMilliseconds.toFixed(3);
         }
       });
     }

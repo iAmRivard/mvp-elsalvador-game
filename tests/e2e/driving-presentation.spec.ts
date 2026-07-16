@@ -81,6 +81,50 @@ async function selectFastMobileTarget(context: BrowserContext, page: Page) {
   }
 }
 
+async function stopMobileTarget(context: BrowserContext, page: Page) {
+  const joystick = page.getByLabel('Joystick de velocidad objetivo');
+  await expect(joystick).toBeVisible();
+  const box = await joystick.boundingBox();
+  expect(box).not.toBeNull();
+  const centerX = box!.x + box!.width / 2;
+  const centerY = box!.y + box!.height / 2;
+  const session = await context.newCDPSession(page);
+  try {
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ id: 2, x: centerX, y: centerY, force: 1 }],
+    });
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [
+        {
+          id: 2,
+          x: centerX,
+          y: centerY + box!.width * 0.44,
+          force: 1,
+        },
+      ],
+    });
+    await expect
+      .poll(
+        async () =>
+          Number(
+            await page
+              .getByTestId('game-map')
+              .getAttribute('data-player-speed-kilometers-per-hour'),
+          ),
+        { timeout: 20_000 },
+      )
+      .toBeLessThan(2);
+  } finally {
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: [],
+    });
+    await session.detach();
+  }
+}
+
 for (const viewport of viewports) {
   test(`respeta el presupuesto de conducción en ${viewport.name}`, async ({
     context,
@@ -177,6 +221,30 @@ for (const viewport of viewports) {
     });
   });
 }
+
+test('restaura la cámara móvil detenida después del perfil rápido', async ({
+  context,
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-mobile');
+  await page.addInitScript(() => window.localStorage.clear());
+  await enterExpedition(page);
+
+  const gameMap = page.getByTestId('game-map');
+  await selectFastMobileTarget(context, page);
+  await expect(gameMap).toHaveAttribute(
+    'data-current-camera-profile',
+    'mobileFast',
+    { timeout: 12_000 },
+  );
+
+  await stopMobileTarget(context, page);
+  await expect(gameMap).toHaveAttribute(
+    'data-current-camera-profile',
+    'mobileStopped',
+    { timeout: 4_000 },
+  );
+});
 
 test('mantiene HUD compacto y cámara de escritorio al conducir', async ({
   page,

@@ -11,6 +11,7 @@ import {
   followCameraTarget,
   followCameraUpdateIsSignificant,
   mobileCameraModeForSpeed,
+  settledMobileCameraModeForSpeed,
   smoothFollowBearing,
   type FollowCameraOptions,
 } from '../src/game/followCamera';
@@ -184,5 +185,17 @@ describe('cámara de seguimiento', () => {
     expect(
       cameraProfileSpeedChangedSignificantly(60, 60.5, followCameraTolerances),
     ).toBe(true);
+  });
+
+  it('settles from fast to stopped after a restore', () => {
+    expect(
+      settledMobileCameraModeForSpeed({
+        speedKilometersPerHour: 0,
+        previousMode: 'fast',
+        timeInStateMilliseconds: 0,
+        hasAlert: false,
+        hasInteraction: false,
+      }),
+    ).toBe('stopped');
   });
 });

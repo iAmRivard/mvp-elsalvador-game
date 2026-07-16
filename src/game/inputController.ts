@@ -51,7 +51,7 @@ export interface InputDiagnostics extends InputSources {
 export interface InputLatencyDiagnostics {
   sequence: number;
   eventToStoredMilliseconds: number | null;
-  inputVisualLatencyMilliseconds: number | null;
+  eventToNextAnimationFrameMilliseconds: number | null;
   inputConsumptionLatencyMilliseconds: number | null;
 }
 
@@ -125,7 +125,7 @@ export class InputController {
     sequence: number;
     eventTimestamp: number;
     storedTimestamp: number;
-    visualTimestamp: number | null;
+    animationFrameTimestamp: number | null;
     consumedTimestamp: number | null;
   } | null = null;
 
@@ -208,20 +208,20 @@ export class InputController {
       sequence,
       eventTimestamp: normalizedEventTimestamp,
       storedTimestamp,
-      visualTimestamp: null,
+      animationFrameTimestamp: null,
       consumedTimestamp: null,
     };
     return sequence;
   }
 
-  markInputVisualUpdate(sequence: number, timestamp: number): void {
+  markInputAnimationFrame(sequence: number, timestamp: number): void {
     if (
       this.inputLatencySample?.sequence !== sequence ||
-      this.inputLatencySample.visualTimestamp !== null
+      this.inputLatencySample.animationFrameTimestamp !== null
     ) {
       return;
     }
-    this.inputLatencySample.visualTimestamp = timestamp;
+    this.inputLatencySample.animationFrameTimestamp = timestamp;
   }
 
   markInputConsumed(timestamp: number): void {
@@ -240,7 +240,7 @@ export class InputController {
       return {
         sequence: 0,
         eventToStoredMilliseconds: null,
-        inputVisualLatencyMilliseconds: null,
+        eventToNextAnimationFrameMilliseconds: null,
         inputConsumptionLatencyMilliseconds: null,
       };
     }
@@ -250,10 +250,13 @@ export class InputController {
         0,
         sample.storedTimestamp - sample.eventTimestamp,
       ),
-      inputVisualLatencyMilliseconds:
-        sample.visualTimestamp === null
+      eventToNextAnimationFrameMilliseconds:
+        sample.animationFrameTimestamp === null
           ? null
-          : Math.max(0, sample.visualTimestamp - sample.eventTimestamp),
+          : Math.max(
+              0,
+              sample.animationFrameTimestamp - sample.eventTimestamp,
+            ),
       inputConsumptionLatencyMilliseconds:
         sample.consumedTimestamp === null
           ? null

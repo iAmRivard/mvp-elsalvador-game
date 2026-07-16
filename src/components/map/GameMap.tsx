@@ -9,6 +9,7 @@ import { gameConfig } from '../../config/game.config';
 import {
   diagnosticsEnabled,
   performanceMetricsEnabled,
+  performanceProfilingEnabled,
 } from '../../config/diagnostics.config';
 import {
   followCameraConfig,
@@ -29,6 +30,7 @@ import {
   followCameraUpdateIsSignificant,
   mobileCameraModeForSpeed,
   mobileCameraTransitionCandidate,
+  settledMobileCameraModeForSpeed,
   smoothFollowBearing,
   type FollowCameraOptions,
   type MobileCameraMode,
@@ -401,6 +403,12 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         hasAlert: presentationMode === 'alert',
         hasInteraction: presentationMode === 'interaction',
       };
+      if (settleImmediately) {
+        mobileCameraMode = settledMobileCameraModeForSpeed(input);
+        mobileCameraCandidateMode = mobileCameraMode;
+        mobileCameraCandidateSince = timestampMilliseconds;
+        return mobileCameraMode;
+      }
       const candidate = mobileCameraTransitionCandidate(input);
       if (candidate !== mobileCameraCandidateMode) {
         mobileCameraCandidateMode = candidate;
@@ -414,7 +422,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       });
       if (nextMode !== mobileCameraMode) {
         mobileCameraMode = nextMode;
-        mobileCameraCandidateMode = nextMode;
+        mobileCameraCandidateMode = mobileCameraTransitionCandidate({
+          ...input,
+          previousMode: nextMode,
+        });
         mobileCameraCandidateSince = timestampMilliseconds;
       }
       return mobileCameraMode;
@@ -843,7 +854,15 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             speedKilometersPerHour,
             followCameraTolerances,
           );
-          if (!wasFollowing || positionChanged || speedChanged) {
+          const mobileCameraTransitionPending =
+            deviceProfile.isTouch &&
+            mobileCameraCandidateMode !== mobileCameraMode;
+          if (
+            !wasFollowing ||
+            positionChanged ||
+            speedChanged ||
+            mobileCameraTransitionPending
+          ) {
             cameraRequestedUpdates += 1;
             cameraWindowRequestedUpdates += 1;
             if (
@@ -915,7 +934,6 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 essential: false,
               });
             }
-            const cameraUpdateDuration = performance.now() - cameraStartedAt;
             exposeCameraTarget(camera);
             recenterUntil = isRecentering ? timestamp + duration : 0;
             lastCameraUpdate = timestamp;
@@ -925,6 +943,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             lastFollowedHeading = player.heading;
             lastFollowedSpeedKilometersPerHour = speedKilometersPerHour;
             lastCameraBearing = camera.options.bearing;
+            const cameraUpdateDuration = performance.now() - cameraStartedAt;
             cameraAppliedUpdates += 1;
             cameraWindowAppliedUpdates += 1;
             cameraUpdateDurationTotal += cameraUpdateDuration;
@@ -937,7 +956,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 cameraUpdateDurations.shift();
               }
             }
-            if (containerRef.current && performanceMetricsEnabled) {
+            if (containerRef.current) {
               containerRef.current.dataset.cameraUpdateMs =
                 cameraUpdateDuration.toFixed(3);
             }
@@ -996,8 +1015,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               );
               containerRef.current.dataset.inputStoredLatencyMs =
                 inputLatency.eventToStoredMilliseconds?.toFixed(3) ?? '';
-              containerRef.current.dataset.inputVisualLatencyMs =
-                inputLatency.inputVisualLatencyMilliseconds?.toFixed(3) ?? '';
+              containerRef.current.dataset.inputNextAnimationFrameLatencyMs =
+                inputLatency.eventToNextAnimationFrameMilliseconds?.toFixed(
+                  3,
+                ) ?? '';
               containerRef.current.dataset.inputConsumptionLatencyMs =
                 inputLatency.inputConsumptionLatencyMilliseconds?.toFixed(3) ??
                 '';
@@ -1360,7 +1381,15 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       data-device-layout={deviceProfile.isCompact ? 'compact' : 'full'}
       data-player-renderer={threeStatus}
     >
-      <div ref={containerRef} className="map-canvas" data-testid="game-map" />
+      <div
+        ref={containerRef}
+        className="map-canvas"
+        data-testid="game-map"
+        data-performance-profiling-enabled={String(
+          performanceProfilingEnabled,
+        )}
+        data-diagnostics-enabled={String(diagnosticsEnabled)}
+      />
 
       <div className="map-vignette" aria-hidden="true" />
       {ambientFog && <div className="map-atmosphere" aria-hidden="true" />}
