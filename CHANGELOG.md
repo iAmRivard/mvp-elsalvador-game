@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.2.5.2 - 2026-07-16
+
+### Fluidez y cámara móvil
+
+- La cámara táctil de calidad media/alta pasa a una cadencia objetivo de 33 ms, filtra cambios
+  insignificantes y conserva perfiles cercanos para conducción y velocidad alta.
+- La histéresis sigue evaluándose aunque el vehículo quede quieto, por lo que una transición desde
+  `mobileFast` termina correctamente en `mobileStopped`.
+- Las métricas separan FPS por throughput de FPS instantáneo, registran el SHA y modo de build, y
+  nombran `evento → próximo RAF` sin presentarlo como latencia visual real.
+
+### Tutorial y presentación
+
+- El onboarding obligatorio se reduce a cinco pasos: girar, seleccionar velocidad, mantener marcha,
+  frenar y seguir la línea cian. Objetivo, interacción, Turbo y bitácora pasan a consejos compactos.
+- La radio móvil se contrae después de una vista previa y puede reabrirse sin perder el evento.
+- Estaciones de combustible con nivel suficiente quedan como iconos discretos; la ayuda completa se
+  reserva para combustible bajo o para un objetivo seleccionado.
+- Vehículo, ruta inmediata y cámara móvil ganan presencia visual sin cambiar física ni contenido.
+
+### Compatibilidad y validación
+
+- Guardados heredados en pasos posteriores del tutorial migran a conducción libre sin repetir
+  instrucciones.
+- Service worker y pruebas PWA usan caches `v0.2.5.2`; PMTiles y solicitudes Range siguen fuera del
+  cache.
+- Playwright cubre onboarding táctil, consejos contextuales, jerarquía de overlays y restauración de
+  cámara al detenerse.
+
 ## v0.2.5.1 - 2026-07-15
 
 ### Onboarding y controles

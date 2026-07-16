@@ -1,7 +1,7 @@
 # El Salvador: Rutas Perdidas
 
 Videojuego web de conducción y exploración sobre una cartografía estilizada de El Salvador. La
-v0.2.5.1 incluye mapa MapLibre 2.5D autónomo, onboarding integrado, presentación dinámica de conducción, navegación sincronizada, velocidad objetivo móvil,
+v0.2.5.2 incluye mapa MapLibre 2.5D autónomo, onboarding integrado, presentación dinámica de conducción, navegación sincronizada, velocidad objetivo móvil,
 red vial local con caminos de tierra, rutas A* en Web Worker, historia guiada, estaciones de
 combustible, música local, vehículo y referencias 3D, progreso, Docker y despliegue en Dokploy.
 
@@ -194,8 +194,8 @@ La validación automática y el protocolo físico pendiente están en
 ## Docker
 
 ```sh
-docker build -t el-salvador-rutas-perdidas:v0.2.5.1 .
-docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.5.1
+docker build -t el-salvador-rutas-perdidas:v0.2.5.2 .
+docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.5.2
 curl http://localhost:8080/healthz
 ```
 
@@ -208,12 +208,21 @@ El navegador lee exclusivamente `/maps/el-salvador.pmtiles` y los recursos de `/
 Consulta `data/SOURCES.md`, `data/LICENSES.md` y `scripts/maps/README.md` para procedencia,
 licencias y reconstrucción.
 
-## Estado de la v0.2.5.1
+## Estado de la v0.2.5.2
+
+- El tutorial obligatorio termina al seguir la ruta; objetivo, interacción, Turbo y bitácora quedan
+  como consejos contextuales no pausantes.
+- La cámara móvil actualiza cerca de 30 Hz en calidad media/alta, conserva histéresis y restaura el
+  perfil detenido incluso después de velocidad rápida.
+- Radio móvil contraíble, estaciones de combustible con prioridad contextual y jerarquía única de
+  overlays reducen saturación sin cambiar física ni progreso.
+- Service worker versionado, PMTiles/Range sin cachear y pruebas E2E con interacciones reales.
+
+### Base v0.2.5.1
 
 - **La transmisión** funciona como onboarding contextual persistente, sin competir con CTA o radio.
 - Reversa en dos etapas, bitácora que suspende controles y HUD detenido compacto por defecto.
 - Restauración exacta de declutter y validación vial de objetivos en `npm run check`.
-- Service worker actualizado sin cachear PMTiles/Range y E2E aislado de caches anteriores.
 
 ### Base v0.2.5
 

@@ -65,7 +65,7 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
 
   await page.evaluate(async () => {
     const cacheName = (await caches.keys()).find((key) =>
-      key.includes('shell-v0.2.5.1'),
+      key.includes('shell-v0.2.5.2'),
     );
     if (!cacheName) throw new Error('No se encontró el shell cache.');
     const cache = await caches.open(cacheName);
@@ -120,7 +120,7 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
   const cacheFirstResult = await page.evaluate(async (assetUrl) => {
     if (!assetUrl) throw new Error('No se encontró un asset con hash.');
     const cacheName = (await caches.keys()).find((key) =>
-      key.includes('static-v0.2.5.1'),
+      key.includes('static-v0.2.5.2'),
     );
     if (!cacheName) throw new Error('No se encontró el static cache.');
     const cache = await caches.open(cacheName);
