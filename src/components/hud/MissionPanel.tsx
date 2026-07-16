@@ -462,7 +462,7 @@ function MissionPanelContent() {
   return (
     <aside
       ref={panelRef}
-      className={`mission-panel ${collapsed ? 'mission-panel--collapsed' : ''} ${compactViewport && !collapsed ? `mission-panel--journal-sheet mission-panel--sheet-${sheetState}` : ''}`}
+      className={`mission-panel ${collapsed ? 'mission-panel--collapsed' : ''} ${onboardingActive ? 'mission-panel--onboarding' : ''} ${compactViewport && !collapsed ? `mission-panel--journal-sheet mission-panel--sheet-${sheetState}` : ''}`}
       aria-label="Panel de misiones"
       data-mobile-sheet-state={compactViewport ? sheetState : 'closed'}
       data-journal-open={isJournalOpen}
@@ -744,7 +744,7 @@ function MissionPanelContent() {
                 </ul>
               </section>
 
-              {contextActionLabel && (
+              {contextActionLabel && !isJournalOpen && (
                 <button
                   type="button"
                   className="mission-context-action"
@@ -870,6 +870,7 @@ export function MissionPanel() {
   const [compactViewport, setCompactViewport] = useState(isCompactViewport);
   const isJournalOpen = useGameStore((state) => state.isJournalOpen);
   const presentationMode = useGameStore((state) => state.presentationMode);
+  const onboardingState = useGameStore((state) => state.onboardingState);
 
   useEffect(() => {
     const compactQuery = window.matchMedia(compactViewportQuery);
@@ -880,7 +881,25 @@ export function MissionPanel() {
       compactQuery.removeEventListener('change', handleCompactChange);
   }, []);
 
-  if (compactViewport && !isJournalOpen && presentationMode !== 'stopped') {
+  if (
+    compactViewport &&
+    !isJournalOpen &&
+    (onboardingState === 'introducing' ||
+      onboardingState === 'driving-basics')
+  ) {
+    return null;
+  }
+
+  const onboardingMissionPanelAllowed =
+    onboardingState === 'navigation-basics' ||
+    onboardingState === 'interaction-basics';
+
+  if (
+    compactViewport &&
+    !isJournalOpen &&
+    presentationMode !== 'stopped' &&
+    !onboardingMissionPanelAllowed
+  ) {
     return null;
   }
 

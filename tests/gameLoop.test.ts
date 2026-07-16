@@ -52,6 +52,8 @@ describe('avance del game loop', () => {
     });
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
     const telemetryUpdates: PlayerSimulationSample[][] = [];
+    const realTimeDeltas: number[] = [];
+    const startedAt = performance.now();
     const loop = startPlayerGameLoop({
       initialPlayer: { ...player, speedMetersPerSecond: 38 },
       input: new InputController(),
@@ -67,18 +69,21 @@ describe('avance del game loop', () => {
         },
       }),
       onVisualUpdate: vi.fn(),
-      onTelemetryUpdate: (_runtime, samples) =>
-        telemetryUpdates.push([...samples]),
+      onTelemetryUpdate: (_runtime, samples, elapsedRealTimeSeconds) => {
+        realTimeDeltas.push(elapsedRealTimeSeconds);
+        telemetryUpdates.push([...samples]);
+      },
     });
     const frame = nextFrame as FrameRequestCallback | null;
     if (!frame) throw new Error('The game loop did not schedule a frame.');
 
-    frame(performance.now() + 120);
+    frame(startedAt + 137);
 
     expect(telemetryUpdates).toHaveLength(2);
     const samples = telemetryUpdates.at(-1);
     if (!samples) throw new Error('Telemetry did not receive movement samples.');
     expect(samples.length).toBeGreaterThan(1);
+    expect(realTimeDeltas.at(-1)).toBeCloseTo(0.137, 2);
     const latestSample = samples.at(-1);
     if (!latestSample) throw new Error('The telemetry sample list is empty.');
     expect(latestSample.player).toEqual(loop.getPlayer());

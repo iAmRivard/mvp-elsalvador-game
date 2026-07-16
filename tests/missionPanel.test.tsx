@@ -136,10 +136,28 @@ describe('CTA móvil de misión', () => {
   });
 
   it('oculta la CTA de misión durante onboarding y expone solo acciones reales', () => {
-    useGameStore.setState({ onboardingState: 'driving-basics' });
+    useGameStore.setState({
+      onboardingState: 'driving-basics',
+      presentationMode: 'driving',
+    });
     const { rerender } = render(<MissionPanel />);
 
     expect(screen.queryByTestId('mobile-mission-cta')).toBeNull();
+    expect(screen.queryByLabelText('Panel de misiones')).toBeNull();
+
+    act(() => useGameStore.getState().openJournal('missions'));
+    rerender(<MissionPanel />);
+    expect(screen.getByLabelText('Panel de misiones')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Cerrar bitácora' }),
+    ).toBeTruthy();
+    act(() => useGameStore.getState().closeJournal());
+
+    act(() => {
+      useGameStore.setState({ onboardingState: 'navigation-basics' });
+    });
+    rerender(<MissionPanel />);
+    expect(screen.getByLabelText('Panel de misiones')).toBeTruthy();
 
     act(() => {
       useGameStore.setState({
@@ -154,5 +172,6 @@ describe('CTA móvil de misión', () => {
         .getByLabelText('Panel de misiones')
         .getAttribute('data-context-action'),
     ).toBe('Escuchar señal');
+    expect(screen.queryByRole('button', { name: 'Escuchar señal' })).toBeNull();
   });
 });

@@ -7,6 +7,7 @@ import {
   coastConditionIsMet,
   objectiveRecognitionIsMet,
   onboardingStateForStep,
+  routeFollowingIsValid,
 } from '../src/game/onboarding';
 
 function diagnostics(values: Partial<InputDiagnostics> = {}): InputDiagnostics {
@@ -45,7 +46,7 @@ function diagnostics(values: Partial<InputDiagnostics> = {}): InputDiagnostics {
 
 describe('reglas de onboarding', () => {
   it('mapea los nueve pasos a estados persistibles', () => {
-    expect(onboardingStateForStep('steer')).toBe('introducing');
+    expect(onboardingStateForStep('steer')).toBe('driving-basics');
     expect(onboardingStateForStep('select-speed')).toBe('driving-basics');
     expect(onboardingStateForStep('coast')).toBe('driving-basics');
     expect(onboardingStateForStep('brake')).toBe('driving-basics');
@@ -122,28 +123,59 @@ describe('reglas de onboarding', () => {
     ).toBe(false);
   });
 
-  it('reconoce objetivo por distancia, visibilidad sostenida o ruta inmediata', () => {
+  it('exige seguimiento vial real y rechaza cada condición inválida', () => {
+    const valid = {
+      routeVisible: true,
+      speedKilometersPerHour: 12,
+      forwardSpeedMetersPerSecond: 12 / 3.6,
+      offRoute: false,
+      requiresRejoin: false,
+      surface: 'primary' as const,
+      roadNetworkReady: true,
+      distanceToRouteMeters: 24,
+      maximumDistanceToRouteMeters: 24,
+      reversing: false,
+    };
+    expect(routeFollowingIsValid(valid)).toBe(true);
+    expect(routeFollowingIsValid({ ...valid, routeVisible: false })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, speedKilometersPerHour: 4.99 })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, offRoute: true })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, requiresRejoin: true })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, surface: 'offroad' })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, roadNetworkReady: false })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, distanceToRouteMeters: 24.01 })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, reversing: true })).toBe(false);
+  });
+
+  it('reconoce solo el objetivo de misión por proximidad o visibilidad sostenida', () => {
     expect(
       objectiveRecognitionIsMet({
         distanceMeters: 300,
         markerVisibleMilliseconds: 0,
-        isImmediateRouteTarget: false,
+        isMissionTarget: true,
       }),
     ).toBe(true);
+    expect(
+      objectiveRecognitionIsMet({
+        distanceMeters: 300.01,
+        markerVisibleMilliseconds: 1_499,
+        isMissionTarget: true,
+      }),
+    ).toBe(false);
     expect(
       objectiveRecognitionIsMet({
         distanceMeters: 1_000,
         markerVisibleMilliseconds: 1_500,
-        isImmediateRouteTarget: false,
+        isMissionTarget: true,
       }),
     ).toBe(true);
     expect(
       objectiveRecognitionIsMet({
-        distanceMeters: null,
-        markerVisibleMilliseconds: 0,
-        isImmediateRouteTarget: true,
+        distanceMeters: 10,
+        markerVisibleMilliseconds: 2_000,
+        isMissionTarget: false,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('habilita Turbo solo con marcha y márgenes seguros', () => {

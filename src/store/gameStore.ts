@@ -171,6 +171,10 @@ interface GameStore extends GameData {
   isJournalOpen: boolean;
   journalSection: StoryLogSection;
   insideValidObjectiveZone: boolean;
+  currentMissionObjectiveVisibility: {
+    objectiveId: string | null;
+    isVisible: boolean;
+  };
   presentationMode: DrivingPresentationMode;
   driving: DrivingRuntimeState;
   missionRoute: MissionRouteRuntimeState;
@@ -244,6 +248,7 @@ interface GameStore extends GameData {
   clearNavigationTarget: () => void;
   refuelAtStation: (stationId: string) => boolean;
   useFuelCanister: () => boolean;
+  beginOnboardingExpedition: () => boolean;
   startMission: (missionId: string) => boolean;
   abandonMission: () => void;
   advanceActiveMission: (
@@ -260,6 +265,10 @@ interface GameStore extends GameData {
   openJournal: (section?: StoryLogSection) => void;
   closeJournal: () => void;
   setInsideValidObjectiveZone: (inside: boolean) => void;
+  setCurrentMissionObjectiveVisibility: (
+    objectiveId: string | null,
+    isVisible: boolean,
+  ) => void;
   requestStoryLog: (section?: StoryLogSection) => void;
   dismissGameplayFeedback: () => void;
   dismissLevelUp: () => void;
@@ -671,6 +680,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   isJournalOpen: false,
   journalSection: 'missions',
   insideValidObjectiveZone: false,
+  currentMissionObjectiveVisibility: {
+    objectiveId: null,
+    isVisible: false,
+  },
   presentationMode: 'stopped',
   isPaused: initialRecoveryReason ? true : initialGameData.isPaused,
   driving: defaultDrivingState,
@@ -702,6 +715,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
         fuel <= 0 ? (state.recoveryReason ?? 'fuel') : state.recoveryReason;
       const telemetry = telemetryFromPlayer({ ...player, fuel });
       const isPaused = recoveryReason ? true : state.isPaused;
+      if (
+        state.telemetry.longitude === telemetry.longitude &&
+        state.telemetry.latitude === telemetry.latitude &&
+        state.telemetry.heading === telemetry.heading &&
+        state.telemetry.speedMetersPerSecond ===
+          telemetry.speedMetersPerSecond &&
+        state.telemetry.speedKilometersPerHour ===
+          telemetry.speedKilometersPerHour &&
+        state.telemetry.fuel === telemetry.fuel &&
+        state.telemetry.totalDistanceMeters ===
+          telemetry.totalDistanceMeters &&
+        state.vehicle.fuel === fuel &&
+        state.recoveryReason === recoveryReason &&
+        state.isPaused === isPaused
+      ) {
+        return state;
+      }
       return {
         telemetry,
         vehicle: { ...state.vehicle, fuel },
@@ -1306,6 +1336,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
     return used;
   },
+  beginOnboardingExpedition: () => {
+    const state = get();
+    if (
+      state.onboardingState !== 'not-started' ||
+      state.activeMissionId !== null
+    ) {
+      return false;
+    }
+    const started = get().startMission('la-transmision');
+    if (started) set({ onboardingState: 'introducing' });
+    return started;
+  },
   startMission: (missionId) => {
     let started = false;
     set((state) => {
@@ -1731,12 +1773,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   dismissMissionCompletion: () => set({ lastCompletedMissionId: null }),
   dismissNarrativeEvent: () =>
-    set((state) => ({
-      activeNarrativeEventId: null,
-      isPaused: Boolean(
-        state.recoveryReason || state.activeMissionChoiceObjectiveId,
-      ),
-    })),
+    set((state) => {
+      const completesIntroduction =
+        state.onboardingState === 'introducing' &&
+        state.activeMissionId === 'la-transmision' &&
+        state.activeNarrativeEventId ===
+          missionStartNarrativeEventId('la-transmision');
+      return {
+        activeNarrativeEventId: null,
+        onboardingState: completesIntroduction
+          ? 'driving-basics'
+          : state.onboardingState,
+        isPaused: Boolean(
+          state.recoveryReason || state.activeMissionChoiceObjectiveId,
+        ),
+      };
+    }),
   dismissRadioEvent: () => set({ activeRadioEventId: null }),
   selectMissionChoice: (optionId) => {
     const state = get();
@@ -1811,6 +1863,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ? state
         : { insideValidObjectiveZone },
     ),
+  setCurrentMissionObjectiveVisibility: (objectiveId, isVisible) =>
+    set((state) =>
+      state.currentMissionObjectiveVisibility.objectiveId === objectiveId &&
+      state.currentMissionObjectiveVisibility.isVisible === isVisible
+        ? state
+        : {
+            currentMissionObjectiveVisibility: { objectiveId, isVisible },
+          },
+    ),
   requestStoryLog: (section = 'history') =>
     set((state) => ({
       isJournalOpen: true,
@@ -1847,9 +1908,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const navigationRestoreFailed =
         loaded.save.game.navigationTarget !== null &&
         game.navigationTarget === null;
+      const resumesOnboardingIntroduction =
+        game.onboardingState === 'introducing' &&
+        game.activeMissionId === 'la-transmision' &&
+        !game.completedMissionIds.includes('la-transmision');
       return {
         ...game,
-        isPaused: recoveryReason ? true : game.isPaused,
+        onboardingState:
+          game.onboardingState === 'introducing' &&
+          !resumesOnboardingIntroduction
+            ? 'driving-basics'
+            : game.onboardingState,
+        isPaused:
+          recoveryReason || resumesOnboardingIntroduction ? true : game.isPaused,
         playerRuntimeRevision: state.playerRuntimeRevision + 1,
         hasSavedGame: true,
         lastSavedAt: loaded.save.savedAt,
@@ -1857,12 +1928,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
         recoveryReason,
         conditionWarning: null,
         conditionWarningsShown: [],
-        activeNarrativeEventId: null,
+        activeNarrativeEventId: resumesOnboardingIntroduction
+          ? 'radio-transmision-inicial'
+          : null,
         activeRadioEventId: null,
         activeMissionChoiceObjectiveId: null,
         isJournalOpen: false,
         journalSection: 'missions',
         insideValidObjectiveZone: false,
+        currentMissionObjectiveVisibility: {
+          objectiveId: null,
+          isVisible: false,
+        },
         missionTimerCountdownSeconds: 0,
         gameplayFeedback: navigationRestoreFailed
           ? feedback(
@@ -1900,6 +1977,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       isJournalOpen: false,
       journalSection: 'missions',
       insideValidObjectiveZone: false,
+      currentMissionObjectiveVisibility: {
+        objectiveId: null,
+        isVisible: false,
+      },
       missionTimerCountdownSeconds: 0,
       gameplayFeedback: null,
       storyLogRequest: { section: 'missions', revision: 0 },
@@ -1950,8 +2031,9 @@ export function startGameAutosave(intervalMilliseconds = 1_500): () => void {
   };
 
   const unsubscribe = useGameStore.subscribe((state) => {
+    if (timer) return;
     const signature = JSON.stringify(persistableGame(state));
-    if (signature === lastSignature || timer) return;
+    if (signature === lastSignature) return;
     timer = setTimeout(flush, intervalMilliseconds);
   });
   const handleVisibilityChange = () => {

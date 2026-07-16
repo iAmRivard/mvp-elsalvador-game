@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { missionById } from '../../data/missions';
+import { routingConfig } from '../../config/routing.config';
 import {
   interactionLabelForObjective,
   objectiveRequiresManualInteraction,
@@ -17,6 +18,7 @@ import {
   conventionalThrottleIntent,
   objectiveRecognitionIsMet,
   onboardingStateForStep,
+  routeFollowingIsValid,
   type OnboardingStepId,
 } from '../../game/onboarding';
 import { useGameStore } from '../../store/gameStore';
@@ -40,6 +42,7 @@ interface TutorialStep {
 const STEP_ADVANCE_DELAY_MILLISECONDS = 420;
 const COAST_HOLD_MILLISECONDS = 600;
 const OBJECTIVE_MARKER_HOLD_MILLISECONDS = 1_500;
+const ROUTE_FOLLOW_HOLD_MILLISECONDS = 900;
 
 export function TutorialOverlay({
   input,
@@ -52,9 +55,12 @@ export function TutorialOverlay({
   );
   const [coastCompleted, setCoastCompleted] = useState(false);
   const [brakeCompleted, setBrakeCompleted] = useState(false);
+  const [routeFollowCompleted, setRouteFollowCompleted] = useState(false);
   const [markerRecognized, setMarkerRecognized] = useState(false);
+  const [interactionCompleted, setInteractionCompleted] = useState(false);
   const brakePeakSpeed = useRef(0);
   const brakeIntentObserved = useRef(false);
+  const interactionObjectiveId = useRef<string | null>(null);
   const [initialStoryLogRevision] = useState(
     () => useGameStore.getState().storyLogRequest.revision,
   );
@@ -62,11 +68,22 @@ export function TutorialOverlay({
   const telemetry = useGameStore((state) => state.telemetry);
   const vehicleCondition = useGameStore((state) => state.vehicle.condition);
   const routeStatus = useGameStore((state) => state.missionRoute.status);
+  const routeOffRoute = useGameStore((state) => state.missionRoute.offRoute);
+  const activeNavigation = useGameStore(
+    (state) => state.missionRoute.activeNavigation,
+  );
+  const drivingSurface = useGameStore((state) => state.driving.surface);
+  const roadNetworkStatus = useGameStore(
+    (state) => state.driving.roadNetworkStatus,
+  );
   const activeMissionId = useGameStore((state) => state.activeMissionId);
   const completedObjectiveIds = useGameStore(
     (state) => state.activeMissionCompletedObjectiveIds,
   );
   const navigationTarget = useGameStore((state) => state.navigationTarget);
+  const objectiveVisibility = useGameStore(
+    (state) => state.currentMissionObjectiveVisibility,
+  );
   const isPaused = useGameStore((state) => state.isPaused);
   const isJournalOpen = useGameStore((state) => state.isJournalOpen);
   const recoveryReason = useGameStore((state) => state.recoveryReason);
@@ -111,7 +128,7 @@ export function TutorialOverlay({
       telemetry.longitude,
     ],
   );
-  const routeVisible = routeStatus === 'road' || routeStatus === 'fallback';
+  const routeVisible = routeStatus === 'road';
   const interactionObjective = nearestObjective?.objective;
   const interactionLabel =
     interactionObjective &&
@@ -136,12 +153,40 @@ export function TutorialOverlay({
       distanceToObjectiveMeters: nearestObjective?.distanceMeters ?? null,
     });
   const coastEligible =
+    !hasBlockingOverlay &&
+    !isPaused &&
     telemetry.speedMetersPerSecond > 0 &&
     coastConditionIsMet(diagnostics, telemetry.speedKilometersPerHour);
-  const markerVisible = Boolean(routeVisible && nearestObjective);
-  const isImmediateRouteTarget = Boolean(
-    routeVisible && nearestObjective && navigationTarget === null,
+  const objectiveTargetKey =
+    activeMissionId && nearestObjective
+      ? `${activeMissionId}:${nearestObjective.objective.id}`
+      : null;
+  const missionTargetIsActive = navigationTarget === null;
+  const markerVisible = Boolean(
+    !hasBlockingOverlay &&
+      !isPaused &&
+    missionTargetIsActive &&
+      nearestObjective &&
+      objectiveVisibility.objectiveId === nearestObjective.objective.id &&
+      objectiveVisibility.isVisible,
   );
+  const routeFollowingValid =
+    !hasBlockingOverlay &&
+    !isPaused &&
+    routeFollowingIsValid({
+    routeVisible,
+    speedKilometersPerHour: telemetry.speedKilometersPerHour,
+    forwardSpeedMetersPerSecond: telemetry.speedMetersPerSecond,
+    offRoute: routeOffRoute,
+    requiresRejoin: activeNavigation?.requiresRejoin ?? true,
+    surface: drivingSurface,
+    roadNetworkReady: roadNetworkStatus === 'ready',
+    distanceToRouteMeters: activeNavigation?.distanceToRouteMeters ?? null,
+    maximumDistanceToRouteMeters: routingConfig.routeRejoinDistanceMeters,
+    reversing:
+      diagnostics.mobileCruise.reversing ||
+      telemetry.speedMetersPerSecond < -0.14,
+    });
 
   useEffect(() => {
     if (stepIndex !== 2 || !coastEligible || coastCompleted) return;
@@ -179,13 +224,49 @@ export function TutorialOverlay({
   ]);
 
   useEffect(() => {
-    if (stepIndex !== 5 || !markerVisible || markerRecognized) return;
+    if (stepIndex !== 4 || !routeFollowingValid || !objectiveTargetKey) return;
+    const timeout = window.setTimeout(
+      () => setRouteFollowCompleted(true),
+      ROUTE_FOLLOW_HOLD_MILLISECONDS,
+    );
+    return () => {
+      window.clearTimeout(timeout);
+      setRouteFollowCompleted(false);
+    };
+  }, [objectiveTargetKey, routeFollowingValid, stepIndex]);
+
+  useEffect(() => {
+    if (stepIndex !== 5 || !markerVisible || !objectiveTargetKey) return;
     const timeout = window.setTimeout(
       () => setMarkerRecognized(true),
       OBJECTIVE_MARKER_HOLD_MILLISECONDS,
     );
-    return () => window.clearTimeout(timeout);
-  }, [markerRecognized, markerVisible, stepIndex]);
+    return () => {
+      window.clearTimeout(timeout);
+      setMarkerRecognized(false);
+    };
+  }, [markerVisible, objectiveTargetKey, stepIndex]);
+
+  useEffect(() => {
+    if (stepIndex !== 6) return;
+    if (!interactionObjectiveId.current && nearestObjective) {
+      interactionObjectiveId.current = nearestObjective.objective.id;
+    }
+    if (
+      (interactionObjectiveId.current !== null &&
+        (completedObjectiveIds.includes(interactionObjectiveId.current) ||
+          nearestObjective?.objective.id !== interactionObjectiveId.current)) ||
+      Boolean(interactionLabel && diagnostics.interact)
+    ) {
+      setInteractionCompleted(true);
+    }
+  }, [
+    completedObjectiveIds,
+    diagnostics.interact,
+    interactionLabel,
+    nearestObjective,
+    stepIndex,
+  ]);
 
   const steps = useMemo<TutorialStep[]>(() => {
     const speedDescription = !usesCompactCard
@@ -232,7 +313,7 @@ export function TutorialOverlay({
         id: 'route',
         title: 'Sigue la línea cian',
         description: 'Conduce sobre el tramo brillante de la ruta.',
-        completed: routeVisible && telemetry.speedKilometersPerHour >= 5,
+        completed: routeFollowCompleted && routeFollowingValid,
         available: routeVisible,
       },
       {
@@ -241,10 +322,10 @@ export function TutorialOverlay({
         description: 'El círculo brillante marca tu próxima acción.',
         completed: objectiveRecognitionIsMet({
           distanceMeters: nearestObjective?.distanceMeters ?? null,
-          markerVisibleMilliseconds: markerRecognized
+          markerVisibleMilliseconds: markerRecognized && markerVisible
             ? OBJECTIVE_MARKER_HOLD_MILLISECONDS
             : 0,
-          isImmediateRouteTarget,
+          isMissionTarget: missionTargetIsActive,
         }),
         available: Boolean(nearestObjective),
       },
@@ -256,8 +337,8 @@ export function TutorialOverlay({
             ? `Pulsa E o Espacio para ${interactionLabel.toLocaleLowerCase()}.`
             : `Toca “${interactionLabel}”.`
           : 'La acción aparecerá cuando estés en el lugar correcto.',
-        completed: Boolean(interactionLabel && diagnostics.interact),
-        available: interactionLabel !== null,
+        completed: interactionCompleted,
+        available: interactionCompleted || interactionLabel !== null,
       },
       {
         id: 'boost',
@@ -284,15 +365,18 @@ export function TutorialOverlay({
     controlMode,
     diagnostics,
     interactionLabel,
+    interactionCompleted,
     initialStoryLogRevision,
-    isImmediateRouteTarget,
     isJournalOpen,
     markerRecognized,
+    markerVisible,
     nearestObjective,
+    missionTargetIsActive,
+    routeFollowCompleted,
+    routeFollowingValid,
     routeVisible,
     safeBoost,
     storyLogRevision,
-    telemetry.speedKilometersPerHour,
     usesCompactCard,
   ]);
   const current = steps[stepIndex];
