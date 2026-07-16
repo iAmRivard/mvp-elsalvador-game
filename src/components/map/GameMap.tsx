@@ -410,10 +410,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     };
 
     const finishStartup = () => {
-      if (!effectActive) return;
+      if (!effectActive || fatalMapErrorHandled) return;
       setLoadingStage('routes');
       window.requestAnimationFrame(() => {
-        if (!effectActive) return;
+        if (!effectActive || fatalMapErrorHandled) return;
         startupReady = true;
         setLoadingStage('ready');
         setStatus('ready');
