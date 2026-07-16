@@ -7,7 +7,41 @@ const outputDirectory = resolve(
   process.argv[3] ?? 'test-results/driving-ux-v0.2.5.1',
 );
 const observationMilliseconds = 30_000;
+const warmupMilliseconds = 10_000;
 await mkdir(outputDirectory, { recursive: true });
+
+function percentile(sortedValues, percentage) {
+  if (sortedValues.length === 0) return null;
+  const index = Math.min(
+    sortedValues.length - 1,
+    Math.max(0, Math.ceil(sortedValues.length * percentage) - 1),
+  );
+  return sortedValues[index];
+}
+
+function summarize(values) {
+  const finiteValues = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (finiteValues.length === 0) {
+    return {
+      samples: 0,
+      average: null,
+      median: null,
+      p95: null,
+      p99: null,
+      maximum: null,
+    };
+  }
+  return {
+    samples: finiteValues.length,
+    average:
+      finiteValues.reduce((total, value) => total + value, 0) /
+      finiteValues.length,
+    median: percentile(finiteValues, 0.5),
+    p95: percentile(finiteValues, 0.95),
+    p99: percentile(finiteValues, 0.99),
+    maximum: finiteValues.at(-1),
+  };
+}
 
 const browser = await chromium.launch({ headless: true });
 try {
@@ -16,6 +50,16 @@ try {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.__v0251LongTasks = [];
+    window.__v0251FrameDurations = [];
+    let previousFrameTimestamp = null;
+    const sampleFrame = (timestamp) => {
+      if (previousFrameTimestamp !== null) {
+        window.__v0251FrameDurations.push(timestamp - previousFrameTimestamp);
+      }
+      previousFrameTimestamp = timestamp;
+      window.requestAnimationFrame(sampleFrame);
+    };
+    window.requestAnimationFrame(sampleFrame);
     if ('PerformanceObserver' in window) {
       try {
         const observer = new PerformanceObserver((list) => {
@@ -34,11 +78,12 @@ try {
   });
   await page.goto(baseUrl);
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
-  await page.getByRole('button', { name: 'Omitir' }).click();
   const beginMission = page.getByRole('button', {
     name: /Comenzar investigación/,
   });
   if (await beginMission.isVisible()) await beginMission.click();
+  const skipTutorial = page.getByRole('button', { name: 'Omitir' });
+  if (await skipTutorial.isVisible()) await skipTutorial.click();
   await page.waitForFunction(() => {
     const map = document.querySelector('[data-testid="game-map"]');
     return (
@@ -55,6 +100,7 @@ try {
   const centerX = joystickBox.x + joystickBox.width / 2;
   const centerY = joystickBox.y + joystickBox.height / 2;
   const session = await context.newCDPSession(page);
+  const inputStartedAt = Date.now();
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchStart',
     touchPoints: [{ id: 1, x: centerX, y: centerY, force: 1 }],
@@ -71,11 +117,13 @@ try {
     ],
   });
   await page.waitForFunction(() => {
-    const value = document.querySelector(
-      '[data-testid="mobile-driving-speed"]',
+    const map = document.querySelector('[data-testid="game-map"]');
+    return (
+      map instanceof HTMLElement &&
+      Number.parseFloat(map.dataset.inputTargetSpeed ?? '0') >= 58
     );
-    return Number.parseFloat(value?.textContent ?? '0') >= 58;
   });
+  const inputResponseMilliseconds = Date.now() - inputStartedAt;
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',
     touchPoints: [],
@@ -84,6 +132,8 @@ try {
   await page.screenshot({
     path: resolve(outputDirectory, 'v0.2.5.1-mobile-after.png'),
   });
+
+  await page.waitForTimeout(warmupMilliseconds);
 
   const initial = await page.evaluate(() => {
     const count = (selector, key = 'renderCount') => {
@@ -94,16 +144,72 @@ try {
     };
     const map = document.querySelector('[data-testid="game-map"]');
     window.__v0251LongTasks = [];
+    window.__v0251FrameDurations = [];
+    window.__v0251CameraDurations = [];
+    window.__v0251RoadTrackerDurations = [];
+    window.__v0251MemorySamples = [];
+    window.__v0251MapCounters = {
+      cameraUpdates: 0,
+      renderedFeatureQueries: 0,
+      telemetryTicks: 0,
+      geoJsonSourceUpdates: 0,
+    };
+    const memory = performance.memory;
+    if (memory) window.__v0251MemorySamples.push(memory.usedJSHeapSize);
+    window.__v0251MemoryInterval = window.setInterval(() => {
+      const currentMemory = performance.memory;
+      if (currentMemory) {
+        window.__v0251MemorySamples.push(currentMemory.usedJSHeapSize);
+      }
+    }, 100);
     window.__v0251DeclutterChanges = 0;
     if (map instanceof HTMLElement) {
-      const observer = new MutationObserver(() => {
-        window.__v0251DeclutterChanges += 1;
+      const observer = new MutationObserver((records) => {
+        for (const record of records) {
+          if (!(record.target instanceof HTMLElement)) continue;
+          switch (record.attributeName) {
+            case 'data-map-declutter-profile':
+              window.__v0251DeclutterChanges += 1;
+              break;
+            case 'data-camera-update-ms': {
+              const value = Number(record.target.dataset.cameraUpdateMs);
+              if (Number.isFinite(value)) {
+                window.__v0251CameraDurations.push(value);
+                window.__v0251MapCounters.cameraUpdates += 1;
+              }
+              break;
+            }
+            case 'data-road-search-last-ms': {
+              const value = Number(record.target.dataset.roadSearchLastMs);
+              if (Number.isFinite(value)) {
+                window.__v0251RoadTrackerDurations.push(value);
+              }
+              break;
+            }
+            case 'data-rendered-symbol-count':
+              window.__v0251MapCounters.renderedFeatureQueries += 1;
+              break;
+            case 'data-player-longitude':
+              window.__v0251MapCounters.telemetryTicks += 1;
+              break;
+            case 'data-geo-json-source-updates':
+              window.__v0251MapCounters.geoJsonSourceUpdates += 1;
+              break;
+          }
+        }
       });
       observer.observe(map, {
         attributes: true,
-        attributeFilter: ['data-map-declutter-profile'],
+        attributeFilter: [
+          'data-map-declutter-profile',
+          'data-camera-update-ms',
+          'data-road-search-last-ms',
+          'data-rendered-symbol-count',
+          'data-player-longitude',
+          'data-geo-json-source-updates',
+        ],
       });
-      window.__v0251DeclutterObserver = observer;
+      window.__v0251MapObserver = observer;
     }
     return {
       mobileDrivingHud: count('.mobile-driving-hud'),
@@ -138,9 +244,11 @@ try {
         : 0;
     };
     const longTasks = window.__v0251LongTasks ?? [];
-    window.__v0251DeclutterObserver?.disconnect();
+    window.__v0251MapObserver?.disconnect();
+    window.clearInterval(window.__v0251MemoryInterval);
     return {
       observationMilliseconds: 30_000,
+      warmupMilliseconds: 10_000,
       viewport: { width: window.innerWidth, height: window.innerHeight },
       hud: box('[data-testid="mobile-driving-hud"]'),
       joystick: box('[aria-label="Joystick de velocidad objetivo"]'),
@@ -154,6 +262,13 @@ try {
         radio: count('.radio-message'),
       },
       declutterChanges: window.__v0251DeclutterChanges ?? 0,
+      samples: {
+        frameDurations: window.__v0251FrameDurations ?? [],
+        cameraDurations: window.__v0251CameraDurations ?? [],
+        roadTrackerDurations: window.__v0251RoadTrackerDurations ?? [],
+        memoryBytes: window.__v0251MemorySamples ?? [],
+      },
+      mapCounters: window.__v0251MapCounters ?? {},
       longTasks: {
         count: longTasks.length,
         totalMilliseconds: longTasks.reduce(
@@ -173,6 +288,29 @@ try {
       value - initial[key],
     ]),
   );
+  const frameDurations = metrics.samples.frameDurations;
+  metrics.frameTimeMilliseconds = {
+    ...summarize(frameDurations),
+    over33Milliseconds: frameDurations.filter((value) => value > 33).length,
+    over50Milliseconds: frameDurations.filter((value) => value > 50).length,
+    over100Milliseconds: frameDurations.filter((value) => value > 100).length,
+  };
+  metrics.framesPerSecond = summarize(
+    frameDurations.filter((value) => value > 0).map((value) => 1_000 / value),
+  );
+  metrics.cameraMilliseconds = summarize(metrics.samples.cameraDurations);
+  metrics.roadTrackerMilliseconds = summarize(
+    metrics.samples.roadTrackerDurations,
+  );
+  const memoryMegabytes = metrics.samples.memoryBytes.map(
+    (value) => value / 1024 / 1024,
+  );
+  metrics.memoryMegabytes = {
+    ...summarize(memoryMegabytes),
+    initial: memoryMegabytes.at(0) ?? null,
+    final: memoryMegabytes.at(-1) ?? null,
+  };
+  metrics.inputResponseMilliseconds = inputResponseMilliseconds;
   await writeFile(
     resolve(outputDirectory, 'v0.2.5.1-mobile-metrics.json'),
     `${JSON.stringify(metrics, null, 2)}\n`,

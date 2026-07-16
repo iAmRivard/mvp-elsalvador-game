@@ -10,12 +10,12 @@ async function startFreshExpedition(page: Page): Promise<void> {
   });
   await page.reload();
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
-  const skipTutorial = page.getByRole('button', { name: 'Omitir' });
-  if (await skipTutorial.isVisible()) await skipTutorial.click();
   const beginMission = page.getByRole('button', {
     name: /Comenzar investigación/,
   });
   if (await beginMission.isVisible()) await beginMission.click();
+  const skipTutorial = page.getByRole('button', { name: 'Omitir' });
+  if (await skipTutorial.isVisible()) await skipTutorial.click();
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,
   });

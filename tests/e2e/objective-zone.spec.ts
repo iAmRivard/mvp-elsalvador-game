@@ -7,6 +7,10 @@ test('muestra zona del objetivo en el punto vial observado sin alterar la superf
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto('/');
   await page.getByRole('button', { name: 'Comenzar expedici\u00f3n' }).click();
+  const beginMission = page.getByRole('button', {
+    name: /Comenzar investigación/,
+  });
+  if (await beginMission.isVisible()) await beginMission.click();
   const skip = page.getByRole('button', { name: 'Omitir' });
   if (await skip.isVisible()) await skip.click();
 

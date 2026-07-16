@@ -28,13 +28,14 @@ test('recorre inicio, tutorial, pausa y configuración', async ({
 
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
   await expect(
+    page.getByRole('dialog', { name: 'Una señal de auxilio' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: /Comenzar investigación/ }).click();
+  await expect(
     page.getByRole('heading', { name: 'Gira el vehículo' }),
   ).toBeVisible();
-  await expect(
-    page.getByText('Realiza la acción para continuar'),
-  ).toBeVisible();
+  await expect(page.getByText('Realiza la acción para continuar')).toBeVisible();
   await page.getByRole('button', { name: 'Omitir' }).click();
-  await page.getByRole('button', { name: /Comenzar investigación/ }).click();
 
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,

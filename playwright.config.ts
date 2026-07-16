@@ -31,15 +31,34 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium-desktop',
+      testIgnore: [/pwa\.spec\.ts/, /onboarding-full\.spec\.ts/],
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'chromium-mobile',
+      testIgnore: [/pwa\.spec\.ts/, /onboarding-full\.spec\.ts/],
       use: { ...devices['Pixel 7'] },
     },
     {
       name: 'chromium-mobile-landscape',
+      testIgnore: [/pwa\.spec\.ts/, /onboarding-full\.spec\.ts/],
       use: { ...devices['Pixel 7 landscape'] },
+    },
+    {
+      name: 'chromium-pwa',
+      testMatch: /pwa\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        serviceWorkers: 'allow',
+      },
+    },
+    {
+      name: 'chromium-onboarding',
+      testMatch: /onboarding-full\.spec\.ts/,
+      use: {
+        ...devices['Pixel 7'],
+        viewport: { width: 392, height: 850 },
+      },
     },
   ],
 });

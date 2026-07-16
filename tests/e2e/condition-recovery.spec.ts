@@ -23,12 +23,12 @@ async function startFresh(page: import('@playwright/test').Page) {
   });
   await page.reload();
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
-  const skip = page.getByRole('button', { name: 'Omitir' });
-  if (await skip.isVisible()) await skip.click();
   const beginMission = page.getByRole('button', {
     name: /Comenzar investigación/,
   });
   if (await beginMission.isVisible()) await beginMission.click();
+  const skip = page.getByRole('button', { name: 'Omitir' });
+  if (await skip.isVisible()) await skip.click();
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,
   });

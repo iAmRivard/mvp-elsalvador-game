@@ -208,11 +208,12 @@ test('recarga en el marcador y recupera la ruta de misión', async ({
   const map = page.getByTestId('game-map');
 
   await expect(page.getByText('Punto de combustible')).toBeVisible();
-  await page
-    .getByRole('button', {
-      name: 'Punto de abastecimiento San Salvador, disponible',
-    })
-    .evaluate((element) => (element as HTMLButtonElement).click());
+  const stationMarker = page.getByRole('button', {
+    name: 'Punto de abastecimiento San Salvador, disponible',
+  });
+  await expect(stationMarker).toBeVisible();
+  await expect(stationMarker).toBeEnabled();
+  await stationMarker.click();
   await page.getByRole('button', { name: 'Marcar ruta' }).click();
   await expect(map).toHaveAttribute(
     'data-navigation-target-kind',

@@ -116,12 +116,12 @@ async function enterExpedition(page: Page) {
   await expect(launchButton).toBeVisible();
   await launchButton.click();
 
-  const skipTutorial = page.getByRole('button', { name: 'Omitir' });
-  if (await skipTutorial.isVisible()) await skipTutorial.click();
   const beginMission = page.getByRole('button', {
     name: /Comenzar investigación/,
   });
   if (await beginMission.isVisible()) await beginMission.click();
+  const skipTutorial = page.getByRole('button', { name: 'Omitir' });
+  if (await skipTutorial.isVisible()) await skipTutorial.click();
 
   await expect(page.getByTestId('game-map')).toHaveAttribute(
     'data-road-network-status',
@@ -153,10 +153,11 @@ async function expandMissionJournal(page: Page) {
     .poll(async () => {
       if ((await missionsTab.count()) > 0) {
         try {
-          await missionsTab
-            .first()
-            .evaluate((element) => (element as HTMLButtonElement).click());
-          return true;
+          const tab = missionsTab.first();
+          if ((await tab.isVisible()) && (await tab.isEnabled())) {
+            await tab.click();
+            return true;
+          }
         } catch {
           // El panel puede cambiar de presentación entre frames.
         }
@@ -169,10 +170,11 @@ async function expandMissionJournal(page: Page) {
       ]) {
         if ((await candidate.count()) === 0) continue;
         try {
-          await candidate
-            .first()
-            .evaluate((element) => (element as HTMLButtonElement).click());
-          return false;
+          const button = candidate.first();
+          if ((await button.isVisible()) && (await button.isEnabled())) {
+            await button.click();
+            return false;
+          }
         } catch {
           // La presentación móvil puede desmontar un candidato entre frames.
         }
@@ -185,10 +187,10 @@ async function expandMissionJournal(page: Page) {
 async function abandonActiveMission(page: Page) {
   const abandonMission = page.getByRole('button', { name: 'Abandonar misión' });
   if (!(await abandonMission.isVisible())) await expandMissionJournal(page);
+  await expect(abandonMission).toBeVisible();
+  await expect(abandonMission).toBeEnabled();
   await abandonMission.scrollIntoViewIfNeeded();
-  await abandonMission.evaluate((element) =>
-    (element as HTMLButtonElement).click(),
-  );
+  await abandonMission.click();
   await expect(
     page.getByRole('complementary', { name: 'Panel de misiones' }),
   ).not.toContainText('Abandonar misión');
@@ -206,9 +208,10 @@ async function startMissionFromList(
       has: page.getByRole('heading', { name: title, exact: true }),
     });
   await expect(missionCard).toBeVisible();
-  await missionCard
-    .getByRole('button', { name: buttonName })
-    .evaluate((element) => (element as HTMLButtonElement).click());
+  const startButton = missionCard.getByRole('button', { name: buttonName });
+  await expect(startButton).toBeVisible();
+  await expect(startButton).toBeEnabled();
+  await startButton.click();
 }
 
 test('carga el mapa sin solicitudes a terceros', async ({
@@ -359,9 +362,12 @@ test('carga el mapa sin solicitudes a terceros', async ({
     }),
   });
   await expect(suchitotoMission).toBeVisible();
-  await suchitotoMission
-    .getByRole('button', { name: 'Iniciar opcional' })
-    .evaluate((element) => (element as HTMLButtonElement).click());
+  const startSuchitoto = suchitotoMission.getByRole('button', {
+    name: 'Iniciar opcional',
+  });
+  await expect(startSuchitoto).toBeVisible();
+  await expect(startSuchitoto).toBeEnabled();
+  await startSuchitoto.click();
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'fallback');
   await expect(gameMap).toHaveAttribute(
     'data-mission-route-coordinate-count',
