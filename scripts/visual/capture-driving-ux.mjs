@@ -244,6 +244,26 @@ try {
         map instanceof HTMLElement
           ? Number(map.dataset.cameraSkippedByTolerance ?? 0)
           : 0,
+      cameraOffsetAppliedUpdates:
+        map instanceof HTMLElement
+          ? Number(map.dataset.cameraOffsetAppliedUpdates ?? 0)
+          : 0,
+      cameraProfileTransitions:
+        map instanceof HTMLElement
+          ? Number(map.dataset.cameraProfileTransitions ?? 0)
+          : 0,
+      cameraFallbackMarkerUpdates:
+        map instanceof HTMLElement
+          ? Number(map.dataset.cameraFallbackMarkerUpdates ?? 0)
+          : 0,
+      cameraThreePlayerUpdates:
+        map instanceof HTMLElement
+          ? Number(map.dataset.cameraThreePlayerUpdates ?? 0)
+          : 0,
+      threeDrivingEffectsUpdates:
+        map instanceof HTMLElement
+          ? Number(map.dataset.threeDrivingEffectsUpdates ?? 0)
+          : 0,
     };
   });
 
@@ -303,6 +323,26 @@ try {
           map instanceof HTMLElement
             ? Number(map.dataset.cameraSkippedByTolerance ?? 0)
             : 0,
+        cameraOffsetAppliedUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraOffsetAppliedUpdates ?? 0)
+            : 0,
+        cameraProfileTransitions:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraProfileTransitions ?? 0)
+            : 0,
+        cameraFallbackMarkerUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraFallbackMarkerUpdates ?? 0)
+            : 0,
+        cameraThreePlayerUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraThreePlayerUpdates ?? 0)
+            : 0,
+        threeDrivingEffectsUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.threeDrivingEffectsUpdates ?? 0)
+            : 0,
       },
       declutterChanges: window.__v0251DeclutterChanges ?? 0,
       samples: {
@@ -345,6 +385,21 @@ try {
     skippedByTolerance:
       metrics.counters.cameraSkippedByTolerance -
       initial.cameraSkippedByTolerance,
+    offsetApplied:
+      metrics.counters.cameraOffsetAppliedUpdates -
+      initial.cameraOffsetAppliedUpdates,
+    profileTransitions:
+      metrics.counters.cameraProfileTransitions -
+      initial.cameraProfileTransitions,
+    fallbackMarkerUpdates:
+      metrics.counters.cameraFallbackMarkerUpdates -
+      initial.cameraFallbackMarkerUpdates,
+    threePlayerUpdates:
+      metrics.counters.cameraThreePlayerUpdates -
+      initial.cameraThreePlayerUpdates,
+    threeDrivingEffectsUpdates:
+      metrics.counters.threeDrivingEffectsUpdates -
+      initial.threeDrivingEffectsUpdates,
   };
   metrics.cameraCounterDeltas.requestedPerSecond =
     metrics.cameraCounterDeltas.requested /
