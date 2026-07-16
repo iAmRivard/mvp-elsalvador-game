@@ -18,11 +18,12 @@ function rectanglesOverlap(first: Rectangle, second: Rectangle): boolean {
 
 async function enterExpedition(page: Page) {
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
-  await page.getByRole('button', { name: 'Omitir' }).click();
   const beginMission = page.getByRole('button', {
     name: /Comenzar investigación/,
   });
   if (await beginMission.isVisible()) await beginMission.click();
+  const skipTutorial = page.getByRole('button', { name: 'Omitir' });
+  if (await skipTutorial.isVisible()) await skipTutorial.click();
 
   const labels = page.locator('.mobile-action-labels');
   await expect(labels).toBeHidden();

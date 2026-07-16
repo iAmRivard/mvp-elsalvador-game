@@ -2,6 +2,7 @@ import maplibregl, { type ErrorEvent } from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TouchControls } from '../game/TouchControls';
 import { gameConfig } from '../../config/game.config';
+import { diagnosticsEnabled } from '../../config/diagnostics.config';
 import { followCameraConfig } from '../../config/followCamera.config';
 import { mapSourceConfig, mapViewConfig } from '../../config/map.config';
 import { roadAssistConfig } from '../../config/roadHandling.config';
@@ -300,8 +301,30 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       if (inside !== state.insideValidObjectiveZone) {
         state.setInsideValidObjectiveZone(inside);
       }
+      const objectiveCoordinates = next
+        ? objectiveNarrativeCoordinates(next.objective)
+        : null;
+      let objectiveVisible = false;
+      if (objectiveCoordinates && state.navigationTarget === null) {
+        const projected = map.project(objectiveCoordinates);
+        const mapContainer = map.getContainer();
+        objectiveVisible =
+          projected.x >= 0 &&
+          projected.y >= 0 &&
+          projected.x <= mapContainer.clientWidth &&
+          projected.y <= mapContainer.clientHeight;
+      }
+      state.setCurrentMissionObjectiveVisibility(
+        next?.objective.id ?? null,
+        objectiveVisible,
+      );
       const container = containerRef.current;
       if (container) {
+        container.dataset.currentMissionObjectiveId =
+          next?.objective.id ?? '';
+        container.dataset.currentMissionObjectiveVisible = String(
+          objectiveVisible,
+        );
         container.dataset.insideValidObjectiveZone = String(inside);
         container.dataset.drivingSurfaceLabel = effectiveDrivingSurfaceLabel(
           state.driving.surface,
@@ -633,30 +656,32 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               (visualFrameCount * 1_000) /
               frameSampleDuration
             ).toFixed(1);
-            const memory = (
-              performance as Performance & {
-                memory?: { usedJSHeapSize: number };
+            if (diagnosticsEnabled) {
+              const memory = (
+                performance as Performance & {
+                  memory?: { usedJSHeapSize: number };
+                }
+              ).memory;
+              if (memory) {
+                containerRef.current.dataset.memoryMb = (
+                  memory.usedJSHeapSize /
+                  1024 /
+                  1024
+                ).toFixed(1);
               }
-            ).memory;
-            if (memory) {
-              containerRef.current.dataset.memoryMb = (
-                memory.usedJSHeapSize /
-                1024 /
-                1024
-              ).toFixed(1);
-            }
-            const symbolLayers = mapDeclutter?.inventory
-              .filter(
-                (layer) => layer.type === 'symbol' && map.getLayer(layer.id),
-              )
-              .map((layer) => layer.id);
-            if (symbolLayers?.length) {
-              try {
-                containerRef.current.dataset.renderedSymbolCount = String(
-                  map.queryRenderedFeatures({ layers: symbolLayers }).length,
-                );
-              } catch {
-                containerRef.current.dataset.renderedSymbolCount = '0';
+              const symbolLayers = mapDeclutter?.inventory
+                .filter(
+                  (layer) => layer.type === 'symbol' && map.getLayer(layer.id),
+                )
+                .map((layer) => layer.id);
+              if (symbolLayers?.length) {
+                try {
+                  containerRef.current.dataset.renderedSymbolCount = String(
+                    map.queryRenderedFeatures({ layers: symbolLayers }).length,
+                  );
+                } catch {
+                  containerRef.current.dataset.renderedSymbolCount = '0';
+                }
               }
             }
             visualFrameCount = 0;
@@ -688,16 +713,19 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             player.heading !== lastFollowedHeading;
           const speedChanged =
             Math.abs(player.speedMetersPerSecond - lastFollowedSpeed) >= 0.05;
-          if (
-            (!wasFollowing || positionChanged || speedChanged) &&
-            timestamp - lastCameraUpdate >=
-              Math.max(
-                deviceProfile.cameraUpdateIntervalMilliseconds,
-                cameraForPlayer(player).profile.updateIntervalMilliseconds,
-              )
-          ) {
+          if (!wasFollowing || positionChanged || speedChanged) {
             const cameraStartedAt = performance.now();
             const camera = cameraForPlayer(player);
+            if (
+              timestamp - lastCameraUpdate <
+              Math.max(
+                deviceProfile.cameraUpdateIntervalMilliseconds,
+                camera.profile.updateIntervalMilliseconds,
+              )
+            ) {
+              wasFollowing = true;
+              return;
+            }
             const isRecentering = !wasFollowing;
             const duration = deviceProfile.reducedMotion
               ? 0
@@ -755,7 +783,11 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           }
           wasFollowing = true;
         },
-        onTelemetryUpdate: (player, movementSamples) => {
+        onTelemetryUpdate: (
+          player,
+          movementSamples,
+          elapsedRealTimeSeconds,
+        ) => {
           const telemetryTimestamp = performance.now();
           const coordinates: [number, number] = [
             player.longitude,
@@ -764,7 +796,11 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           const state = useGameStore.getState();
           state.setTelemetry(player);
           if (state.isJournalOpen && !state.isPaused) {
-            state.advanceActiveMission(player, false, 0.1);
+            state.advanceActiveMission(
+              player,
+              false,
+              elapsedRealTimeSeconds,
+            );
           }
           if (containerRef.current) {
             const inputDiagnostics = inputController.getDiagnostics();
@@ -816,44 +852,48 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           }
           if (roadTracker) {
             const metrics = roadTracker.getMetrics();
-            const roadDiagnostics = roadTracker.getDiagnostics();
             if (containerRef.current) {
               containerRef.current.dataset.roadSearchMs =
                 metrics.averageDurationMilliseconds.toFixed(3);
+              containerRef.current.dataset.roadSearchLastMs =
+                metrics.lastDurationMilliseconds.toFixed(3);
               containerRef.current.dataset.roadSearchCandidates = String(
                 metrics.lastCandidateCount,
               );
+              const roadDiagnostics = roadTracker.getDiagnostics();
               containerRef.current.dataset.roadSelectedEdge = String(
                 roadDiagnostics.selectedEdgeId ?? '',
               );
               containerRef.current.dataset.roadPreviousEdge = String(
                 roadDiagnostics.previousEdgeId ?? '',
               );
-              containerRef.current.dataset.roadSelectedScore =
-                roadDiagnostics.selectedScore?.toFixed(2) ?? '';
               containerRef.current.dataset.roadDistanceMeters =
                 roadDiagnostics.nearestEdgeDistanceMeters?.toFixed(1) ?? '';
               containerRef.current.dataset.roadContactSurface =
                 roadDiagnostics.surface;
-              containerRef.current.dataset.roadConsecutiveMisses = String(
-                roadDiagnostics.consecutiveMisses,
-              );
-              containerRef.current.dataset.roadGraceRemainingMs = String(
-                Math.round(roadDiagnostics.gracePeriodRemainingMilliseconds),
-              );
-              containerRef.current.dataset.roadOffroadReason =
-                roadDiagnostics.offroadReason ?? '';
-              containerRef.current.dataset.roadContactSource =
-                roadDiagnostics.contactSource;
-              containerRef.current.dataset.roadDiagnosticExport =
-                JSON.stringify(roadTracker.getDiagnosticExport());
-              containerRef.current.dataset.roadCandidateScores =
-                roadDiagnostics.candidates
-                  .map(
-                    (candidate) =>
-                      `${String(candidate.edgeId)}:${candidate.score.totalScore.toFixed(1)}`,
-                  )
-                  .join(',');
+              if (diagnosticsEnabled) {
+                containerRef.current.dataset.roadSelectedScore =
+                  roadDiagnostics.selectedScore?.toFixed(2) ?? '';
+                containerRef.current.dataset.roadConsecutiveMisses = String(
+                  roadDiagnostics.consecutiveMisses,
+                );
+                containerRef.current.dataset.roadGraceRemainingMs = String(
+                  Math.round(roadDiagnostics.gracePeriodRemainingMilliseconds),
+                );
+                containerRef.current.dataset.roadOffroadReason =
+                  roadDiagnostics.offroadReason ?? '';
+                containerRef.current.dataset.roadContactSource =
+                  roadDiagnostics.contactSource;
+                containerRef.current.dataset.roadDiagnosticExport =
+                  JSON.stringify(roadTracker.getDiagnosticExport());
+                containerRef.current.dataset.roadCandidateScores =
+                  roadDiagnostics.candidates
+                    .map(
+                      (candidate) =>
+                        `${String(candidate.edgeId)}:${candidate.score.totalScore.toFixed(1)}`,
+                    )
+                    .join(',');
+              }
             }
           }
           const environment =
@@ -898,6 +938,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 environment.movementBlockedBy ?? '';
             }
             updateObjectiveZonePresentation(useGameStore.getState());
+            if (threeLayer) syncInteractiveSignal(threeLayer);
           }
 
           const nearestLocation = findNearestLocation(coordinates);
@@ -952,14 +993,23 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       });
 
       unsubscribeRuntime = useGameStore.subscribe((state, previousState) => {
+        const objectiveStructureChanged =
+          state.activeMissionId !== previousState.activeMissionId ||
+          state.activeMissionCompletedObjectiveIds !==
+            previousState.activeMissionCompletedObjectiveIds ||
+          state.navigationTarget !== previousState.navigationTarget ||
+          state.missionRoute.activeEdgeIds !==
+            previousState.missionRoute.activeEdgeIds;
         if (
           state.missionRoute.activeEdgeIds !==
           previousState.missionRoute.activeEdgeIds
         ) {
           activeRouteEdgeIds = new Set(state.missionRoute.activeEdgeIds);
         }
-        if (threeLayer) syncInteractiveSignal(threeLayer);
-        updateObjectiveZonePresentation(state);
+        if (objectiveStructureChanged) {
+          if (threeLayer) syncInteractiveSignal(threeLayer);
+          updateObjectiveZonePresentation(state);
+        }
         if (!previousState.isJournalOpen && state.isJournalOpen) {
           inputController.suspendForOverlay();
         } else if (

@@ -110,6 +110,12 @@ function rectanglesOverlap(
   );
 }
 
+function clockTextToSeconds(value: string | null): number {
+  const match = value?.match(/(\d+):(\d{2})/);
+  if (!match) throw new Error(`Temporizador inesperado: ${value ?? 'vacío'}`);
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
 test('guía la historia hasta la ruta cronometrada y conserva la decisión', async ({
   page,
   baseURL,
@@ -164,8 +170,6 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
-  const skipTutorial = page.getByRole('button', { name: 'Omitir' });
-  if (await skipTutorial.isVisible()) await skipTutorial.click();
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,
   });
@@ -184,6 +188,8 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
   await introduction
     .getByRole('button', { name: 'Comenzar investigación' })
     .click();
+  const skipTutorial = page.getByRole('button', { name: 'Omitir' });
+  if (await skipTutorial.isVisible()) await skipTutorial.click();
 
   await pressInteraction(page);
   const radio = page.locator('.radio-message');
@@ -273,6 +279,52 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
   expect(timerBox!.y).toBeGreaterThanOrEqual(0);
   expect(timerBox!.x + timerBox!.width).toBeLessThanOrEqual(viewport!.width);
   expect(timerBox!.y + timerBox!.height).toBeLessThanOrEqual(viewport!.height);
+
+  await page.keyboard.down('w');
+  await page.waitForTimeout(800);
+  const openMobileJournal = page.getByRole('button', {
+    name: 'Abrir bitácora de la misión',
+  });
+  if (await openMobileJournal.isVisible()) await openMobileJournal.click();
+  else
+    await page
+      .getByRole('button', { name: 'Expandir panel de misiones' })
+      .click();
+  const missionPanel = page.getByRole('complementary', {
+    name: 'Panel de misiones',
+  });
+  await expect(missionPanel).toHaveAttribute('data-journal-open', 'true');
+  await page.waitForTimeout(250);
+  const timerBeforeJournal = clockTextToSeconds(
+    await timer.locator('strong').textContent(),
+  );
+  const longitudeDuringJournal = await gameMap.getAttribute(
+    'data-player-longitude',
+  );
+  const latitudeDuringJournal = await gameMap.getAttribute(
+    'data-player-latitude',
+  );
+  await page.waitForTimeout(2_200);
+  expect(
+    clockTextToSeconds(await timer.locator('strong').textContent()),
+  ).toBeLessThan(timerBeforeJournal);
+  await expect(gameMap).toHaveAttribute(
+    'data-player-longitude',
+    longitudeDuringJournal!,
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-player-latitude',
+    latitudeDuringJournal!,
+  );
+  const closeMobileJournal = page.getByRole('button', {
+    name: 'Cerrar bitácora',
+  });
+  if (await closeMobileJournal.isVisible()) await closeMobileJournal.click();
+  else
+    await page
+      .getByRole('button', { name: 'Contraer panel de misiones' })
+      .click();
+  await page.keyboard.up('w');
 
   const fuelBefore = Number(await gameMap.getAttribute('data-player-fuel'));
   await page.keyboard.down('w');

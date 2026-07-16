@@ -4,6 +4,12 @@
 
 ### Onboarding y controles
 
+- La introducción de **La transmisión** aparece antes del tutorial; cerrar `Comenzar investigación`
+  realiza una transición atómica a `driving-basics`, conserva la misión y despausa el juego.
+- Seguir la ruta exige avance sostenido sobre red vial válida, sin offroad, reversa ni
+  reincorporación. Reconocer el objetivo usa proximidad de 300 m o visibilidad proyectada durante
+  1.5 s y reinicia el tiempo al cambiar de objetivo.
+
 - Las partidas nuevas activan **La transmisión** como misión tutorial y avanzan por nueve
   instrucciones contextuales sin CTA de siguiente misión ni confirmaciones manuales.
 - El guardado sube al esquema 5 con estado de onboarding explícito; las partidas v1–v4 migran sin
@@ -14,6 +20,14 @@
   control, bitácora, recuperación y nueva partida limpian el estado de reversa.
 
 ### HUD, bitácora y mapa
+
+- `MissionPanel` desaparece por completo en móvil durante introducción y conducción básica, y el
+  mini-navegador vuelve desde `navigation-basics`. Las acciones contextuales no quedan detrás de la
+  bitácora ni de la tarjeta móvil del tutorial.
+- La simulación del vehículo se congela con la bitácora abierta, pero los objetivos cronometrados
+  reciben el delta real del loop y continúan avanzando.
+- Diagnósticos de capas quedan fuera de producción, cámara y store evitan trabajo redundante y las
+  fuentes GeoJSON sólo se actualizan cuando cambia su contenido.
 
 - La bitácora es estado global: en móvil desmonta controles y HUD, congela el vehículo, conserva
   la velocidad objetivo y deja avanzar el temporizador de la misión.
@@ -27,6 +41,10 @@
   usan `interactionCoordinates` y las zonas viales válidas evitan falsos avisos offroad.
 
 ### CI, PWA y verificación
+
+- Playwright añade proyectos aislados para el onboarding táctil completo 392×850 y para el service
+  worker real: update/`SKIP_WAITING`, navegación network-first, assets cache-first y PMTiles Range
+  206 sin cachear. Las interacciones de juego usan clics reales, sin `force` ni `element.click()`.
 
 - Playwright bloquea service workers durante E2E para que las intercepciones de red sean
   deterministas. Producción conserva el SW con navegación network-first, assets versionados

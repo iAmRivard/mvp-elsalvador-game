@@ -18,6 +18,7 @@ import { TutorialOverlay } from '../components/menu/TutorialOverlay';
 import { ServiceWorkerUpdatePrompt } from '../components/pwa/ServiceWorkerUpdatePrompt';
 import { OverlayManager } from '../components/ui/OverlayManager';
 import { gameConfig } from '../config/game.config';
+import { diagnosticsEnabled } from '../config/diagnostics.config';
 import { requestGameFullscreen } from '../game/fullscreen';
 import { InputController } from '../game/inputController';
 import { onboardingIsActive } from '../types/onboarding';
@@ -27,9 +28,6 @@ const GameMap = lazy(async () => {
   const module = await import('../components/map/GameMap');
   return { default: module.GameMap };
 });
-
-const diagnosticsEnabled =
-  import.meta.env.DEV && import.meta.env.VITE_ENABLE_DIAGNOSTICS === 'true';
 
 export function App() {
   const [sessionStarted, setSessionStarted] = useState(false);
@@ -50,9 +48,13 @@ export function App() {
   const setPaused = useGameStore((state) => state.setPaused);
   const loadGame = useGameStore((state) => state.loadGame);
   const resetGame = useGameStore((state) => state.resetGame);
-  const setOnboardingState = useGameStore((state) => state.setOnboardingState);
-  const startMission = useGameStore((state) => state.startMission);
-  const showTutorial = sessionStarted && onboardingIsActive(onboardingState);
+  const beginOnboardingExpedition = useGameStore(
+    (state) => state.beginOnboardingExpedition,
+  );
+  const showTutorial =
+    sessionStarted &&
+    onboardingState !== 'introducing' &&
+    onboardingIsActive(onboardingState);
 
   useEffect(() => startGameAutosave(), []);
   useEffect(() => {
@@ -62,10 +64,10 @@ export function App() {
   const enterGame = (loadSavedGame: boolean) => {
     const loaded = loadSavedGame && hasSavedGame && loadGame();
     if (!loaded) {
-      setOnboardingState('introducing');
-      startMission('la-transmision');
+      beginOnboardingExpedition();
+    } else {
+      setPaused(false);
     }
-    setPaused(false);
     setSessionStarted(true);
   };
   const enterFullscreenExpedition = async (loadSavedGame: boolean) => {

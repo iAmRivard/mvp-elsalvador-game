@@ -2,12 +2,12 @@ import { expect, test } from '@playwright/test';
 
 async function launch(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
-  const skip = page.getByRole('button', { name: 'Omitir' });
-  if (await skip.isVisible()) await skip.click();
   const beginMission = page.getByRole('button', {
     name: /Comenzar investigación/,
   });
   if (await beginMission.isVisible()) await beginMission.click();
+  const skip = page.getByRole('button', { name: 'Omitir' });
+  if (await skip.isVisible()) await skip.click();
 }
 
 test('reintenta un fallo fatal sin recargar ni perder el estado de sesión', async ({

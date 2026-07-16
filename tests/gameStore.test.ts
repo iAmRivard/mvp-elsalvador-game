@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { chapterOneMissionIds } from '../src/data/chapter1';
 import { missionById } from '../src/data/missions';
 import { fuelStationById } from '../src/data/fuelStations';
@@ -33,6 +33,24 @@ function reachRouteChoice(): void {
 describe('estado de misiones y capítulo', () => {
   beforeEach(() => {
     useGameStore.setState(useGameStore.getInitialState(), true);
+  });
+
+  it('no notifica Zustand cuando la telemetría no cambió', () => {
+    const state = useGameStore.getState();
+    const listener = vi.fn();
+    const unsubscribe = useGameStore.subscribe(listener);
+
+    state.setTelemetry({
+      longitude: state.telemetry.longitude,
+      latitude: state.telemetry.latitude,
+      heading: state.telemetry.heading,
+      speedMetersPerSecond: state.telemetry.speedMetersPerSecond,
+      fuel: state.telemetry.fuel,
+      totalDistanceMeters: state.telemetry.totalDistanceMeters,
+    });
+
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
   });
 
   it('inicia con evento narrativo, lo descarta y abandona la misión', () => {

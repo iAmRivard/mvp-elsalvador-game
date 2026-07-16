@@ -17,11 +17,12 @@ const viewports: ViewportCase[] = [
 async function enterExpedition(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
-  await page.getByRole('button', { name: 'Omitir' }).click();
   const beginMission = page.getByRole('button', {
     name: /Comenzar investigación/,
   });
   if (await beginMission.isVisible()) await beginMission.click();
+  const skipTutorial = page.getByRole('button', { name: 'Omitir' });
+  if (await skipTutorial.isVisible()) await skipTutorial.click();
   await expect(page.getByTestId('game-map')).toHaveAttribute(
     'data-road-network-status',
     /ready|unavailable/,
@@ -110,9 +111,9 @@ for (const viewport of viewports) {
       'data-camera-average-update-ms',
       /^\d+\.\d{3}$/,
     );
-    await expect(gameMap).toHaveAttribute(
+    await expect(gameMap).not.toHaveAttribute(
       'data-rendered-symbol-count',
-      /^\d+$/,
+      /.+/,
     );
 
     await expect(page.locator('.player-hud')).toBeHidden();

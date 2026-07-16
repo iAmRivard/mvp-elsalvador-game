@@ -100,11 +100,119 @@ describe('tutorial contextual', () => {
         },
       }));
     });
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    act(() => useGameStore.getState().openJournal('missions'));
+    await act(() => vi.advanceTimersByTimeAsync(600));
+    act(() => useGameStore.getState().closeJournal());
     await act(() => vi.advanceTimersByTimeAsync(599));
     expect(screen.getByText('Mantén la marcha')).toBeTruthy();
     await act(() => vi.advanceTimersByTimeAsync(1));
     await act(() => vi.advanceTimersByTimeAsync(420));
     expect(screen.getByText('Frena de verdad')).toBeTruthy();
+  });
+
+  it('reinicia los 1.5 s de visibilidad al cambiar el objetivo actual', async () => {
+    const input = new InputController();
+    useGameStore.setState((state) => ({
+      activeMissionId: 'la-transmision',
+      telemetry: {
+        ...state.telemetry,
+        longitude: -89.2,
+        latitude: 13.7,
+      },
+      missionRoute: {
+        ...state.missionRoute,
+        status: 'road',
+        offRoute: false,
+        activeNavigation: {
+          routeSegmentIndex: 0,
+          recommendedHeading: 0,
+          maneuverType: 'continue',
+          maneuverCoordinates: [-89.2, 13.71],
+          distanceToManeuverMeters: 100,
+          distanceToRouteMeters: 0,
+          requiresRejoin: false,
+        },
+      },
+      driving: {
+        ...state.driving,
+        surface: 'primary',
+        roadNetworkStatus: 'ready',
+      },
+      currentMissionObjectiveVisibility: {
+        objectiveId: 'sintonizar-transmision',
+        isVisible: true,
+      },
+    }));
+    render(<TutorialOverlay input={input} onComplete={vi.fn()} />);
+
+    act(() => input.setJoystickTurn(0.5));
+    await act(() => vi.advanceTimersByTimeAsync(420));
+    act(() => input.setTouchThrottle(0.6));
+    await act(() => vi.advanceTimersByTimeAsync(420));
+    act(() => {
+      input.setTouchThrottle(0);
+      useGameStore.setState((state) => ({
+        telemetry: {
+          ...state.telemetry,
+          speedMetersPerSecond: 15 / 3.6,
+          speedKilometersPerHour: 15,
+        },
+      }));
+    });
+    await act(() => vi.advanceTimersByTimeAsync(600));
+    await act(() => vi.advanceTimersByTimeAsync(420));
+    act(() => {
+      input.setTouchThrottle(-1);
+      useGameStore.setState((state) => ({
+        telemetry: {
+          ...state.telemetry,
+          speedMetersPerSecond: 8 / 3.6,
+          speedKilometersPerHour: 8,
+        },
+      }));
+    });
+    await act(() => vi.advanceTimersByTimeAsync(420));
+    act(() => {
+      input.setTouchThrottle(0);
+      useGameStore.setState((state) => ({
+        telemetry: {
+          ...state.telemetry,
+          speedMetersPerSecond: 10 / 3.6,
+          speedKilometersPerHour: 10,
+        },
+      }));
+    });
+    await act(() => vi.advanceTimersByTimeAsync(800));
+    act(() => useGameStore.getState().openJournal('missions'));
+    await act(() => vi.advanceTimersByTimeAsync(800));
+    act(() => useGameStore.getState().closeJournal());
+    await act(() => vi.advanceTimersByTimeAsync(899));
+    expect(screen.getByText('Sigue la línea cian')).toBeTruthy();
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    await act(() => vi.advanceTimersByTimeAsync(420));
+    expect(screen.getByText('Reconoce el objetivo')).toBeTruthy();
+
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+    act(() => useGameStore.getState().openJournal('missions'));
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+    act(() => useGameStore.getState().closeJournal());
+    await act(() => vi.advanceTimersByTimeAsync(1_499));
+    expect(screen.getByText('Reconoce el objetivo')).toBeTruthy();
+    act(() =>
+      useGameStore.setState({
+        activeMissionCompletedObjectiveIds: ['sintonizar-transmision'],
+        currentMissionObjectiveVisibility: {
+          objectiveId: 'llegar-repetidor-oeste',
+          isVisible: true,
+        },
+      }),
+    );
+    await act(() => vi.advanceTimersByTimeAsync(1_499));
+    expect(screen.getByText('Reconoce el objetivo')).toBeTruthy();
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    await act(() => vi.advanceTimersByTimeAsync(420));
+    expect(screen.getByText('Acércate para interactuar')).toBeTruthy();
   });
 
   it('omitir cambia solo el onboarding y conserva la misión', () => {

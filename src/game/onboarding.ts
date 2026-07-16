@@ -1,5 +1,6 @@
 import type { InputDiagnostics } from './inputController';
 import type { OnboardingState } from '../types/onboarding';
+import type { RoadSurface } from '../types/roads';
 
 export const onboardingStepIds = [
   'steer',
@@ -20,7 +21,7 @@ export function onboardingStateForStep(
 ): OnboardingState {
   switch (step) {
     case 'steer':
-      return 'introducing';
+      return 'driving-basics';
     case 'select-speed':
     case 'coast':
     case 'brake':
@@ -99,20 +100,51 @@ export function brakeConditionIsMet(observation: BrakeObservation): boolean {
   return realDeceleration || brakedToStop;
 }
 
+export interface RouteFollowingObservation {
+  routeVisible: boolean;
+  speedKilometersPerHour: number;
+  forwardSpeedMetersPerSecond: number;
+  offRoute: boolean;
+  requiresRejoin: boolean;
+  surface: RoadSurface;
+  roadNetworkReady: boolean;
+  distanceToRouteMeters: number | null;
+  maximumDistanceToRouteMeters: number;
+  reversing: boolean;
+}
+
+export function routeFollowingIsValid(
+  observation: RouteFollowingObservation,
+): boolean {
+  return (
+    observation.routeVisible &&
+    observation.speedKilometersPerHour >= 5 &&
+    observation.forwardSpeedMetersPerSecond > 0 &&
+    !observation.offRoute &&
+    !observation.requiresRejoin &&
+    observation.surface !== 'offroad' &&
+    observation.roadNetworkReady &&
+    observation.distanceToRouteMeters !== null &&
+    observation.distanceToRouteMeters <=
+      observation.maximumDistanceToRouteMeters &&
+    !observation.reversing
+  );
+}
+
 export interface ObjectiveRecognitionObservation {
   distanceMeters: number | null;
   markerVisibleMilliseconds: number;
-  isImmediateRouteTarget: boolean;
+  isMissionTarget: boolean;
 }
 
 export function objectiveRecognitionIsMet(
   observation: ObjectiveRecognitionObservation,
 ): boolean {
+  if (!observation.isMissionTarget) return false;
   return (
     (observation.distanceMeters !== null &&
       observation.distanceMeters <= 300) ||
-    observation.markerVisibleMilliseconds >= 1_500 ||
-    observation.isImmediateRouteTarget
+    observation.markerVisibleMilliseconds >= 1_500
   );
 }
 

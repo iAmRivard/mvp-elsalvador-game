@@ -1,85 +1,102 @@
-# Validación de onboarding y conducción v0.2.5.1
+# Validación funcional y móvil v0.2.5.1
 
-Fecha: 15 de julio de 2026.
+Fecha: 15 de julio de 2026. Baseline Git:
+`a9018ad409cce01e0e4ec51afec0540ebbbf36a1`.
 
-## Alcance
+## Alcance corregido
 
-Esta corrección integra **La transmisión** con el onboarding, hace inequívoca la reversa, convierte
-la bitácora en un modo de interfaz real, reduce ruido del HUD y combustible, restaura el declutter
-original y valida los objetivos contra la red vial local. No cambia la cámara ni la física principal.
+- La narrativa inicial de **La transmisión** precede al tutorial y su cierre realiza una sola
+  transición de store a `driving-basics`.
+- Ruta, objetivo e interacción requieren evidencia real y sostenida; cambiar el objetivo reinicia
+  el reconocimiento visual.
+- `MissionPanel` se desmonta durante `introducing`/`driving-basics` y reaparece desde
+  `navigation-basics`.
+- La bitácora congela vehículo y entrada, pero no el tiempo real de objetivos cronometrados.
+- El E2E usa interacciones normales; no contiene `force: true`, `element.click()` sintético ni una
+  API que marque pasos del onboarding.
+- El service worker se prueba en un proyecto PWA real separado de los proyectos deterministas.
 
-## Validación automatizada
+## Onboarding completo automatizado
 
-- Auditoría base: Node 24.13.0, npm 11.6.2, 64 archivos/301 pruebas unitarias aprobadas.
-- El E2E base tuvo 45 aprobadas, 26 omitidas y un fallo reproducible en `map-startup.spec.ts`: el
-  service worker de producción respondía antes de que `page.route` pudiera inyectar el error 503.
-- `npm run check`: **aprobado** en 30.2 s. Vitest aprobó 74 archivos/345 pruebas en 8.53 s;
-  también se validaron 205 recursos, PMTiles de 64.38 MiB, 17,083 nodos/23,054 aristas y los
-  objetivos viales antes del build de producción.
-- Playwright local final: **48 aprobadas, 30 omitidas, 0 fallidas** de 78 en 3.2 min.
-- Las 30 omisiones son matrices declaradas para otro proyecto/viewport: controles y layout móvil
-  no corren en desktop; recuperación/arranque/objetivo y cámara desktop no se duplican donde no
-  aplican; los presupuestos de viewport se ejecutan una sola vez en el proyecto móvil.
-- La prueba automatizada alcanza conducción rápida y limpia en 6.2–9.6 s después de omitir el
-  onboarding. El tiempo del onboarding completo sin omitir no se considera validación física.
+El proyecto Playwright `chromium-onboarding` usa 392×850 y eventos táctiles reales vía CDP. Limpia
+el guardado, inicia una expedición, comprueba narrativa/pausa, cierra con **Comenzar investigación**,
+gira, elige velocidad, mantiene marcha, frena sin reversa, sigue la ruta, reconoce el objetivo,
+interactúa, usa Turbo y abre/cierra la bitácora. El flujo aprobó 3/3 repeticiones locales, 5/5
+repeticiones de estrés servidas por Docker y el cierre de ambas matrices completas, sin omitir
+pasos.
 
-## Presupuesto y rendimiento
+El flujo detectó además un solapamiento real: la tarjeta del paso de interacción interceptaba el
+botón visible. La tarjeta se reubica para ese paso y el test conserva un clic normal, por lo que una
+regresión de hit-testing vuelve a fallar.
 
-Los viewports automatizados son 392×850, 412×850, 360×640, 850×412, 768×1024 y Desktop
-Chrome. En todos los casos móviles se aprobó HUD superior ≤17%, controles inferiores ≤27%, mapa
-útil ≥58% y tutorial ≤15%.
+## Temporizadores y bitácora
 
-La captura sostenida de 30 s en Chromium móvil headless registró:
+Vitest comprueba que el tiempo real recibido por el loop no usa un delta fijo, que abrir la
+bitácora no pausa el objetivo cronometrado y que una pausa manual sí lo hace. El E2E de historia
+abre la bitácora con el vehículo en marcha en escritorio, Pixel vertical y Pixel horizontal:
+longitud/latitud permanecen exactas durante 2.2 s mientras el reloj visible disminuye.
 
-- 41.3 FPS y cámara promedio de 1.470 ms (objetivo <3 ms).
-- 149 renders de `MobileDrivingHud` (muestreo de 5 Hz, no por frame).
-- 0 renders de `PlayerHud`, `MissionPanel`, contenido pesado de misión y radio mientras estaban
-  ocultos/desmontados.
-- 4 símbolos renderizados, 20/23 capas visibles, 0 cambios de perfil declutter y 0 long tasks.
+## PWA
 
-El artefacto reproducible queda en `test-results/driving-ux-v0.2.5.1/`; se generan capturas para
-392×850, 412×850, 360×640, 850×412 y 768×1024, más el JSON de métricas.
+El proyecto `chromium-pwa` conserva service workers y valida:
+
+- registro y control reales;
+- navegación network-first frente a una respuesta cacheada;
+- actualización visible, `SKIP_WAITING` y `controllerchange`;
+- assets con hash cache-first;
+- PMTiles Range `bytes=0-1023` con HTTP 206, 1024 bytes y sin entrada en Cache Storage;
+- actualización diferida durante una misión activa.
+
+La ejecución enfocada aprobó 1/1 y una repetición de estrés aprobó 5/5. Los demás proyectos
+bloquean service workers para mantener deterministas las pruebas que interceptan red. La prueba
+sincroniza la navegación causada por `controllerchange`, evitando consultar un contexto JavaScript
+que ya está siendo reemplazado.
+
+## Rendimiento reproducible
+
+La metodología y los números completos están en:
+
+- `docs/performance/mobile-baseline-v0.2.5.1.md`;
+- `docs/performance/mobile-optimized-v0.2.5.1.md`.
+
+En 30 s posteriores a 10 s de calentamiento, FPS promedio pasó de 53.98 a 54.98, frametime medio
+de 20.013 a 19.453 ms y frames >33 ms de 301 a 258 (-14.3%). No hubo frames >50/>100 ms ni long
+tasks. El p95 permaneció en 33.4 ms; no se declara la meta de -25% como cumplida. Las consultas
+diagnósticas de capas bajaron de 30 a 0.
+
+## Validación local
+
+- Baseline limpio: Node 24.18.0, npm 11.16.0, `npm ci` sin vulnerabilidades, `npm run check` con 74
+  archivos/345 pruebas aprobadas y Playwright con 48 aprobadas/30 omitidas.
+- Implementación final: `npm run check` aprobó lint, 74 archivos/351 pruebas, tipos, build y todos
+  los verificadores de datos y recursos.
+- Playwright local aprobó 50 pruebas, omitió las 30 variantes que no corresponden a cada proyecto
+  y no tuvo fallos en 3.3 min. El flujo cronometrado aprobó además 3/3 repeticiones enfocadas.
 
 ## Validación Docker
 
-**Aprobada** con Docker 29.2.0. `docker build --tag rutas-perdidas:test .` terminó correctamente
-e incluyó `npm run check`. El contenedor Nginx devolvió `/healthz` 200, documento principal 200,
-cabecera CSP presente y Range 0–1023 con HTTP 206 y 1024 bytes exactos. Playwright contra
-`http://127.0.0.1:8080` aprobó 48, omitió 30 y falló 0 de 78 en 3.2 min. El contenedor se detuvo al
-terminar.
+- Imagen local: `el-salvador-rutas-perdidas:v0.2.5.1`; digest del manifest list
+  `sha256:3a7e9ab87767c707c1da99f4666cbbacde92c1e04d4b8553425c0d6aa7baa6a9`.
+- El build ejecutó `npm run check` dentro de la etapa de construcción y aprobó 74 archivos/351
+  pruebas.
+- Nginx devolvió 200 en `/healthz` y `/`, con CSP; la solicitud Range `bytes=0-1023` al PMTiles
+  devolvió 206, `Content-Range: bytes 0-1023/67511255` y exactamente 1024 bytes.
+- La matriz Playwright contra `http://127.0.0.1:8080` aprobó 50 pruebas, omitió 30 y no tuvo
+  fallos en 3.3 min. Incluyó PWA real y onboarding táctil completo.
 
-## Validación GitHub Actions
+Los identificadores y enlaces de GitHub Actions para el SHA publicado se registran en la entrega;
+no se crea tag ni release para esta corrección.
 
-El fallo anterior corresponde a Docker run `29445894302`, job `image` (`87456146713`), paso
-**Probar mapa y autonomía en navegador**. `npm run test:e2e` terminó con código 1 porque el caso
-esperaba `.map-message--error > strong` y el elemento no apareció. La causa fue el service worker
-interceptando el request antes de Playwright. La corrección bloquea service workers sólo en E2E y
-endurece la estrategia del SW de producción.
+## Validación física pendiente
 
-El código candidato `b77a6c4` quedó aprobado sin retries:
+No se ejecutó en el teléfono de referencia. La automatización no demuestra temperatura, batería,
+safe areas del hardware, respuesta háptica, altavoz/audífonos ni fluidez percibida.
 
-- CI run `29458690002`: **success**, job `quality` (`87497437697`) en 58 s. Checkout LFS,
-  verificación del artefacto, instalación y `npm run check` terminaron correctamente.
-- Docker run `29458690004`: **success**, job `image` (`87497437680`) en 6 min 57 s. Build,
-  health/CSP/Range, Playwright (48 aprobadas, 30 omitidas, 0 fallidas en 4.9 min), limpieza del
-  contenedor, login y publicación por SHA en GHCR terminaron correctamente.
-- La advertencia no bloqueante de Actions indica que `docker/login-action@v3` aún declara Node 20
-  y el runner la fuerza a Node 24; no afectó el resultado ni se ocultó con `continue-on-error`.
+Pendientes humanos:
 
-El tag continúa bloqueado hasta que el commit documental que contiene este registro vuelva a pasar
-CI y Docker sobre el mismo SHA.
+- sesión continua de 15 minutos en el dispositivo objetivo;
+- onboarding nuevo y partida existente;
+- frenado/reversa, Turbo, radio, bitácora, combustible y objetivos;
+- playtest de cinco personas.
 
-## Validación física
-
-No ejecutada para v0.2.5.1. Los videos de referencia prueban la versión anterior y sirven como
-diagnóstico, no como aprobación de esta corrección.
-
-## Pendientes humanos
-
-- Recorrer el onboarding completo en el teléfono de referencia y medir tiempo hasta conducción
-  limpia; el objetivo es menos de 30 segundos.
-- Conducir al menos 15 minutos, incluyendo frenado/reversa, Turbo, radio, bitácora y objetivos.
-- Confirmar legibilidad, safe areas, respuesta háptica y audio con altavoz y audífonos.
-- Realizar el playtest previsto con cinco personas.
-
-No se atribuyen resultados físicos o humanos a la automatización.
+No se atribuyen resultados físicos o humanos hasta realizar y registrar esas sesiones.

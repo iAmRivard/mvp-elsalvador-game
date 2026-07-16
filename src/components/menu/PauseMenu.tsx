@@ -56,7 +56,7 @@ export function PauseMenu({ onExitToTitle }: PauseMenuProps) {
           <button
             type="button"
             onClick={() => {
-              setOnboardingState('introducing');
+              setOnboardingState('driving-basics');
               setPaused(false);
             }}
           >

@@ -22,6 +22,7 @@ export interface PlayerGameLoopOptions {
   onTelemetryUpdate: (
     player: PlayerRuntime,
     samples: readonly PlayerSimulationSample[],
+    elapsedRealTimeSeconds: number,
   ) => void;
 }
 
@@ -63,7 +64,7 @@ export function startPlayerGameLoop(
   };
 
   options.onVisualUpdate(player, previousTimestamp);
-  options.onTelemetryUpdate(player, []);
+  options.onTelemetryUpdate(player, [], 0);
 
   const frame = (timestamp: number) => {
     if (stopped) return;
@@ -96,7 +97,11 @@ export function startPlayerGameLoop(
     if (timestamp - lastTelemetryTimestamp >= 100) {
       const telemetrySamples = pendingSamples;
       pendingSamples = [];
-      options.onTelemetryUpdate(player, telemetrySamples);
+      options.onTelemetryUpdate(
+        player,
+        telemetrySamples,
+        Math.max(0, (timestamp - lastTelemetryTimestamp) / 1_000),
+      );
       lastTelemetryTimestamp = timestamp;
     }
 

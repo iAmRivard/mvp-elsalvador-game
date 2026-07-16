@@ -455,6 +455,68 @@ export function addMissionRoute(
   const immediateSource = () =>
     map.getSource<GeoJSONSource>(IMMEDIATE_SOURCE_ID);
   const rejoinSource = () => map.getSource<GeoJSONSource>(REJOIN_SOURCE_ID);
+  interface LineSourceSnapshot {
+    key: string;
+    coordinates: RoadCoordinates[];
+  }
+  const routeSourceSnapshot: LineSourceSnapshot = {
+    key: 'empty',
+    coordinates: [],
+  };
+  const immediateSourceSnapshot: LineSourceSnapshot = {
+    key: 'empty',
+    coordinates: [],
+  };
+  const rejoinSourceSnapshot: LineSourceSnapshot = {
+    key: 'empty',
+    coordinates: [],
+  };
+  const sameCoordinates = (
+    previous: readonly RoadCoordinates[],
+    next: readonly RoadCoordinates[],
+  ) =>
+    previous.length === next.length &&
+    previous.every(
+      (coordinate, index) =>
+        coordinate[0] === next[index]?.[0] &&
+        coordinate[1] === next[index]?.[1],
+    );
+  const setLineSourceData = (
+    source: () => GeoJSONSource | undefined,
+    snapshot: LineSourceSnapshot,
+    key: string,
+    coordinates: readonly RoadCoordinates[],
+    properties: Record<string, string | null> = {},
+  ) => {
+    if (snapshot.key === key && sameCoordinates(snapshot.coordinates, coordinates)) {
+      return;
+    }
+    const currentSource = source();
+    if (!currentSource) return;
+    const data: FeatureCollection<LineString> =
+      coordinates.length >= 2
+        ? {
+            type: 'FeatureCollection',
+            features: [
+              {
+                type: 'Feature',
+                properties,
+                geometry: { type: 'LineString', coordinates: [...coordinates] },
+              },
+            ],
+          }
+        : emptyRoute;
+    currentSource.setData(data);
+    snapshot.key = key;
+    snapshot.coordinates = coordinates.map(([longitude, latitude]) => [
+      longitude,
+      latitude,
+    ]);
+    const container = map.getContainer();
+    container.dataset.geoJsonSourceUpdates = String(
+      Number(container.dataset.geoJsonSourceUpdates ?? 0) + 1,
+    );
+  };
   const exposeRoute = (
     mode: 'road' | 'fallback' | null,
     coordinateCount: number,
@@ -472,8 +534,13 @@ export function addMissionRoute(
       routeCoordinates.length < 2 ||
       routeInstructions.length === 0
     ) {
-      immediateSource()?.setData(emptyRoute);
-      rejoinSource()?.setData(emptyRoute);
+      setLineSourceData(
+        immediateSource,
+        immediateSourceSnapshot,
+        'empty',
+        [],
+      );
+      setLineSourceData(rejoinSource, rejoinSourceSnapshot, 'empty', []);
       maneuverMarkerElement.hidden = true;
       useGameStore.getState().setMissionNavigation({
         nextInstruction: null,
@@ -497,38 +564,18 @@ export function addMissionRoute(
     );
     lastKnownSegmentIndex =
       progress.activeNavigation?.routeSegmentIndex ?? lastKnownSegmentIndex;
-    immediateSource()?.setData({
-      type: 'FeatureCollection',
-      features:
-        !reversing && progress.immediateCoordinates.length >= 2
-          ? [
-              {
-                type: 'Feature',
-                properties: {},
-                geometry: {
-                  type: 'LineString',
-                  coordinates: progress.immediateCoordinates,
-                },
-              },
-            ]
-          : [],
-    });
-    rejoinSource()?.setData({
-      type: 'FeatureCollection',
-      features:
-        !reversing && progress.rejoinCoordinates.length >= 2
-          ? [
-              {
-                type: 'Feature',
-                properties: {},
-                geometry: {
-                  type: 'LineString',
-                  coordinates: progress.rejoinCoordinates,
-                },
-              },
-            ]
-          : [],
-    });
+    setLineSourceData(
+      immediateSource,
+      immediateSourceSnapshot,
+      'immediate',
+      reversing ? [] : progress.immediateCoordinates,
+    );
+    setLineSourceData(
+      rejoinSource,
+      rejoinSourceSnapshot,
+      'rejoin',
+      reversing ? [] : progress.rejoinCoordinates,
+    );
     const orientation = vehicleOrientation(
       physicalHeading,
       progress.activeNavigation?.recommendedHeading ?? null,
@@ -592,9 +639,14 @@ export function addMissionRoute(
     routeInstructions = [];
     routeMode = null;
     lastKnownSegmentIndex = null;
-    routeSource()?.setData(emptyRoute);
-    immediateSource()?.setData(emptyRoute);
-    rejoinSource()?.setData(emptyRoute);
+    setLineSourceData(routeSource, routeSourceSnapshot, 'empty', []);
+    setLineSourceData(
+      immediateSource,
+      immediateSourceSnapshot,
+      'empty',
+      [],
+    );
+    setLineSourceData(rejoinSource, rejoinSourceSnapshot, 'empty', []);
     maneuverMarkerElement.hidden = true;
     exposeRoute(null, 0);
     useGameStore.getState().setMissionRoute({
@@ -628,9 +680,14 @@ export function addMissionRoute(
     routeMode = null;
     routeInstructions = [];
     lastKnownSegmentIndex = null;
-    routeSource()?.setData(emptyRoute);
-    immediateSource()?.setData(emptyRoute);
-    rejoinSource()?.setData(emptyRoute);
+    setLineSourceData(routeSource, routeSourceSnapshot, 'empty', []);
+    setLineSourceData(
+      immediateSource,
+      immediateSourceSnapshot,
+      'empty',
+      [],
+    );
+    setLineSourceData(rejoinSource, rejoinSourceSnapshot, 'empty', []);
     maneuverMarkerElement.hidden = true;
     useGameStore.getState().setMissionRoute({
       status: 'calculating',
@@ -685,21 +742,18 @@ export function addMissionRoute(
       routeInstructions = generateNavigationInstructions(route.coordinates);
       routeMode = 'road';
       lastKnownSegmentIndex = null;
-      routeSource()?.setData({
-        type: 'FeatureCollection',
-        features: [
-          {
-            type: 'Feature',
-            properties: {
-              missionId: target.mission?.id ?? null,
-              navigationTargetKind: target.kind,
-              objectiveId: target.targetId,
-              mode: 'road',
-            },
-            geometry: { type: 'LineString', coordinates: route.coordinates },
-          },
-        ],
-      });
+      setLineSourceData(
+        routeSource,
+        routeSourceSnapshot,
+        `road:${target.key}`,
+        route.coordinates,
+        {
+          missionId: target.mission?.id ?? null,
+          navigationTargetKind: target.kind,
+          objectiveId: target.targetId,
+          mode: 'road',
+        },
+      );
       useGameStore.getState().setMissionRoute({
         status: 'road',
         distanceMeters: route.distanceMeters,
@@ -733,21 +787,18 @@ export function addMissionRoute(
     routeInstructions = generateNavigationInstructions(coordinates);
     routeMode = 'fallback';
     lastKnownSegmentIndex = null;
-    routeSource()?.setData({
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            missionId: target.mission?.id ?? null,
-            navigationTargetKind: target.kind,
-            objectiveId: target.targetId,
-            mode: 'fallback',
-          },
-          geometry: { type: 'LineString', coordinates },
-        },
-      ],
-    });
+    setLineSourceData(
+      routeSource,
+      routeSourceSnapshot,
+      `fallback:${target.key}`,
+      coordinates,
+      {
+        missionId: target.mission?.id ?? null,
+        navigationTargetKind: target.kind,
+        objectiveId: target.targetId,
+        mode: 'fallback',
+      },
+    );
     useGameStore.getState().setMissionRoute({
       status: 'fallback',
       distanceMeters,

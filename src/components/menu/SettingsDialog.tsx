@@ -481,7 +481,7 @@ export function SettingsDialog({
               type="button"
               className="settings-dialog__tutorial"
               onClick={() => {
-                setOnboardingState('introducing');
+                setOnboardingState('driving-basics');
                 setPaused(false);
                 onClose();
               }}

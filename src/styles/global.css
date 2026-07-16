@@ -4804,6 +4804,10 @@ html[data-fullscreen='true'] .game-shell {
     display: none;
   }
 
+  .game-shell .mission-panel--collapsed.mission-panel--onboarding {
+    display: block;
+  }
+
   .game-shell--driving .topbar .current-region,
   .game-shell--fast .topbar .current-region {
     display: none;
@@ -4861,6 +4865,7 @@ html[data-fullscreen='true'] .game-shell {
 
   html[data-tutorial-target='route'] .mobile-tutorial-card,
   html[data-tutorial-target='objective'] .mobile-tutorial-card,
+  html[data-tutorial-target='interact'] .mobile-tutorial-card,
   html[data-tutorial-target='journal'] .mobile-tutorial-card {
     top: max(142px, calc(env(safe-area-inset-top) + 134px));
     bottom: auto;
@@ -6357,6 +6362,7 @@ html[data-reduced-motion='true'] *::after {
   (max-height: 560px) and (pointer: coarse) {
   .mission-panel--journal-sheet {
     position: fixed;
+    z-index: 31;
     top: auto !important;
     right: max(12px, env(safe-area-inset-right));
     bottom: 0;
@@ -6453,6 +6459,10 @@ html[data-reduced-motion='true'] *::after {
 }
 
 @media (orientation: landscape) and (max-height: 560px) and (pointer: coarse) {
+  .mission-panel--journal-sheet .mission-route-summary {
+    position: static;
+  }
+
   .mobile-tutorial-card {
     top: max(54px, calc(env(safe-area-inset-top) + 48px));
     left: max(8px, env(safe-area-inset-left));
@@ -6750,6 +6760,10 @@ html[data-reduced-motion='true'] *::after {
     display: none;
   }
 
+  .game-shell .mission-panel--collapsed.mission-panel--onboarding {
+    display: block;
+  }
+
   .mobile-tutorial-card {
     position: fixed !important;
     top: auto;
@@ -6765,6 +6779,7 @@ html[data-reduced-motion='true'] *::after {
 
   html[data-tutorial-target='route'] .mobile-tutorial-card,
   html[data-tutorial-target='objective'] .mobile-tutorial-card,
+  html[data-tutorial-target='interact'] .mobile-tutorial-card,
   html[data-tutorial-target='journal'] .mobile-tutorial-card {
     top: max(142px, calc(env(safe-area-inset-top) + 134px));
     bottom: auto;
