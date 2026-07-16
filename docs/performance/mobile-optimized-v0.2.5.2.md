@@ -1,65 +1,76 @@
 # Optimización móvil v0.2.5.2
 
-Fecha: 16 de julio de 2026. Commit base:
-`1a9eb830e7ee03e709aa6d28143073d135ecb508`.
+Fecha: 16 de julio de 2026.
+
+- Commit base: `1a9eb830e7ee03e709aa6d28143073d135ecb508`.
+- SHA de runtime medido:
+  `a30ae66c28b2ee0e6ec8eda640af6545423968dc`.
 
 ## Protocolo
 
-- Build de producción con `VITE_ENABLE_PROFILING=true`, servido con Vite
+- Build de producción normal, sin `VITE_ENABLE_PROFILING`, servido con Vite
   Preview en Windows.
 - Chromium headless con emulación Pixel 7.
-- Mismo inicio, ruta, calidad, navegador y capturador del baseline.
+- Mismo inicio, ruta, calidad, navegador y capturador v2 del control base.
 - 10 segundos de calentamiento y 30 segundos de observación.
-- Tres corridas sobre el mismo código final de medición.
-- Los valores de comparación son la mediana de las tres corridas. Los rangos
-  se documentan cuando ayudan a mostrar variabilidad.
+- Tres corridas sobre el mismo SHA y build.
+- Los valores optimizados son la mediana de las tres corridas; los rangos se
+  conservan abajo.
+- Cada JSON registra SHA, modo de build, fecha, URL, versión de esquema y
+  alcance de los cronómetros.
 
-Esta automatización mide frame pacing y costos instrumentados. No demuestra
+La automatización mide frame pacing y costos instrumentados. No demuestra
 fluidez percibida, temperatura ni respuesta en un teléfono físico.
 
-## Comparación
+## Comparación estricta con el control base v2
 
-| Métrica | v0.2.5.1/base | v0.2.5.2 | Cambio |
-| --- | ---: | ---: | ---: |
-| FPS promedio | 51.93 | 54.26 | +4.5% |
-| FPS mediano | 59.88 | 59.88 | 0% |
-| Frametime promedio | 21.149 ms | 19.852 ms | -6.1% |
-| Frametime p50 | 16.7 ms | 16.7 ms | 0% |
-| Frametime p95 | 33.4 ms | 33.4 ms | 0% |
-| Frametime p99 | 33.4 ms | 33.4 ms | 0% |
-| Frames >33 ms | 382 | 289 | -24.3% |
-| Frames >50 ms | 0 | 0 | 0 |
-| Frames >100 ms | 0 | 0 | 0 |
-| Cámara solicitada/s | n/d | 50.90 | nueva |
-| Cámara aplicada/s | 17.67 | 28.47 | +61.1% |
-| Cámara omitida por intervalo | n/d | 673 | nueva |
-| Cámara omitida por tolerancia | n/d | 0 | nueva |
-| Cámara promedio | 1.281 ms | 1.395 ms | +0.114 ms |
-| Cámara p95 | 1.9 ms | 2.1 ms | +0.2 ms |
-| RoadTracker p95 | 0.1 ms | 0.2 ms | +0.1 ms |
-| Renders `MobileDrivingHud` | 151 | 151 | 0 |
-| Actualizaciones Zustand totales | n/d | n/d | n/d |
-| Ticks de telemetría observados | 282 | 282 | 0 |
-| Actualizaciones GeoJSON | 115 | 110 | -4.3% |
-| Long tasks | 0 | 0 | 0 |
-| Tiempo para seleccionar 58 km/h | 1,112 ms | 1,135 ms | +2.1% |
-| Latencia visual de input | n/d | 49.6 ms | nueva |
+| Métrica                          | v0.2.5.1/base |  v0.2.5.2 |           Cambio |
+| -------------------------------- | ------------: | --------: | ---------------: |
+| FPS promedio por throughput      |         46.11 |     50.67 |            +9.9% |
+| FPS promedio instantáneo         |         50.98 |     54.48 |            +6.9% |
+| FPS mediano instantáneo          |         59.88 |     59.88 |               0% |
+| Frametime promedio               |     21.687 ms | 19.734 ms |            -9.0% |
+| Frametime p50                    |       16.7 ms |   16.7 ms |               0% |
+| Frametime p95                    |       33.4 ms |   33.4 ms |               0% |
+| Frametime p99                    |       33.4 ms |   33.4 ms |               0% |
+| Frames >33 ms                    |           416 |       280 |           -32.7% |
+| Frames >50 ms                    |             0 |         0 |                0 |
+| Frames >100 ms                   |             0 |         0 |                0 |
+| Cámara solicitada/s              |           n/d |     51.37 |            nueva |
+| Cámara aplicada/s                |         17.13 |     28.60 |           +66.9% |
+| Cámara omitida por intervalo     |           n/d |       676 |            nueva |
+| Cámara omitida por tolerancia    |           n/d |         0 |            nueva |
+| Cámara promedio                  |      1.275 ms |  1.482 ms |        +0.207 ms |
+| Cámara p95                       |        1.7 ms |    2.2 ms |          +0.5 ms |
+| RoadTracker p95                  |        0.2 ms |    0.1 ms |          -0.1 ms |
+| Renders `MobileDrivingHud`       |           153 |       151 |               -2 |
+| Actualizaciones Zustand totales  |           n/d |       n/d |              n/d |
+| Ticks de telemetría observados   |           281 |       283 |               +2 |
+| Actualizaciones GeoJSON          |           120 |       113 |            -5.8% |
+| Long tasks                       |             0 |         0 |                0 |
+| Tiempo para seleccionar 58 km/h  |      1,173 ms |  1,156 ms |            -1.4% |
+| Latencia visual real de input    |           n/d |       n/d |              n/d |
+| Evento → próximo RAF             |           n/d |   53.7 ms | nueva, profiling |
+| Heap final expuesto por Chromium |     45.20 MiB | 57.51 MiB |         variable |
 
-Rangos de las tres corridas finales:
+Rangos de las tres corridas normales:
 
-- FPS promedio: 53.71–54.44.
-- Frametime promedio: 19.760–20.172 ms.
-- Frames >33 ms: 282–312.
-- Cámara aplicada: 27.67–28.50 actualizaciones/s.
-- Cámara promedio: 1.309–1.788 ms.
-- Cámara p95: 1.7–3.4 ms. Dos corridas quedaron bajo 3 ms; el valor de
-  3.4 ms coincidió con la única long task observada en las tres corridas.
-- GeoJSON: 88–120 actualizaciones.
-- Latencia visual de input: 48.1–61.6 ms.
-- Heap final expuesto por Chromium: 42.63–68.86 MiB.
+- FPS por throughput: 49.14–51.37.
+- FPS instantáneo promedio: 53.37–54.96.
+- Frametime promedio: 19.467–20.349 ms.
+- Frames >33 ms: 259–326.
+- Cámara solicitada: 49.63–52.03 solicitudes/s.
+- Cámara aplicada: 28.37–28.83 actualizaciones/s.
+- Cámara omitida por intervalo: 638–703.
+- Cámara promedio: 1.277–1.603 ms.
+- Cámara p95: 1.7–2.7 ms; las tres corridas cumplen menos de 3 ms.
+- GeoJSON: 109–115 actualizaciones.
+- Tiempo para seleccionar 58 km/h: 1,138–1,210 ms.
+- Heap final expuesto por Chromium: 54.17–61.04 MiB.
+- Ninguna corrida normal añadió frames >50 ms, frames >100 ms o long tasks.
 
-La mediana de cámara p95 cumple el objetivo de menos de 3 ms. La corrida
-atípica se conserva en el informe; no se descartó ni se sustituyó.
+El p95 de cámara cumple el objetivo en las tres corridas. La variación de heap
+no se interpreta como regresión sin perfil de memoria dedicado.
 
 ## Cámara
 
@@ -70,8 +81,10 @@ atípica se conserva en el informe; no se descartó ni se sustituyó.
   completo.
 - `jumpTo` omite zoom y pitch cuando el perfil no cambió de forma
   significativa.
-- Las escrituras de diagnóstico quedaron fuera del cronómetro de aplicación de
-  cámara.
+- La métrica de cámara usa el mismo límite en base y optimizado: llamada a
+  MapLibre, `exposeCameraTarget` y bookkeeping de seguimiento.
+- Contadores y último costo son ligeros; arrays, percentiles y diagnósticos
+  pesados sólo se habilitan con diagnostics o profiling.
 - Tolerancias configurables:
   - coordenadas: `0.00000015°`;
   - bearing: `0.35°`;
@@ -81,32 +94,29 @@ atípica se conserva en el informe; no se descartó ni se sustituyó.
   - offset: `0.75 px`.
 - El perfil rápido móvil entra a 84 km/h después de 900 ms sostenidos y sale a
   74 km/h después de 650 ms.
+- La transición pendiente sigue evaluándose con el vehículo quieto, de modo que
+  `mobileFast` termina correctamente en `mobileStopped`.
 - `mobileDriving` usa zoom 15.45 y `mobileFast` 15.20 para conservar cercanía.
 
-El escenario de medición mantiene movimiento continuo, por lo que no generó
-omisiones netas por tolerancia. Las pruebas puras sí verifican cambios pequeños
-y significativos. No hubo transiciones interrumpidas en la corrida de control.
+El escenario continuo no produjo omisiones por tolerancia. Las pruebas puras
+verifican cambios pequeños y significativos, y el E2E táctil verifica la
+restauración completa al detenerse.
 
 ## Input
 
-`timeToSelect58KphTargetMilliseconds` conserva la medición anterior con un
+`timeToSelect58KphTargetMilliseconds` conserva la medición histórica con un
 nombre explícito. No se presenta como latencia.
 
-La instrumentación nueva, habilitada solo con profiling o diagnostics, registra:
+Una captura separada `production-profiling`, sobre el mismo SHA, registró:
 
-1. timestamp del evento de puntero;
-2. momento posterior a almacenar el valor en `InputController`;
-3. siguiente consumo por el game loop;
-4. siguiente `requestAnimationFrame` que confirma el cambio visual del joystick.
+- evento → almacenado en `InputController`: 50.2 ms;
+- evento → consumido por el game loop: 52.8 ms;
+- evento → próximo `requestAnimationFrame`: 53.7 ms;
+- latencia visual/presentación real: n/d.
 
-Medianas headless:
-
-- evento → almacenado: 45.9 ms;
-- evento → consumido: 48.8 ms;
-- evento → frame visual: 49.6 ms.
-
-CDP, Chromium headless y la cola de eventos limitan la precisión. Estos valores
-sirven para detectar regresiones grandes, no como medición táctil física.
+El próximo RAF no confirma pintura ni presentación en pantalla. CDP, Chromium
+headless y la cola de eventos limitan la precisión; estos valores sólo ayudan a
+detectar regresiones grandes. La validación táctil física sigue pendiente.
 
 ## Tutorial, overlays y UI
 
@@ -116,10 +126,11 @@ sirven para detectar regresiones grandes, no como medición táctil física.
   a `completed`.
 - Objetivo, interacción, Turbo y bitácora son consejos pequeños, no pausantes y
   deduplicados por sesión.
-- La cola monta como máximo un overlay grande y ordena narrativa, recuperación
-  o elección, tutorial, radio y avisos compactos.
-- La radio móvil muestra 4.5 segundos completos y luego se contrae sin
-  descartar el evento. La franja puede expandirse.
+- La política de overlays monta como máximo un panel informativo grande y
+  prioriza narrativa, recuperación/elección, interacción, tutorial, radio,
+  consejo, mini navegador y alertas.
+- La radio móvil muestra 4.5 segundos completos y luego se contrae sin descartar
+  el evento. La franja puede expandirse.
 - Con más de 35% de combustible y misión activa, estaciones no seleccionadas
   quedan como iconos discretos. Entre 25% y 35% usan formato compacto; bajo 25%
   muestran asistencia completa.
@@ -134,13 +145,12 @@ prioridad visual de combustible.
 ## Costos y límites restantes
 
 - El p95 de frametime continúa cuantizado en 33.4 ms en Chromium headless; no se
-  alcanzó una reducción del 25% porque el baseline comparable ya alternaba
-  principalmente entre frames de 16.7 y 33.4 ms.
+  alcanzó una reducción de 25% en esa métrica, aunque los frames >33 ms bajaron
+  32.7% en el control estrictamente comparable.
 - La cámara aplicada queda cerca de 30 Hz, no exactamente en 30 Hz, por la
   cadencia real de frames y el filtro de intervalo.
-- `cameraSkippedByTolerance` necesita un escenario detenido o casi estático para
-  producir un contador representativo.
+- `cameraSkippedByTolerance` necesita un escenario detenido o casi estático
+  para producir un contador representativo.
 - Los ticks observados no equivalen a todas las escrituras de Zustand.
-- La memoria de Chromium es orientativa y varió ampliamente entre corridas.
 - Siguen pendientes teléfono físico, sesión de 15 minutos, calentamiento,
   audio, hápticos, safe areas y sensación subjetiva de cámara/velocidad.
