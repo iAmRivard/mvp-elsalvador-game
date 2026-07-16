@@ -278,4 +278,21 @@ describe('keyboard route controls', () => {
     expect(input.snapshot().boost).toBe(false);
     unbind();
   });
+
+  it('separa almacenamiento, frame visual y consumo del input', () => {
+    const input = new InputController();
+    const eventTimestamp = performance.now() - 2;
+    const sequence = input.recordInputStored(eventTimestamp);
+    input.markInputConsumed(eventTimestamp + 8);
+    input.markInputVisualUpdate(sequence, eventTimestamp + 12);
+
+    expect(input.getInputLatencyDiagnostics()).toMatchObject({
+      sequence,
+      inputVisualLatencyMilliseconds: 12,
+      inputConsumptionLatencyMilliseconds: 8,
+    });
+    expect(
+      input.getInputLatencyDiagnostics().eventToStoredMilliseconds,
+    ).not.toBeNull();
+  });
 });

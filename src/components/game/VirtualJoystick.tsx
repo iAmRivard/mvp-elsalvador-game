@@ -9,6 +9,7 @@ import {
   driveJoystickConfig,
   type JoystickPositionMode,
 } from '../../config/mobileControls.config';
+import { performanceMetricsEnabled } from '../../config/diagnostics.config';
 import { applyDeadZone, applyResponseCurve } from '../../game/analogInput';
 import {
   driveJoystickOutput,
@@ -175,6 +176,20 @@ export function VirtualJoystick({
     } else {
       const normalized = applyDeadZone(visualX / radiusPixels, deadZone);
       input.setJoystickTurn(applyResponseCurve(normalized, responseExponent));
+    }
+    if (performanceMetricsEnabled) {
+      const sequence = input.recordInputStored(event.timeStamp);
+      window.requestAnimationFrame((timestamp) => {
+        input.markInputVisualUpdate(sequence, timestamp);
+        const diagnostics = input.getInputLatencyDiagnostics();
+        if (
+          surfaceRef.current &&
+          diagnostics.inputVisualLatencyMilliseconds !== null
+        ) {
+          surfaceRef.current.dataset.inputVisualLatencyMs =
+            diagnostics.inputVisualLatencyMilliseconds.toFixed(3);
+        }
+      });
     }
     if (surfaceRef.current) {
       surfaceRef.current.dataset.processingMs = (
