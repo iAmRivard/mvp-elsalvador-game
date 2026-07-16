@@ -8,6 +8,8 @@
   insignificantes y conserva perfiles cercanos para conducción y velocidad alta.
 - La histéresis sigue evaluándose aunque el vehículo quede quieto, por lo que una transición desde
   `mobileFast` termina correctamente en `mobileStopped`.
+- Un fallo tardío de recurso de MapLibre ya no desmonta un mapa que terminó de iniciar; se degrada y
+  registra, mientras pérdida de contexto WebGL y fallos de arranque conservan recuperación bloqueante.
 - Las métricas separan FPS por throughput de FPS instantáneo, registran el SHA y modo de build, y
   nombran `evento → próximo RAF` sin presentarlo como latencia visual real.
 

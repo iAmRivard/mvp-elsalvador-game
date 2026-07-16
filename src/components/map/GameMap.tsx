@@ -1,7 +1,4 @@
-import maplibregl, {
-  type ErrorEvent,
-  type JumpToOptions,
-} from 'maplibre-gl';
+import maplibregl, { type ErrorEvent, type JumpToOptions } from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TouchControls } from '../game/TouchControls';
 import { FuelStationLegend } from '../hud/FuelStationLegend';
@@ -911,9 +908,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               };
               if (
                 !lastAppliedCameraOptions ||
-                Math.abs(
-                  camera.options.zoom - lastAppliedCameraOptions.zoom,
-                ) >= followCameraTolerances.minimumZoomDelta
+                Math.abs(camera.options.zoom - lastAppliedCameraOptions.zoom) >=
+                  followCameraTolerances.minimumZoomDelta
               ) {
                 jumpOptions.zoom = camera.options.zoom;
               }
@@ -1008,8 +1004,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               inputDiagnostics.interact,
             );
             if (performanceMetricsEnabled) {
-              const inputLatency =
-                inputController.getInputLatencyDiagnostics();
+              const inputLatency = inputController.getInputLatencyDiagnostics();
               containerRef.current.dataset.inputLatencySequence = String(
                 inputLatency.sequence,
               );
@@ -1303,12 +1298,18 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       lastCameraBearing = camera.options.bearing;
     };
     const handleError = (event: ErrorEvent) => {
-      if (!isFatalMapError(event.error)) return;
+      const details = mapErrorDetails(event.error);
+      if (!isFatalMapError(event.error, startupReady)) {
+        if (containerRef.current) {
+          containerRef.current.dataset.mapLastNonfatalError = details;
+        }
+        return;
+      }
       startupReady = false;
       useGameStore.getState().setInsideValidObjectiveZone(false);
       inputController.clearAllInput();
       inputController.resetMobileBoostCompletely();
-      setErrorMessage(mapErrorDetails(event.error));
+      setErrorMessage(details);
       setStatus('error');
     };
 
@@ -1385,9 +1386,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         ref={containerRef}
         className="map-canvas"
         data-testid="game-map"
-        data-performance-profiling-enabled={String(
-          performanceProfilingEnabled,
-        )}
+        data-performance-profiling-enabled={String(performanceProfilingEnabled)}
         data-diagnostics-enabled={String(diagnosticsEnabled)}
       />
 
@@ -1405,9 +1404,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         <span className="sr-only">El mapa local está listo.</span>
       )}
 
-      {status === 'ready' && (
-        <FuelStationLegend />
-      )}
+      {status === 'ready' && <FuelStationLegend />}
 
       {threeStatus === 'ready' && (
         <span className="sr-only">Vehículo 3D activo.</span>

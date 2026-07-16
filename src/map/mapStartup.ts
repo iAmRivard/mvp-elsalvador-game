@@ -14,11 +14,18 @@ export function mapErrorDetails(error: unknown): string {
   return 'MapLibre no pudo completar la carga del recurso principal.';
 }
 
-export function isFatalMapError(error: unknown): boolean {
+export function isFatalMapError(
+  error: unknown,
+  startupComplete = false,
+): boolean {
   const details = mapErrorDetails(error).toLowerCase();
-  return !optionalResourceFragments.some((fragment) =>
-    details.includes(fragment),
-  );
+  if (
+    optionalResourceFragments.some((fragment) => details.includes(fragment))
+  ) {
+    return false;
+  }
+  if (details.includes('webgl context lost')) return true;
+  return !startupComplete;
 }
 
 export const mapLoadingLabels: Readonly<Record<MapLoadingStage, string>> = {

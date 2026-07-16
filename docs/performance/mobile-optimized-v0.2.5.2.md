@@ -22,6 +22,10 @@ Fecha: 16 de julio de 2026.
 La automatización mide frame pacing y costos instrumentados. No demuestra
 fluidez percibida, temperatura ni respuesta en un teléfono físico.
 
+Después de estas capturas se añadió una corrección aislada a la ruta de error
+tardío de MapLibre. No modifica el loop, la cámara ni el camino normal medido;
+por transparencia, las tablas conservan el SHA exacto de las capturas.
+
 ## Comparación estricta con el control base v2
 
 | Métrica                          | v0.2.5.1/base |  v0.2.5.2 |           Cambio |
