@@ -5,6 +5,7 @@ export type OverlayPriority =
   | 'tutorial'
   | 'radio'
   | 'information'
+  | 'compact-radio'
   | 'discovery';
 
 export type OverlayKind =
@@ -37,7 +38,8 @@ const priorityOrder: Readonly<Record<OverlayPriority, number>> = {
   tutorial: 3,
   radio: 4,
   information: 5,
-  discovery: 6,
+  'compact-radio': 6,
+  discovery: 7,
 };
 
 export function resolveOverlayQueue(
@@ -51,13 +53,17 @@ export function resolveOverlayQueue(
   );
   const large = ordered.filter((candidate) => candidate.large);
   const activeLarge = large[0] ?? null;
+  const compact = ordered.filter(
+    (candidate) =>
+      !candidate.large ||
+      (activeLarge?.kind === 'radio' && candidate.kind === 'discovery'),
+  );
+  const compactIds = new Set(compact.map((candidate) => candidate.id));
   return {
     activeLarge,
-    queuedLarge: activeLarge ? large.slice(1) : [],
-    compact: ordered.filter(
-      (candidate) =>
-        !candidate.large ||
-        (activeLarge?.kind === 'radio' && candidate.kind === 'discovery'),
-    ),
+    queuedLarge: activeLarge
+      ? large.slice(1).filter((candidate) => !compactIds.has(candidate.id))
+      : [],
+    compact,
   };
 }
