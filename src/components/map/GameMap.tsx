@@ -1,4 +1,7 @@
-import maplibregl, { type ErrorEvent } from 'maplibre-gl';
+import maplibregl, {
+  type ErrorEvent,
+  type JumpToOptions,
+} from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TouchControls } from '../game/TouchControls';
 import { FuelStationLegend } from '../hud/FuelStationLegend';
@@ -883,7 +886,27 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             }
             if (!isRecentering || duration === 0) {
               if (map.isEasing()) cameraInterruptedTransitions += 1;
-              map.jumpTo(camera.options);
+              const jumpOptions: JumpToOptions = {
+                center: camera.options.center,
+                bearing: camera.options.bearing,
+              };
+              if (
+                !lastAppliedCameraOptions ||
+                Math.abs(
+                  camera.options.zoom - lastAppliedCameraOptions.zoom,
+                ) >= followCameraTolerances.minimumZoomDelta
+              ) {
+                jumpOptions.zoom = camera.options.zoom;
+              }
+              if (
+                !lastAppliedCameraOptions ||
+                Math.abs(
+                  camera.options.pitch - lastAppliedCameraOptions.pitch,
+                ) >= followCameraTolerances.minimumPitchDeltaDegrees
+              ) {
+                jumpOptions.pitch = camera.options.pitch;
+              }
+              map.jumpTo(jumpOptions);
             } else {
               map.easeTo({
                 ...camera.options,
@@ -892,6 +915,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 essential: false,
               });
             }
+            const cameraUpdateDuration = performance.now() - cameraStartedAt;
             exposeCameraTarget(camera);
             recenterUntil = isRecentering ? timestamp + duration : 0;
             lastCameraUpdate = timestamp;
@@ -901,7 +925,6 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             lastFollowedHeading = player.heading;
             lastFollowedSpeedKilometersPerHour = speedKilometersPerHour;
             lastCameraBearing = camera.options.bearing;
-            const cameraUpdateDuration = performance.now() - cameraStartedAt;
             cameraAppliedUpdates += 1;
             cameraWindowAppliedUpdates += 1;
             cameraUpdateDurationTotal += cameraUpdateDuration;

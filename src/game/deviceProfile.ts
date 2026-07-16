@@ -65,7 +65,11 @@ export function resolveDeviceProfile(signals: DeviceSignals): DeviceProfile {
           ? 60
           : 40,
     mapDataUpdateIntervalMilliseconds:
-      quality === 'low' ? 250 : signals.coarsePointer ? 140 : 100,
+      quality === 'low'
+        ? 250
+        : isCompact || signals.coarsePointer
+          ? 170
+          : 100,
     fadeDurationMilliseconds: signals.reducedMotion
       ? 0
       : quality === 'low'

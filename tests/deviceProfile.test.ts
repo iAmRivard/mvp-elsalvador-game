@@ -62,6 +62,22 @@ describe('perfil de dispositivo', () => {
     expect(profile.cameraUpdateIntervalMilliseconds).toBe(33);
   });
 
+  it('mantiene cadencia GeoJSON móvil aunque coarse pointer no se exponga', () => {
+    const profile = resolveDeviceProfile({
+      width: 392,
+      height: 850,
+      coarsePointer: false,
+      reducedMotion: false,
+      hardwareConcurrency: 8,
+      deviceMemoryGigabytes: 8,
+      devicePixelRatio: 3,
+      configuredQuality: 'medium',
+    });
+
+    expect(profile.isCompact).toBe(true);
+    expect(profile.mapDataUpdateIntervalMilliseconds).toBe(170);
+  });
+
   it('respeta movimiento reducido y una selección explícita alta', () => {
     const profile = resolveDeviceProfile({
       width: 844,

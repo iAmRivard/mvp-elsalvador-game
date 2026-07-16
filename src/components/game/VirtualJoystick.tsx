@@ -179,8 +179,8 @@ export function VirtualJoystick({
     }
     if (performanceMetricsEnabled) {
       const sequence = input.recordInputStored(event.timeStamp);
-      window.requestAnimationFrame((timestamp) => {
-        input.markInputVisualUpdate(sequence, timestamp);
+      window.requestAnimationFrame(() => {
+        input.markInputVisualUpdate(sequence, performance.now());
         const diagnostics = input.getInputLatencyDiagnostics();
         if (
           surfaceRef.current &&
