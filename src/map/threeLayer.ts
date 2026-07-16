@@ -32,6 +32,7 @@ export interface ThreeDrivingEffectsState {
 
 export interface ThreeGameLayerOptions {
   quality: GraphicsQuality;
+  mobile?: boolean;
   reducedMotion: boolean;
   onPlayerReady: () => void;
   onPlayerError: () => void;
@@ -275,7 +276,7 @@ class ThreeGameLayer implements CustomLayerInterface {
     if (this.playerModel) {
       const playerScale = mercatorScaleForScreenSize(
         zoom,
-        threePlayerTargetPixels(this.options.quality),
+        threePlayerTargetPixels(this.options.quality, this.options.mobile),
         PLAYER_MODEL_LENGTH,
       );
       this.playerModel.scale.setScalar(playerScale);

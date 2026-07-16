@@ -30,5 +30,8 @@ describe('transformaciones de la capa 3D', () => {
     expect(threePlayerTargetPixels('high')).toBeGreaterThan(
       threePlayerTargetPixels('medium'),
     );
+    expect(threePlayerTargetPixels('medium', true)).toBeCloseTo(
+      threePlayerTargetPixels('medium') * 1.12,
+    );
   });
 });

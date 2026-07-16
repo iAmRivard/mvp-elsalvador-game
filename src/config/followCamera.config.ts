@@ -66,14 +66,14 @@ export const drivingCameraProfiles: DrivingCameraProfiles = {
     transitionDurationMilliseconds: 60,
   },
   mobileDriving: {
-    zoom: 15.4,
+    zoom: 15.45,
     pitch: 59,
     offsetYRatio: 0.24,
     updateIntervalMilliseconds: 33,
     transitionDurationMilliseconds: 50,
   },
   mobileFast: {
-    zoom: 15.15,
+    zoom: 15.2,
     pitch: 61,
     offsetYRatio: 0.26,
     updateIntervalMilliseconds: 33,
