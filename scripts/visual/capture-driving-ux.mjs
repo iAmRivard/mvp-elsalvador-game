@@ -5,7 +5,7 @@ import { chromium, devices } from '@playwright/test';
 
 const baseUrl = process.argv[2] ?? 'http://127.0.0.1:5173';
 const outputDirectory = resolve(
-  process.argv[3] ?? 'test-results/driving-ux-v0.2.5.2',
+  process.argv[3] ?? 'test-results/driving-ux-v0.2.5.3',
 );
 const observationMilliseconds = 30_000;
 const warmupMilliseconds = 10_000;
@@ -141,7 +141,7 @@ try {
   });
   await page.getByTestId('game-map').waitFor({ state: 'visible' });
   await page.screenshot({
-    path: resolve(outputDirectory, 'v0.2.5.2-mobile-after.png'),
+    path: resolve(outputDirectory, 'v0.2.5.3-mobile-after.png'),
   });
 
   await page.waitForTimeout(warmupMilliseconds);
@@ -425,7 +425,7 @@ try {
       'event to stored, next game-loop consumption and next animation frame; presentation latency unavailable',
   };
   await writeFile(
-    resolve(outputDirectory, 'v0.2.5.2-mobile-metrics.json'),
+    resolve(outputDirectory, 'v0.2.5.3-mobile-metrics.json'),
     `${JSON.stringify(metrics, null, 2)}\n`,
     'utf8',
   );
@@ -443,7 +443,7 @@ try {
     });
     await page.waitForTimeout(250);
     await page.screenshot({
-      path: resolve(outputDirectory, `v0.2.5.2-mobile-${viewport.name}.png`),
+      path: resolve(outputDirectory, `v0.2.5.3-mobile-${viewport.name}.png`),
     });
   }
   await session.detach();
