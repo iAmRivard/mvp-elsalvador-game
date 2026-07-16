@@ -302,9 +302,11 @@ describe('keyboard route controls', () => {
     const sequence = input.recordInputStored(eventTimestamp);
     input.markInputAnimationFrame(sequence, eventTimestamp + 80);
 
-    expect(input.getInputLatencyDiagnostics()).toMatchObject({
-      eventToNextAnimationFrameMilliseconds: 80,
-      inputConsumptionLatencyMilliseconds: null,
-    });
+    const diagnostics = input.getInputLatencyDiagnostics();
+    expect(diagnostics.eventToNextAnimationFrameMilliseconds).toBeCloseTo(
+      80,
+      6,
+    );
+    expect(diagnostics.inputConsumptionLatencyMilliseconds).toBeNull();
   });
 });
