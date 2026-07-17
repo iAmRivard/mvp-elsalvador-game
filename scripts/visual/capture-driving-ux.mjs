@@ -110,9 +110,21 @@ try {
     }
   });
   await page.goto(baseUrl);
-  const buildSha = await page
-    .locator('[data-build-sha]')
-    .getAttribute('data-build-sha');
+  const buildIdentityElement = page.locator('[data-build-sha]').first();
+  let buildSha =
+    (await buildIdentityElement.count()) > 0
+      ? await buildIdentityElement.getAttribute('data-build-sha')
+      : null;
+  if (!buildSha) {
+    const identityResponse = await page.request.get(
+      new URL('/build-identity.json', baseUrl).toString(),
+    );
+    if (identityResponse.ok()) {
+      const identity = await identityResponse.json();
+      buildSha =
+        typeof identity?.buildSha === 'string' ? identity.buildSha : null;
+    }
+  }
   if (!repositorySha || !buildSha || repositorySha !== buildSha) {
     throw new Error(
       `La captura no corresponde al checkout actual: repo=${repositorySha ?? 'n/d'}, build=${buildSha ?? 'n/d'}.`,
