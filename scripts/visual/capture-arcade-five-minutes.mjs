@@ -1,12 +1,23 @@
+import { execFileSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium, devices } from '@playwright/test';
 
 const baseUrl = process.argv[2] ?? 'http://127.0.0.1:4173';
 const outputDirectory = resolve(
-  process.argv[3] ?? 'test-results/arcade-five-minutes',
+  process.argv[3] ?? 'artifacts/arcade-five-minutes',
 );
 const durationMilliseconds = Number(process.argv[4] ?? 300_000);
+const repositorySha = (() => {
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return null;
+  }
+})();
 const captureTimes = [0, 1, 3, 8, 15, 30, 45, 75, 120, 180, 300]
   .map((seconds) => seconds * 1_000)
   .filter((milliseconds) => milliseconds <= durationMilliseconds);
@@ -45,6 +56,9 @@ try {
     sessionStorage.clear();
   });
   await page.goto(baseUrl);
+  const buildSha = await page
+    .locator('[data-build-sha]')
+    .getAttribute('data-build-sha');
   await page.getByRole('button', { name: /Comenzar expedici.n/ }).click();
   await page.getByRole('button', { name: /Comenzar investigaci.n/ }).click();
   const skip = page.getByRole('button', { name: 'Omitir' });
@@ -114,17 +128,6 @@ try {
     if (firstEventMilliseconds === null && (await radio.isVisible())) {
       firstEventMilliseconds = elapsed;
     }
-    if (
-      firstEventMilliseconds !== null &&
-      elapsed - firstEventMilliseconds > 2_500 &&
-      (await radio.isVisible())
-    ) {
-      const closeRadio = page.getByRole('button', {
-        name: /Cerrar transmisi.n/,
-      });
-      if (await closeRadio.isVisible()) await closeRadio.click();
-    }
-
     const interaction = page.getByRole('button', { name: /Escuchar se.al/ });
     if (await interaction.isVisible()) {
       await interaction.click();
@@ -159,24 +162,17 @@ try {
   });
   const layout = await page.evaluate(() => {
     const mapElement = document.querySelector('[data-testid="game-map"]');
-    const viewportArea = window.innerWidth * window.innerHeight;
-    const hudArea = [...document.querySelectorAll('.game-hud *')]
-      .filter((element) => {
-        if (!(element instanceof HTMLElement)) return false;
-        const style = getComputedStyle(element);
-        const rect = element.getBoundingClientRect();
-        return (
-          style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0
-        );
-      })
-      .reduce((area, element) => {
-        if (!(element instanceof HTMLElement)) return area;
-        const rect = element.getBoundingClientRect();
-        return area + rect.width * rect.height;
-      }, 0);
+    const usefulMapAreaRatio =
+      mapElement instanceof HTMLElement
+        ? Number(mapElement.dataset.usefulMapAreaRatio)
+        : Number.NaN;
+    const hasUsefulMapAreaRatio = Number.isFinite(usefulMapAreaRatio);
     return {
       viewport: { width: window.innerWidth, height: window.innerHeight },
-      hudAreaRatio: Math.min(1, hudArea / viewportArea),
+      usefulMapAreaRatio: hasUsefulMapAreaRatio ? usefulMapAreaRatio : null,
+      hudAreaRatio: hasUsefulMapAreaRatio
+        ? Math.max(0, 1 - usefulMapAreaRatio)
+        : null,
       overlays: document.querySelectorAll(
         '[role="dialog"], .radio-message:not(.radio-message--compact)',
       ).length,
@@ -194,6 +190,12 @@ try {
     resolve(outputDirectory, 'session.json'),
     `${JSON.stringify(
       {
+        captureMetadata: {
+          repositorySha,
+          buildSha,
+          baseUrl,
+          capturedAt: new Date().toISOString(),
+        },
         durationMilliseconds,
         captureTimesMilliseconds: captureTimes,
         firstEventMilliseconds,
