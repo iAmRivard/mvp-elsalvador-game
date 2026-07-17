@@ -90,6 +90,7 @@ export function App() {
             enterGame(false);
           }}
         />
+        <RecommendedControlsPrompt />
         <ServiceWorkerUpdatePrompt deferUpdate={Boolean(activeMissionId)} />
       </main>
     );
@@ -176,7 +177,6 @@ export function App() {
             }}
           />
         )}
-      <RecommendedControlsPrompt gameplayActive={sessionStarted} />
       <ServiceWorkerUpdatePrompt deferUpdate={Boolean(activeMissionId)} />
     </main>
   );

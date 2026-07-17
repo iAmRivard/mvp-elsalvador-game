@@ -61,24 +61,6 @@ describe('modos móviles de conducción', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('mantiene la narrativa por encima del aviso no modal de migración', () => {
-    useSettingsStore.setState({
-      controlMode: 'classic-buttons',
-      arcadeDrivingPromptDismissed: false,
-    });
-    useGameStore.setState({
-      activeNarrativeEventId: 'radio-transmision-inicial',
-    });
-    render(<RecommendedControlsPrompt />);
-
-    expect(screen.queryByText('Conducción Arcade')).toBeNull();
-    act(() => useGameStore.setState({ activeNarrativeEventId: null }));
-    expect(
-      screen.getByRole('status', { name: 'Nuevo control móvil' }),
-    ).toBeTruthy();
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-
   it('no ofrece reintentar aceleración en un modo manual', async () => {
     vi.useFakeTimers();
     useSettingsStore.setState({ controlMode: 'classic-buttons' });
@@ -142,19 +124,5 @@ describe('modos móviles de conducción', () => {
     act(() => useGameStore.getState().closeJournal());
     expect(screen.getByLabelText('Controles táctiles')).toBeTruthy();
     expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(35);
-  });
-
-  it('informa en el titulo sin cubrir una sesion de juego activa', () => {
-    useSettingsStore.setState({
-      controlMode: 'classic-buttons',
-      arcadeDrivingPromptDismissed: false,
-    });
-    const { rerender } = render(
-      <RecommendedControlsPrompt gameplayActive={false} />,
-    );
-
-    expect(screen.getByTestId('controls-migration')).toBeTruthy();
-    rerender(<RecommendedControlsPrompt gameplayActive />);
-    expect(screen.queryByTestId('controls-migration')).toBeNull();
   });
 });

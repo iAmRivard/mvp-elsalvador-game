@@ -1,16 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { onboardingIsActive } from '../../types/onboarding';
 
 const mobileControlsQuery =
   '(hover: none), (pointer: coarse), (max-width: 600px)';
 
-export function RecommendedControlsPrompt({
-  gameplayActive = false,
-}: {
-  gameplayActive?: boolean;
-}) {
+export function RecommendedControlsPrompt() {
   const [mobileContext, setMobileContext] = useState(() =>
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia(mobileControlsQuery).matches
@@ -26,17 +20,6 @@ export function RecommendedControlsPrompt({
   const setDismissed = useSettingsStore(
     (state) => state.setArcadeDrivingPromptDismissed,
   );
-  const blockedByGameplayOverlay = useGameStore((state) =>
-    Boolean(
-      state.isPaused ||
-      state.isJournalOpen ||
-      state.recoveryReason ||
-      state.activeNarrativeEventId ||
-      state.activeRadioEventId ||
-      state.activeMissionChoiceObjectiveId ||
-      onboardingIsActive(state.onboardingState),
-    ),
-  );
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;
     const mediaQuery = window.matchMedia(mobileControlsQuery);
@@ -46,13 +29,7 @@ export function RecommendedControlsPrompt({
     return () => mediaQuery.removeEventListener('change', update);
   }, []);
 
-  if (
-    gameplayActive ||
-    !mobileContext ||
-    dismissed ||
-    controlMode === 'arcade-driving' ||
-    blockedByGameplayOverlay
-  ) {
+  if (!mobileContext || dismissed || controlMode === 'arcade-driving') {
     return null;
   }
 

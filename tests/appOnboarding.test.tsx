@@ -4,15 +4,23 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/app/App';
 import { useGameStore } from '../src/store/gameStore';
+import { useSettingsStore } from '../src/store/settingsStore';
 
 vi.mock('../src/components/menu/StartScreen', () => ({
-  StartScreen: ({ onContinue, onNewGame }: {
+  StartScreen: ({
+    onContinue,
+    onNewGame,
+  }: {
     onContinue: () => void;
     onNewGame: () => void;
   }) => (
     <>
-      <button type="button" onClick={onContinue}>Comenzar expedición</button>
-      <button type="button" onClick={onNewGame}>Nueva partida</button>
+      <button type="button" onClick={onContinue}>
+        Comenzar expedición
+      </button>
+      <button type="button" onClick={onNewGame}>
+        Nueva partida
+      </button>
     </>
   ),
 }));
@@ -30,6 +38,7 @@ describe('integración de onboarding con la primera misión', () => {
   beforeEach(() => {
     window.localStorage.clear();
     useGameStore.setState(useGameStore.getInitialState(), true);
+    useSettingsStore.setState(useSettingsStore.getInitialState(), true);
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       value: vi.fn(() => ({
@@ -41,6 +50,30 @@ describe('integración de onboarding con la primera misión', () => {
   });
 
   afterEach(cleanup);
+
+  it('ofrece Arcade a un control legado solo mientras esta en el titulo', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn(() => ({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    });
+    useSettingsStore.setState({
+      controlMode: 'classic-buttons',
+      arcadeDrivingPromptDismissed: false,
+    });
+
+    render(<App />);
+    expect(screen.getByTestId('controls-migration')).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Comenzar expedición' }),
+    );
+
+    expect(await screen.findByText('Una señal de auxilio')).toBeTruthy();
+    expect(screen.queryByTestId('controls-migration')).toBeNull();
+  });
 
   it('muestra la narrativa pausante antes del entrenamiento', async () => {
     render(<App />);
