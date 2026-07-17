@@ -184,7 +184,7 @@ describe('road tracker', () => {
     expect(tracker.getDiagnostics().consecutiveMisses).toBe(1);
   });
 
-  it('allows the fourth consecutive miss to become offroad', () => {
+  it('keeps seven sampled misses inside the 1.75 second grace window', () => {
     const tracker = new RoadTracker(
       new RoadSpatialIndex(createRoadTestNetwork()),
     );
@@ -193,7 +193,7 @@ describe('road tracker', () => {
       timestampMilliseconds: 0,
     });
 
-    for (const timestampMilliseconds of [250, 500, 750]) {
+    for (const timestampMilliseconds of [250, 500, 750, 1_000, 1_250, 1_500]) {
       expect(
         tracker.update([-89.31, 13.71], {
           mobile: true,
@@ -204,41 +204,41 @@ describe('road tracker', () => {
     expect(
       tracker.update([-89.31, 13.71], {
         mobile: true,
-        timestampMilliseconds: 1_000,
+        timestampMilliseconds: 1_750,
       }),
-    ).toBeNull();
+    ).not.toBeNull();
     expect(tracker.getDiagnostics()).toMatchObject({
-      surface: 'offroad',
-      consecutiveMisses: 4,
-      offroadReason: 'maximum-misses',
+      surface: 'road-unclassified',
+      consecutiveMisses: 7,
+      offroadReason: null,
     });
   });
 
   it.each([
     [
       '60 FPS',
-      Array.from({ length: 62 }, (_, index) =>
-        Math.round(((index + 1) * 1_000) / 60),
+      Array.from({ length: 59 }, (_, index) =>
+        Math.round(((index + 1) * 1_750) / 60),
       ),
     ],
     [
       '30 FPS',
-      Array.from({ length: 32 }, (_, index) =>
-        Math.round(((index + 1) * 1_000) / 30),
+      Array.from({ length: 29 }, (_, index) =>
+        Math.round(((index + 1) * 1_750) / 30),
       ),
     ],
     [
       '20 FPS',
-      Array.from({ length: 21 }, (_, index) =>
-        Math.round(((index + 1) * 1_000) / 20),
+      Array.from({ length: 19 }, (_, index) =>
+        Math.round(((index + 1) * 1_750) / 20),
       ),
     ],
     [
       'frames irregulares',
-      [16, 70, 249, 250, 400, 510, 749, 750, 920, 1_000, 1_050],
+      [16, 70, 249, 250, 400, 510, 749, 750, 920, 1_000, 1_250, 1_500],
     ],
   ])(
-    'conserva aproximadamente un segundo de gracia a %s',
+    'conserva 1.75 segundos de gracia y luego expira a %s',
     (_label, timestamps) => {
       const tracker = new RoadTracker(
         new RoadSpatialIndex(createRoadTestNetwork()),
@@ -254,9 +254,14 @@ describe('road tracker', () => {
         });
       }
       expect(tracker.getDiagnostics().consecutiveMisses).toBeGreaterThanOrEqual(
-        3,
+        5,
       );
-      expect(tracker.getDiagnostics().consecutiveMisses).toBeLessThanOrEqual(4);
+      expect(tracker.getDiagnostics().consecutiveMisses).toBeLessThanOrEqual(8);
+      expect(tracker.getDiagnostics().surface).toBe('road-unclassified');
+      tracker.update([-89.31, 13.71], {
+        mobile: true,
+        timestampMilliseconds: 1_751,
+      });
       expect(tracker.getDiagnostics().surface).toBe('offroad');
     },
   );
@@ -272,7 +277,7 @@ describe('road tracker', () => {
     expect(
       tracker.update([-89.31, 13.71], {
         mobile: true,
-        timestampMilliseconds: 1_001,
+        timestampMilliseconds: 1_751,
       }),
     ).toBeNull();
     expect(tracker.getDiagnostics().offroadReason).toBe('contact-timeout');

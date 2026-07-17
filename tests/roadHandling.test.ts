@@ -5,7 +5,10 @@ import {
   roadSpeedMultipliers,
   roadSurfaceLabels,
 } from '../src/config/roadHandling.config';
-import { fuelConsumptionConfig } from '../src/config/travel.config';
+import {
+  fuelConsumptionConfig,
+  vehicleHandlingConfig,
+} from '../src/config/travel.config';
 import { restrictedAreaTypeAt } from '../src/data/restrictedAreas';
 import { stepPlayerDetailed } from '../src/game/movement';
 import { roadResultForEdge } from '../src/roads/spatialIndex';
@@ -32,10 +35,10 @@ describe('road handling', () => {
     expect(roadSpeedMultipliers).toMatchObject({
       motorway: 1.25,
       primary: 1,
-      track: 0.5,
-      'dirt-road': 0.5,
-      'road-unclassified': 0.7,
-      offroad: 0.25,
+      track: 0.45,
+      'dirt-road': 0.45,
+      'road-unclassified': 0.8,
+      offroad: 0.6,
     });
     expect(roadFuelMultipliers).toMatchObject({
       primary: 1,
@@ -55,6 +58,7 @@ describe('road handling', () => {
       'Vía sin clasificar',
     );
     expect(roadSurfaceLabels.offroad).toBe('Fuera de carretera');
+    expect(vehicleHandlingConfig.offroadSpeedMultiplier).toBe(0.6);
   });
 
   it('uses the temporary unclassified surface during recovered contact', () => {
@@ -78,7 +82,7 @@ describe('road handling', () => {
 
     expect(result.environment).toMatchObject({
       surface: 'road-unclassified',
-      speedMultiplier: 0.7,
+      speedMultiplier: 0.8,
       fuelMultiplier: 1.15,
     });
   });
@@ -102,7 +106,7 @@ describe('road handling', () => {
     );
 
     expect(result.environment.surface).toBe('dirt-road');
-    expect(result.environment.speedMultiplier).toBe(0.5);
+    expect(result.environment.speedMultiplier).toBe(0.45);
     expect(result.environment.fuelMultiplier).toBe(1.35);
   });
 
@@ -122,7 +126,7 @@ describe('road handling', () => {
       { roadNetworkEnabled: true, roadContact: null },
     );
     expect(result.environment.surface).toBe('offroad');
-    expect(result.environment.speedMultiplier).toBe(0.25);
+    expect(result.environment.speedMultiplier).toBe(0.6);
     expect(result.environment.fuelMultiplier).toBe(1.75);
     expect(result.player.speedMetersPerSecond).toBeCloseTo(19.3, 8);
     expect(result.player.fuel).toBeCloseTo(

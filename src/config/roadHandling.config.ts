@@ -26,8 +26,8 @@ export const roadAssistConfig: RoadAssistConfig = {
 export const mobileRoadContactConfig = {
   detectionRadiusMeters: 52,
   lastEdgeSearchRadiusMeters: 70,
-  gracePeriodMilliseconds: 1_000,
-  maximumConsecutiveMisses: 4,
+  gracePeriodMilliseconds: 1_750,
+  maximumConsecutiveMisses: 8,
   missSampleIntervalMilliseconds: 250,
   surfaceHistoryLimit: 20,
 } as const;
@@ -53,10 +53,10 @@ export const roadSpeedMultipliers: Readonly<Record<RoadSurface, number>> = {
   tertiary: 0.8,
   residential: 0.65,
   service: 0.55,
-  track: 0.5,
-  'dirt-road': 0.5,
-  'road-unclassified': 0.7,
-  offroad: 0.25,
+  track: 0.45,
+  'dirt-road': 0.45,
+  'road-unclassified': 0.8,
+  offroad: 0.6,
 };
 
 export const roadFuelMultipliers: Readonly<Record<RoadSurface, number>> = {
