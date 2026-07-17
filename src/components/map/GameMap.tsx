@@ -126,7 +126,11 @@ import {
 import { RoadTracker } from '../../roads/roadTracker';
 import type { RoadSpatialIndex } from '../../roads/spatialIndex';
 import { alignedRoadHeading } from '../../roads/initialRoadPosition';
-import { INITIAL_PLAYER, useGameStore } from '../../store/gameStore';
+import {
+  INITIAL_PLAYER,
+  useGameStore,
+  type DrivingWearSample,
+} from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import type { PlayerRuntime, PlayerTelemetry } from '../../types/game';
 import type { RoadContact, RoadEdge } from '../../types/roads';
@@ -1900,6 +1904,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             );
             state.setDrivingEnvironment(environment);
             const hapticsEnabled = useSettingsStore.getState().hapticsEnabled;
+            const wearSamples: DrivingWearSample[] = [];
             for (const sample of movementSamples) {
               const blockedImpact =
                 sample.environment.movementBlockedBy !== null &&
@@ -1916,10 +1921,22 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               }
               if (blockedImpact) triggerHaptic('collision', hapticsEnabled);
               previousHapticSurface = sample.environment.surface;
-              state.applyDrivingWear(
-                sample.vehicleDistanceMeters,
-                sample.environment.surface,
-                blockedImpact,
+              if (
+                blockedImpact ||
+                sample.environment.surface === 'offroad' ||
+                sample.environment.surface === 'track' ||
+                sample.environment.surface === 'dirt-road'
+              ) {
+                wearSamples.push({
+                  vehicleDistanceMeters: sample.vehicleDistanceMeters,
+                  surface: sample.environment.surface,
+                  blockedImpact,
+                });
+              }
+            }
+            if (wearSamples.length > 0) {
+              state.applyDrivingWearSamples(
+                wearSamples,
                 (selectedMissionChoiceOption(
                   state.activeMissionId,
                   state.missionChoiceSelections,

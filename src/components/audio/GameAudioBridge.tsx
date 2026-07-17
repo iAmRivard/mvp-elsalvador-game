@@ -1,4 +1,8 @@
 import { useEffect } from 'react';
+import {
+  adaptiveMusicStateChanged,
+  vehicleAudioStateChanged,
+} from '../../audio/audioStoreChanges';
 import { gameAudio } from '../../audio/gameAudio';
 import { musicStateForGame } from '../../audio/musicState';
 import { missionById } from '../../data/missions';
@@ -82,8 +86,12 @@ export function GameAudioBridge({ input }: { input: InputController }) {
     const unsubscribeSettings = useSettingsStore.subscribe(configureAudio);
     const unsubscribeInput = input.subscribe(() => updateVehicleAudio(input));
     const unsubscribeGame = useGameStore.subscribe((state, previousState) => {
-      updateVehicleAudio(input);
-      const timerSecond = updateAdaptiveMusic();
+      if (vehicleAudioStateChanged(state, previousState)) {
+        updateVehicleAudio(input);
+      }
+      const timerSecond = adaptiveMusicStateChanged(state, previousState)
+        ? updateAdaptiveMusic()
+        : previousTimerSecond;
       if (
         state.activeMissionId &&
         state.activeMissionId !== previousState.activeMissionId

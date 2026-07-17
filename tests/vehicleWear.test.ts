@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { vehicleStateConfig } from '../src/config/vehicleState.config';
 import { conditionWarningForTransition } from '../src/game/conditionWarnings';
 import { useGameStore } from '../src/store/gameStore';
@@ -68,5 +68,40 @@ describe('balance de desgaste del vehículo', () => {
       recoveryReason: 'condition',
       isPaused: true,
     });
+  });
+
+  it('agrupa una ventana de muestras en una sola escritura equivalente', () => {
+    useGameStore.getState().setRoadNetworkStatus('ready');
+    const listener = vi.fn();
+    const unsubscribe = useGameStore.subscribe(listener);
+    listener.mockClear();
+
+    useGameStore.getState().applyDrivingWearSamples([
+      {
+        vehicleDistanceMeters: 10,
+        surface: 'offroad',
+        blockedImpact: false,
+      },
+      {
+        vehicleDistanceMeters: 5,
+        surface: 'track',
+        blockedImpact: true,
+      },
+      {
+        vehicleDistanceMeters: 20,
+        surface: 'primary',
+        blockedImpact: false,
+      },
+    ]);
+
+    expect(listener).toHaveBeenCalledOnce();
+    expect(useGameStore.getState().vehicle.condition).toBeCloseTo(
+      100 -
+        (10 * vehicleStateConfig.offroadConditionPerVehicleMeter +
+          5 * vehicleStateConfig.trackConditionPerVehicleMeter +
+          vehicleStateConfig.blockedImpactCondition),
+      6,
+    );
+    unsubscribe();
   });
 });

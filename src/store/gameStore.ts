@@ -130,6 +130,12 @@ export type SaveMessage =
 
 export type RoadNetworkStatus = 'loading' | 'ready' | 'unavailable';
 
+export interface DrivingWearSample {
+  vehicleDistanceMeters: number;
+  surface: RoadSurface;
+  blockedImpact: boolean;
+}
+
 interface DrivingRuntimeState extends PlayerStepEnvironment {
   roadNetworkStatus: RoadNetworkStatus;
 }
@@ -227,6 +233,10 @@ interface GameStore extends GameData {
     blockedImpact: boolean,
     conditionMultiplier?: number,
   ) => void;
+  applyDrivingWearSamples: (
+    samples: readonly DrivingWearSample[],
+    conditionMultiplier?: number,
+  ) => void;
   alignInitialPlayerToRoad: (
     coordinates: RoadCoordinates,
     heading: number,
@@ -308,6 +318,58 @@ interface GameStore extends GameData {
   resetGame: () => void;
   dismissSaveMessage: () => void;
   dismissConditionWarning: () => void;
+}
+
+function drivingWearDamageFor(
+  samples: readonly DrivingWearSample[],
+  conditionMultiplier: number,
+): number {
+  let damage = 0;
+  for (const sample of samples) {
+    const distanceDamage =
+      Math.max(0, sample.vehicleDistanceMeters) *
+      (sample.surface === 'offroad'
+        ? vehicleStateConfig.offroadConditionPerVehicleMeter
+        : sample.surface === 'track'
+          ? vehicleStateConfig.trackConditionPerVehicleMeter
+          : sample.surface === 'dirt-road'
+            ? vehicleStateConfig.trackConditionPerVehicleMeter *
+              roadConditionMultipliers[sample.surface]
+            : 0);
+    damage +=
+      distanceDamage +
+      (sample.blockedImpact ? vehicleStateConfig.blockedImpactCondition : 0);
+  }
+  return damage * Math.max(0.1, conditionMultiplier);
+}
+
+function drivingWearStateFor(
+  state: GameStore,
+  samples: readonly DrivingWearSample[],
+  conditionMultiplier: number,
+): GameStore | Partial<GameStore> {
+  if (state.driving.roadNetworkStatus !== 'ready') return state;
+  const damage = drivingWearDamageFor(samples, conditionMultiplier);
+  if (damage <= 0) return state;
+  const condition = Math.max(0, state.vehicle.condition - damage);
+  const nextWarning = conditionWarningForTransition(
+    state.vehicle.condition,
+    condition,
+  );
+  const shouldShowWarning =
+    nextWarning !== null && !state.conditionWarningsShown.includes(nextWarning);
+  return {
+    vehicle: { ...state.vehicle, condition },
+    conditionWarning: shouldShowWarning ? nextWarning : state.conditionWarning,
+    conditionWarningsShown: shouldShowWarning
+      ? [...state.conditionWarningsShown, nextWarning]
+      : state.conditionWarningsShown,
+    recoveryReason:
+      condition <= 0
+        ? (state.recoveryReason ?? 'condition')
+        : state.recoveryReason,
+    isPaused: condition <= 0 ? true : state.isPaused,
+  };
 }
 
 const presentationController = new DrivingPresentationController();
@@ -872,46 +934,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     blockedImpact,
     conditionMultiplier = 1,
   ) =>
-    set((state) => {
-      if (state.driving.roadNetworkStatus !== 'ready') return state;
-      const distanceDamage =
-        Math.max(0, vehicleDistanceMeters) *
-        (surface === 'offroad'
-          ? vehicleStateConfig.offroadConditionPerVehicleMeter
-          : surface === 'track'
-            ? vehicleStateConfig.trackConditionPerVehicleMeter
-            : surface === 'dirt-road'
-              ? vehicleStateConfig.trackConditionPerVehicleMeter *
-                roadConditionMultipliers[surface]
-              : 0);
-      const damage =
-        (distanceDamage +
-          (blockedImpact ? vehicleStateConfig.blockedImpactCondition : 0)) *
-        Math.max(0.1, conditionMultiplier);
-      if (damage <= 0) return state;
-      const condition = Math.max(0, state.vehicle.condition - damage);
-      const nextWarning = conditionWarningForTransition(
-        state.vehicle.condition,
-        condition,
-      );
-      const shouldShowWarning =
-        nextWarning !== null &&
-        !state.conditionWarningsShown.includes(nextWarning);
-      return {
-        vehicle: { ...state.vehicle, condition },
-        conditionWarning: shouldShowWarning
-          ? nextWarning
-          : state.conditionWarning,
-        conditionWarningsShown: shouldShowWarning
-          ? [...state.conditionWarningsShown, nextWarning]
-          : state.conditionWarningsShown,
-        recoveryReason:
-          condition <= 0
-            ? (state.recoveryReason ?? 'condition')
-            : state.recoveryReason,
-        isPaused: condition <= 0 ? true : state.isPaused,
-      };
-    }),
+    set((state) =>
+      drivingWearStateFor(
+        state,
+        [{ vehicleDistanceMeters, surface, blockedImpact }],
+        conditionMultiplier,
+      ),
+    ),
+  applyDrivingWearSamples: (samples, conditionMultiplier = 1) =>
+    set((state) => drivingWearStateFor(state, samples, conditionMultiplier)),
   alignInitialPlayerToRoad: (coordinates, heading, distanceMeters) => {
     let aligned = false;
     set((state) => {
