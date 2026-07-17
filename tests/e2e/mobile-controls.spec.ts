@@ -13,9 +13,11 @@ async function startFreshExpedition(page: Page): Promise<void> {
   const beginMission = page.getByRole('button', {
     name: /Comenzar investigación/,
   });
-  if (await beginMission.isVisible()) await beginMission.click();
+  await expect(beginMission).toBeVisible();
+  await beginMission.click();
   const skipTutorial = page.getByRole('button', { name: 'Omitir' });
-  if (await skipTutorial.isVisible()) await skipTutorial.click();
+  await expect(skipTutorial).toBeVisible();
+  await skipTutorial.click();
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,
   });
@@ -46,7 +48,7 @@ async function openPauseSettings(page: Page) {
   return { pauseMenu, settings };
 }
 
-test('mantiene velocidad objetivo, gira, frena y activa reversa', async ({
+test('Arcade arranca de inmediato, mantiene crucero y usa reversa segura', async ({
   context,
   page,
 }, testInfo) => {
@@ -56,7 +58,7 @@ test('mantiene velocidad objetivo, gira, frena y activa reversa', async ({
   const gameMap = page.getByTestId('game-map');
   await expect(page.getByLabel('Controles táctiles')).toHaveAttribute(
     'data-control-mode',
-    'target-speed-joystick',
+    'arcade-driving',
   );
   await expect(page.getByRole('button', { name: 'Acelerar' })).toHaveCount(0);
   await expect(
@@ -69,15 +71,21 @@ test('mantiene velocidad objetivo, gira, frena y activa reversa', async ({
     'OBJETIVO 0 km/h',
   );
 
-  const joystick = page.getByLabel('Joystick de velocidad objetivo');
+  const joystick = page.getByLabel('Joystick de conducción arcade');
   const joystickCenter = await centerOf(joystick);
   const session = await context.newCDPSession(page);
+  const initialPosition = await gameMap.evaluate(
+    (element) =>
+      `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+  );
+  const movementStartedAt = Date.now();
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchStart',
     touchPoints: [
       { id: 1, x: joystickCenter.x, y: joystickCenter.y, force: 1 },
     ],
   });
+  const touchMoveDispatchStartedAt = Date.now();
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchMove',
     touchPoints: [
@@ -89,12 +97,104 @@ test('mantiene velocidad objetivo, gira, frena y activa reversa', async ({
       },
     ],
   });
-  await page.waitForTimeout(850);
+  await expect
+    .poll(
+      () =>
+        gameMap.evaluate(
+          (element) =>
+            `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+        ),
+      { timeout: 1_000, intervals: [16, 25, 50] },
+    )
+    .not.toBe(initialPosition);
+  const wallClockFirstPositionMilliseconds =
+    Date.now() - touchMoveDispatchStartedAt;
+  const visibleMovementMilliseconds = Date.now() - movementStartedAt;
+  expect(visibleMovementMilliseconds).toBeLessThan(1_000);
+  await expect(gameMap).toHaveAttribute(
+    'data-input-consumption-to-position-latency-ms',
+    /^\d+(?:\.\d+)?$/,
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-input-consumption-to-visual-latency-ms',
+    /^\d+(?:\.\d+)?$/,
+  );
+  const firstPositionMilliseconds = Number(
+    await gameMap.getAttribute(
+      'data-input-consumption-to-position-latency-ms',
+    ),
+  );
+  const firstVisualMilliseconds = Number(
+    await gameMap.getAttribute(
+      'data-input-consumption-to-visual-latency-ms',
+    ),
+  );
+  const inputPipeline = {
+    eventToStoredMilliseconds: Number(
+      await gameMap.getAttribute('data-input-stored-latency-ms'),
+    ),
+    eventToConsumedMilliseconds: Number(
+      await gameMap.getAttribute('data-input-consumption-latency-ms'),
+    ),
+    eventToFirstPositionMilliseconds: Number(
+      await gameMap.getAttribute('data-input-first-position-latency-ms'),
+    ),
+    eventToFirstVisualMilliseconds: Number(
+      await gameMap.getAttribute('data-input-first-visual-latency-ms'),
+    ),
+  };
+  expect(firstPositionMilliseconds).toBeLessThan(250);
+  expect(firstVisualMilliseconds).toBeLessThan(1_000);
   await expect
     .poll(async () =>
       Number(await gameMap.getAttribute('data-input-target-speed')),
     )
-    .toBeGreaterThan(25);
+    .toBeGreaterThanOrEqual(25);
+  await expect(gameMap).toHaveAttribute('data-drive-enabled', 'true');
+  await expect(gameMap).toHaveAttribute('data-runtime-blocked-by', '');
+
+  const speedMilestones: Record<'10' | '20' | '30', number> = {
+    '10': 0,
+    '20': 0,
+    '30': 0,
+  };
+  for (const threshold of [10, 20, 30] as const) {
+    await expect
+      .poll(
+        async () =>
+          Number(
+            await gameMap.getAttribute(
+              'data-player-speed-kilometers-per-hour',
+            ),
+          ),
+        { timeout: 3_000, intervals: [16, 25, 50] },
+      )
+      .toBeGreaterThanOrEqual(threshold);
+    speedMilestones[String(threshold) as '10' | '20' | '30'] =
+      Date.now() - movementStartedAt;
+  }
+  expect(speedMilestones['10']).toBeLessThan(1_000);
+  expect(speedMilestones['20']).toBeLessThan(2_000);
+  expect(speedMilestones['30']).toBeLessThan(3_000);
+  await testInfo.attach('arcade-movement-metrics.json', {
+    body: JSON.stringify(
+      {
+        firstPositionMilliseconds,
+        firstVisualMilliseconds,
+        wallClockFirstPositionMilliseconds,
+        visibleMovementMilliseconds,
+        inputPipeline,
+        speedMilestones,
+      },
+      null,
+      2,
+    ),
+    contentType: 'application/json',
+  });
+  await expect(page.locator('.map-frame')).toHaveAttribute(
+    'data-player-renderer',
+    /^(ready|fallback)$/,
+  );
   const positionWhenReleased = await gameMap.evaluate(
     (element) =>
       `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
@@ -246,6 +346,165 @@ test('mantiene velocidad objetivo, gira, frena y activa reversa', async ({
   await session.detach();
 });
 
+test('el fallback vial compartido nunca deja el runtime esperando', async ({
+  context,
+  page,
+}, testInfo) => {
+  test.skip(!testInfo.project.name.startsWith('chromium-mobile'));
+  test.setTimeout(30_000);
+  await page.addInitScript(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+  await page.route('**/data/roads/western-corridor.json', async () => {
+    await new Promise<void>(() => undefined);
+  });
+  await page.goto('/');
+
+  const start = page.getByRole('button', { name: 'Comenzar expedición' });
+  await expect(start).toBeDisabled();
+  await expect(
+    page.getByText(/modo compatible sin asistencia vial completa/i),
+  ).toBeVisible({ timeout: 12_000 });
+  await expect(start).toBeEnabled();
+  await start.click();
+  const narrative = page.getByRole('dialog', { name: 'Una señal de auxilio' });
+  await expect(narrative).toBeVisible();
+  await narrative
+    .getByRole('button', { name: /Comenzar investigación/ })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Elige tu velocidad' }),
+  ).toBeVisible();
+
+  const gameMap = page.getByTestId('game-map');
+  await expect(gameMap).toHaveAttribute(
+    'data-road-network-status',
+    'unavailable',
+  );
+  await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'fallback');
+  await expect(gameMap).toHaveAttribute('data-drive-enabled', 'true');
+  await expect(gameMap).toHaveAttribute('data-runtime-blocked-by', '');
+  const joystickCenter = await centerOf(
+    page.getByLabel('Joystick de conducción arcade'),
+  );
+  const session = await context.newCDPSession(page);
+  const drag = async (id: number, x: number, y: number) => {
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [
+        { id, x: joystickCenter.x, y: joystickCenter.y, force: 1 },
+      ],
+    });
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ id, x, y, force: 1 }],
+    });
+  };
+  const release = () =>
+    session.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: [],
+    });
+
+  await drag(
+    40,
+    joystickCenter.x,
+    joystickCenter.y - joystickCenter.width * 0.44,
+  );
+  await expect
+    .poll(() =>
+      gameMap
+        .getAttribute('data-player-speed-kilometers-per-hour')
+        .then(Number),
+    )
+    .toBeGreaterThanOrEqual(15);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-tutorial-target',
+    'steer',
+  );
+  await release();
+
+  const headingBeforeTurn = Number(
+    await gameMap.getAttribute('data-navigation-physical-heading'),
+  );
+  await drag(
+    41,
+    joystickCenter.x + joystickCenter.width * 0.55,
+    joystickCenter.y,
+  );
+  await expect
+    .poll(async () => {
+      const heading = Number(
+        await gameMap.getAttribute('data-navigation-physical-heading'),
+      );
+      return Math.abs(((heading - headingBeforeTurn + 540) % 360) - 180);
+    })
+    .toBeGreaterThanOrEqual(4);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-tutorial-target',
+    'coast',
+  );
+  await release();
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-tutorial-target',
+    'brake',
+    { timeout: 4_000 },
+  );
+
+  await drag(
+    42,
+    joystickCenter.x,
+    joystickCenter.y + joystickCenter.width * 0.44,
+  );
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-tutorial-target',
+    'route',
+    { timeout: 8_000 },
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Sigue la guía directa' }),
+  ).toBeVisible();
+  await release();
+  await expect(gameMap).toHaveAttribute(
+    'data-input-cruise-reverse-state',
+    'reverse-armed',
+  );
+
+  const positionBeforeRouteFollow = await gameMap.evaluate(
+    (element) =>
+      `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+  );
+  await drag(
+    43,
+    joystickCenter.x,
+    joystickCenter.y - joystickCenter.width * 0.44,
+  );
+  await expect
+    .poll(
+      () =>
+        gameMap.evaluate(
+          (element) =>
+            `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+        ),
+      { timeout: 1_000, intervals: [16, 25, 50] },
+    )
+    .not.toBe(positionBeforeRouteFollow);
+  await expect
+    .poll(() =>
+      gameMap
+        .getAttribute('data-player-speed-kilometers-per-hour')
+        .then(Number),
+    )
+    .toBeGreaterThanOrEqual(5);
+  await expect(page.locator('[data-tutorial-card="mobile"]')).toHaveCount(0, {
+    timeout: 5_000,
+  });
+  await expect(page.getByTestId('mobile-driving-hud')).toBeVisible();
+  await release();
+  await session.detach();
+});
+
 test('persiste modos alternativos y limpia entradas al pausar', async ({
   page,
 }, testInfo) => {
@@ -254,7 +513,7 @@ test('persiste modos alternativos y limpia entradas al pausar', async ({
   const gameMap = page.getByTestId('game-map');
 
   let { pauseMenu, settings } = await openPauseSettings(page);
-  await settings.getByText('Joystick + pedales', { exact: true }).click();
+  await settings.getByText('Joystick y pedales', { exact: true }).click();
   await settings.getByText('Grande', { exact: true }).click();
   await settings
     .getByRole('slider', { name: 'Zona muerta del joystick' })
@@ -282,7 +541,7 @@ test('persiste modos alternativos y limpia entradas al pausar', async ({
     return parsed;
   }, settingsKey);
   expect(persistedSettings).toMatchObject({
-    version: 8,
+    version: 9,
     settings: {
       controlMode: 'classic-buttons',
       joystickSize: 'large',

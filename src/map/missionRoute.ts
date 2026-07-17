@@ -536,6 +536,9 @@ export function addMissionRoute(
     const container = map.getContainer();
     container.dataset.missionRouteMode = mode ?? 'idle';
     container.dataset.missionRouteCoordinateCount = String(coordinateCount);
+    useGameStore
+      .getState()
+      .setMissionRouteVisualReady(mode !== null && coordinateCount >= 2);
   };
   const updateNavigation = (
     position: RoadCoordinates,
@@ -553,6 +556,19 @@ export function addMissionRoute(
       mapContainer.dataset.navigationRejoinStartLongitude = '';
       mapContainer.dataset.navigationRejoinStartLatitude = '';
       maneuverMarkerElement.hidden = true;
+      mapContainer.dataset.navigationReversing = String(
+        vehicleIsReversing(
+          useGameStore.getState().telemetry.speedMetersPerSecond,
+        ),
+      );
+      mapContainer.dataset.navigationOffRoute = 'false';
+      mapContainer.dataset.navigationRequiresRejoin = 'false';
+      mapContainer.dataset.navigationRouteSegment = '';
+      mapContainer.dataset.navigationRecommendedHeading = '';
+      mapContainer.dataset.navigationPhysicalHeading =
+        physicalHeading.toFixed(1);
+      mapContainer.dataset.navigationNextType = '';
+      mapContainer.dataset.navigationNextDistance = '0';
       useGameStore.getState().setMissionNavigation({
         nextInstruction: null,
         distanceToNextInstructionMeters: null,
@@ -737,14 +753,17 @@ export function addMissionRoute(
       exposeRoute(null, 0);
     }
 
-    const route = await localRoutingService
-      .getRoute({
-        origin: target.playerCoordinates,
-        destination: target.coordinates,
-        temporarilyClosedEdgeIds:
-          useGameStore.getState().temporarilyClosedRoadEdgeIds,
-      })
-      .catch(() => null);
+    const route =
+      useGameStore.getState().driving.roadNetworkStatus === 'unavailable'
+        ? null
+        : await localRoutingService
+            .getRoute({
+              origin: target.playerCoordinates,
+              destination: target.coordinates,
+              temporarilyClosedEdgeIds:
+                useGameStore.getState().temporarilyClosedRoadEdgeIds,
+            })
+            .catch(() => null);
     map.getContainer().dataset.routeCalculationMs = (
       performance.now() - calculationStartedAt
     ).toFixed(2);

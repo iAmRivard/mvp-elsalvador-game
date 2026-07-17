@@ -49,8 +49,8 @@ function diagnostics(values: Partial<InputDiagnostics> = {}): InputDiagnostics {
 describe('reglas de onboarding', () => {
   it('mapea los nueve pasos a estados persistibles', () => {
     expect(onboardingStepIds).toEqual([
-      'steer',
       'select-speed',
+      'steer',
       'coast',
       'brake',
       'route',
@@ -140,6 +140,7 @@ describe('reglas de onboarding', () => {
       requiresRejoin: false,
       surface: 'primary' as const,
       roadNetworkReady: true,
+      fallbackMode: false,
       distanceToRouteMeters: 24,
       maximumDistanceToRouteMeters: 24,
       reversing: false,
@@ -153,6 +154,16 @@ describe('reglas de onboarding', () => {
     expect(routeFollowingIsValid({ ...valid, roadNetworkReady: false })).toBe(false);
     expect(routeFollowingIsValid({ ...valid, distanceToRouteMeters: 24.01 })).toBe(false);
     expect(routeFollowingIsValid({ ...valid, reversing: true })).toBe(false);
+    expect(
+      routeFollowingIsValid({
+        ...valid,
+        roadNetworkReady: false,
+        fallbackMode: true,
+        surface: 'offroad',
+        requiresRejoin: true,
+        distanceToRouteMeters: null,
+      }),
+    ).toBe(true);
   });
 
   it('reconoce solo el objetivo de misión por proximidad o visibilidad sostenida', () => {

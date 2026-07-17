@@ -259,6 +259,22 @@ describe('overlay manager', () => {
     expect(manager?.getAttribute('data-radio-expansion-blocked')).toBe('true');
   });
 
+  it('keeps radio compact while the journal owns the large overlay slot', () => {
+    vi.useFakeTimers();
+    setMobileViewport(true);
+    useGameStore.setState({
+      activeRadioEventId: 'radio-ruta-occidental',
+      isJournalOpen: true,
+    });
+    const { container } = render(<OverlayManager />);
+    const manager = container.querySelector('.overlay-manager');
+
+    expect(manager?.getAttribute('data-active-overlay')).toBe('none');
+    expect(manager?.getAttribute('data-radio-display-mode')).toBe('compact');
+    expect(manager?.getAttribute('data-radio-expansion-blocked')).toBe('true');
+    expect(container.querySelector('.radio-message')).toBeNull();
+  });
+
   it('resets the full preview timer when the active radio changes', () => {
     vi.useFakeTimers();
     setMobileViewport(true);

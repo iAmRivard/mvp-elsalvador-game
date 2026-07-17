@@ -36,6 +36,10 @@ const STEP_ADVANCE_DELAY_MILLISECONDS = 420;
 const COAST_HOLD_MILLISECONDS = 600;
 const ROUTE_FOLLOW_HOLD_MILLISECONDS = 900;
 
+function headingDifferenceDegrees(first: number, second: number): number {
+  return Math.abs(((first - second + 540) % 360) - 180);
+}
+
 export function TutorialOverlay({
   input,
   onComplete,
@@ -55,7 +59,13 @@ export function TutorialOverlay({
   const brakeIntentObserved = useRef(false);
   const controlMode = useSettingsStore((state) => state.controlMode);
   const telemetry = useGameStore((state) => state.telemetry);
+  const [steerStartHeading, setSteerStartHeading] = useState(
+    telemetry.heading,
+  );
   const routeStatus = useGameStore((state) => state.missionRoute.status);
+  const routeVisualReady = useGameStore(
+    (state) => state.missionRoute.visualReady,
+  );
   const routeOffRoute = useGameStore((state) => state.missionRoute.offRoute);
   const activeNavigation = useGameStore(
     (state) => state.missionRoute.activeNavigation,
@@ -98,7 +108,10 @@ export function TutorialOverlay({
     !isPaused &&
     telemetry.speedMetersPerSecond > 0 &&
     coastConditionIsMet(diagnostics, telemetry.speedKilometersPerHour);
-  const routeVisible = routeStatus === 'road';
+  const fallbackRoute =
+    routeStatus === 'fallback' && roadNetworkStatus === 'unavailable';
+  const routeVisible =
+    routeVisualReady && (routeStatus === 'road' || fallbackRoute);
   const routeFollowingValid =
     !hasBlockingOverlay &&
     !isPaused &&
@@ -110,6 +123,7 @@ export function TutorialOverlay({
       requiresRejoin: activeNavigation?.requiresRejoin ?? true,
       surface: drivingSurface,
       roadNetworkReady: roadNetworkStatus === 'ready',
+      fallbackMode: fallbackRoute,
       distanceToRouteMeters: activeNavigation?.distanceToRouteMeters ?? null,
       maximumDistanceToRouteMeters: routingConfig.routeRejoinDistanceMeters,
       reversing:
@@ -174,17 +188,11 @@ export function TutorialOverlay({
       ? 'Mantén W para ganar velocidad.'
       : controlMode === 'classic-buttons'
         ? 'Mantén Avanzar para ganar velocidad.'
-        : controlMode === 'target-speed-joystick'
+        : controlMode === 'target-speed-joystick' ||
+            controlMode === 'arcade-driving'
           ? 'Empuja hacia arriba para elegir al menos 20 km/h.'
           : 'Acelera con el control derecho.';
     return [
-      {
-        id: 'steer',
-        title: 'Gira el vehículo',
-        description: 'Mueve la dirección hacia un lado.',
-        completed: Math.abs(diagnostics.turn) > 0.4,
-        available: true,
-      },
       {
         id: 'select-speed',
         title: 'Elige tu velocidad',
@@ -193,6 +201,19 @@ export function TutorialOverlay({
           conventionalThrottleIntent(diagnostics) > 0.45 ||
           diagnostics.mobileCruise.targetSpeedKilometersPerHour >= 20,
         available: true,
+      },
+      {
+        id: 'steer',
+        title: 'Gira en movimiento',
+        description: 'Mantén la marcha y mueve la dirección hacia un lado.',
+        completed:
+          telemetry.speedKilometersPerHour >= 5 &&
+          Math.abs(diagnostics.turn) > 0.4 &&
+          headingDifferenceDegrees(
+            telemetry.heading,
+            steerStartHeading,
+          ) >= 4,
+        available: telemetry.speedKilometersPerHour >= 5,
       },
       {
         id: 'coast',
@@ -212,8 +233,10 @@ export function TutorialOverlay({
       },
       {
         id: 'route',
-        title: 'Sigue la línea cian',
-        description: 'Conduce sobre el tramo brillante de la ruta.',
+        title: fallbackRoute ? 'Sigue la guía directa' : 'Sigue la línea cian',
+        description: fallbackRoute
+          ? 'La red vial no respondió; avanza con la guía directa para continuar.'
+          : 'Conduce sobre el tramo brillante de la ruta.',
         completed: routeFollowCompleted && routeFollowingValid,
         available: routeVisible,
       },
@@ -223,9 +246,13 @@ export function TutorialOverlay({
     coastCompleted,
     controlMode,
     diagnostics,
+    fallbackRoute,
     routeFollowCompleted,
     routeFollowingValid,
     routeVisible,
+    steerStartHeading,
+    telemetry.heading,
+    telemetry.speedKilometersPerHour,
     usesCompactCard,
   ]);
   const current = steps[stepIndex];
@@ -262,10 +289,22 @@ export function TutorialOverlay({
     if (!current.available || !current.completed) return;
     const timeout = window.setTimeout(() => {
       if (isLast) complete();
-      else setStepIndex((value) => Math.min(value + 1, steps.length - 1));
+      else {
+        if (current.id === 'select-speed') {
+          setSteerStartHeading(useGameStore.getState().telemetry.heading);
+        }
+        setStepIndex((value) => Math.min(value + 1, steps.length - 1));
+      }
     }, STEP_ADVANCE_DELAY_MILLISECONDS);
     return () => window.clearTimeout(timeout);
-  }, [complete, current.available, current.completed, isLast, steps.length]);
+  }, [
+    complete,
+    current.available,
+    current.completed,
+    current.id,
+    isLast,
+    steps.length,
+  ]);
 
   if (usesCompactCard) {
     return (

@@ -23,12 +23,15 @@ const viewports: ViewportCase[] = [
 async function enterExpedition(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
-  const beginMission = page.getByRole('button', {
-    name: /Comenzar investigación/,
-  });
-  if (await beginMission.isVisible()) await beginMission.click();
-  const skipTutorial = page.getByRole('button', { name: 'Omitir' });
-  if (await skipTutorial.isVisible()) await skipTutorial.click();
+  const narrative = page.getByRole('dialog', { name: 'Una señal de auxilio' });
+  await expect(narrative).toBeVisible();
+  await narrative
+    .getByRole('button', { name: /Comenzar investigación/ })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Elige tu velocidad' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Omitir' }).click();
   await expect(page.getByTestId('game-map')).toHaveAttribute(
     'data-road-network-status',
     /ready|unavailable/,
@@ -47,7 +50,7 @@ async function selectMobileTarget(
   targetSpeedKilometersPerHour: number,
   touchId: number,
 ) {
-  const joystick = page.getByLabel('Joystick de velocidad objetivo');
+  const joystick = page.getByLabel('Joystick de conducción arcade');
   await expect(joystick).toBeVisible();
   const box = await joystick.boundingBox();
   expect(box).not.toBeNull();
@@ -132,7 +135,7 @@ async function expectAppliedCameraOffset(
 }
 
 async function stopMobileTarget(context: BrowserContext, page: Page) {
-  const joystick = page.getByLabel('Joystick de velocidad objetivo');
+  const joystick = page.getByLabel('Joystick de conducción arcade');
   await expect(joystick).toBeVisible();
   const box = await joystick.boundingBox();
   expect(box).not.toBeNull();
@@ -232,7 +235,7 @@ for (const viewport of viewports) {
 
     const [hudBox, joystickBox, actionsBox] = await Promise.all([
       drivingHud.boundingBox(),
-      page.getByLabel('Joystick de velocidad objetivo').boundingBox(),
+      page.getByLabel('Joystick de conducción arcade').boundingBox(),
       page.locator('.touch-actions').boundingBox(),
     ]);
     expect(hudBox).not.toBeNull();

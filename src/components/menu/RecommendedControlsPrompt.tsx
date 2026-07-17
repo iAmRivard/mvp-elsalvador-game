@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { onboardingIsActive } from '../../types/onboarding';
 
 const mobileControlsQuery =
   '(hover: none), (pointer: coarse), (max-width: 600px)';
@@ -12,13 +14,24 @@ export function RecommendedControlsPrompt() {
   );
   const controlMode = useSettingsStore((state) => state.controlMode);
   const dismissed = useSettingsStore(
-    (state) => state.targetSpeedJoystickPromptDismissed,
+    (state) => state.arcadeDrivingPromptDismissed,
   );
   const setMobileControlMode = useSettingsStore(
     (state) => state.setMobileControlMode,
   );
   const setDismissed = useSettingsStore(
-    (state) => state.setTargetSpeedJoystickPromptDismissed,
+    (state) => state.setArcadeDrivingPromptDismissed,
+  );
+  const blockedByGameplayOverlay = useGameStore((state) =>
+    Boolean(
+      state.isPaused ||
+        state.isJournalOpen ||
+        state.recoveryReason ||
+        state.activeNarrativeEventId ||
+        state.activeRadioEventId ||
+        state.activeMissionChoiceObjectiveId ||
+        onboardingIsActive(state.onboardingState),
+    ),
   );
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;
@@ -29,36 +42,39 @@ export function RecommendedControlsPrompt() {
     return () => mediaQuery.removeEventListener('change', update);
   }, []);
 
-  if (!mobileContext || dismissed || controlMode === 'target-speed-joystick') {
+  if (
+    !mobileContext ||
+    dismissed ||
+    controlMode === 'arcade-driving' ||
+    blockedByGameplayOverlay
+  ) {
     return null;
   }
 
   return (
-    <div className="controls-migration-backdrop">
-      <section
-        className="controls-migration"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="controls-migration-title"
-      >
-        <span>Nuevo control móvil</span>
-        <h2 id="controls-migration-title">Velocidad objetivo</h2>
-        <p>
-          Ajusta la velocidad con el joystick y suéltalo para mantener la
-          marcha.
-        </p>
-        <div>
-          <button
-            type="button"
-            onClick={() => setMobileControlMode('target-speed-joystick')}
-          >
-            Probar
-          </button>
-          <button type="button" onClick={() => setDismissed(true)}>
-            Mantener controles actuales
-          </button>
-        </div>
-      </section>
-    </div>
+    <aside
+      className="controls-migration"
+      role="status"
+      aria-label="Nuevo control móvil"
+      data-controls-migration="arcade"
+    >
+      <span>Nuevo control móvil</span>
+      <h2>Conducción Arcade</h2>
+      <p>
+        Desliza hacia arriba para arrancar al instante y suelta para mantener
+        la marcha.
+      </p>
+      <div>
+        <button
+          type="button"
+          onClick={() => setMobileControlMode('arcade-driving')}
+        >
+          Probar
+        </button>
+        <button type="button" onClick={() => setDismissed(true)}>
+          Mantener controles actuales
+        </button>
+      </div>
+    </aside>
   );
 }

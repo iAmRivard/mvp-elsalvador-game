@@ -32,7 +32,7 @@ test('recorre inicio, tutorial, pausa y configuración', async ({
   ).toBeVisible();
   await page.getByRole('button', { name: /Comenzar investigación/ }).click();
   await expect(
-    page.getByRole('heading', { name: 'Gira el vehículo' }),
+    page.getByRole('heading', { name: 'Elige tu velocidad' }),
   ).toBeVisible();
   await expect(page.getByText('Realiza la acción para continuar')).toBeVisible();
   await page.getByRole('button', { name: 'Omitir' }).click();
@@ -70,7 +70,7 @@ test('recorre inicio, tutorial, pausa y configuración', async ({
   await page.keyboard.press('Escape');
   await pauseMenu.getByRole('button', { name: 'Ver tutorial' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Gira el vehículo' }),
+    page.getByRole('heading', { name: 'Elige tu velocidad' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Omitir' }).click();
 });

@@ -31,9 +31,19 @@ function setCoarsePointer(matches: boolean): void {
 }
 
 async function reachCoast(input: InputController): Promise<void> {
-  act(() => input.setJoystickTurn(0.5));
-  await act(() => vi.advanceTimersByTimeAsync(420));
   act(() => input.setTouchThrottle(0.6));
+  await act(() => vi.advanceTimersByTimeAsync(420));
+  act(() => {
+    input.setJoystickTurn(0.5);
+    useGameStore.setState((state) => ({
+      telemetry: {
+        ...state.telemetry,
+        speedMetersPerSecond: 10 / 3.6,
+        speedKilometersPerHour: 10,
+        heading: state.telemetry.heading + 8,
+      },
+    }));
+  });
   await act(() => vi.advanceTimersByTimeAsync(420));
 }
 
@@ -76,14 +86,24 @@ describe('tutorial obligatorio', () => {
     const input = new InputController();
     render(<TutorialOverlay input={input} onComplete={vi.fn()} />);
 
-    expect(screen.getByText('Gira el vehículo')).toBeTruthy();
+    expect(screen.getByText('Elige tu velocidad')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Siguiente' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Entendido' })).toBeNull();
-    act(() => input.setJoystickTurn(0.45));
-    await act(() => vi.advanceTimersByTimeAsync(420));
-    expect(screen.getByText('Elige tu velocidad')).toBeTruthy();
-
     act(() => input.setTouchThrottle(0.6));
+    await act(() => vi.advanceTimersByTimeAsync(420));
+    expect(screen.getByText('Gira en movimiento')).toBeTruthy();
+
+    act(() => {
+      input.setJoystickTurn(0.45);
+      useGameStore.setState((state) => ({
+        telemetry: {
+          ...state.telemetry,
+          speedMetersPerSecond: 10 / 3.6,
+          speedKilometersPerHour: 10,
+          heading: state.telemetry.heading + 8,
+        },
+      }));
+    });
     await act(() => vi.advanceTimersByTimeAsync(420));
     expect(screen.getByText('Mantén la marcha')).toBeTruthy();
     expect(document.documentElement.dataset.tutorialTarget).toBe('coast');
@@ -99,11 +119,33 @@ describe('tutorial obligatorio', () => {
     expect(
       document.querySelector('[data-tutorial-card="mobile"]'),
     ).toBeTruthy();
-    act(() => input.setJoystickTurn(0.5));
+    act(() => input.setTouchThrottle(0.6));
     await act(() => vi.advanceTimersByTimeAsync(420));
     expect(
-      screen.getByText('Mantén Avanzar para ganar velocidad.'),
+      screen.getByText('Gira en movimiento'),
     ).toBeTruthy();
+  });
+
+  it('no acepta un giro automático sin intención lateral del jugador', async () => {
+    const input = new InputController();
+    render(<TutorialOverlay input={input} onComplete={vi.fn()} />);
+    act(() => input.setTouchThrottle(0.6));
+    await act(() => vi.advanceTimersByTimeAsync(420));
+    expect(screen.getByText('Gira en movimiento')).toBeTruthy();
+
+    act(() => {
+      useGameStore.setState((state) => ({
+        telemetry: {
+          ...state.telemetry,
+          speedMetersPerSecond: 10 / 3.6,
+          speedKilometersPerHour: 10,
+          heading: state.telemetry.heading + 12,
+        },
+      }));
+    });
+    await act(() => vi.advanceTimersByTimeAsync(420));
+
+    expect(screen.getByText('Gira en movimiento')).toBeTruthy();
   });
 
   it('exige sostener la marcha centrada durante 600 ms', async () => {
@@ -143,6 +185,7 @@ describe('tutorial obligatorio', () => {
       missionRoute: {
         ...state.missionRoute,
         status: 'road',
+        visualReady: true,
         offRoute: false,
         activeNavigation: {
           routeSegmentIndex: 0,

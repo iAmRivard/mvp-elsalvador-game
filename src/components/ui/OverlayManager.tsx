@@ -74,9 +74,11 @@ export function OverlayManager({
     radioPresentation.eventId === radioId
       ? radioPresentation.mode
       : 'expanded';
-  const radioDisplayMode: RadioDisplayMode = mobileRadioViewport
-    ? storedRadioMode
-    : 'expanded';
+  const radioDisplayMode: RadioDisplayMode = isJournalOpen
+    ? 'compact'
+    : mobileRadioViewport
+      ? storedRadioMode
+      : 'expanded';
 
   const setCurrentRadioMode = useCallback(
     (mode: RadioDisplayMode) => {
@@ -106,6 +108,7 @@ export function OverlayManager({
     narrativeId ||
       recoveryReason ||
       missionChoiceId ||
+      isJournalOpen ||
       (showTutorial && input),
   );
   const compactRadio = useCallback(

@@ -107,7 +107,7 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   await expect(introduction).toBeHidden();
   await expect(page.locator('html')).toHaveAttribute(
     'data-tutorial-target',
-    'steer',
+    'select-speed',
   );
   await expect(page.getByText('Paso 1 de 5')).toBeVisible();
   await expect(page.getByTestId('mobile-driving-hud')).toHaveCount(0);
@@ -117,26 +117,27 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
     'ready',
     { timeout: 20_000 },
   );
+  await expect(page.getByTestId('game-map')).toHaveAttribute(
+    'data-mission-route-mode',
+    'road',
+    { timeout: 20_000 },
+  );
+  await expect
+    .poll(async () =>
+      Number(
+        await page
+          .getByTestId('game-map')
+          .getAttribute('data-mission-route-coordinate-count'),
+      ),
+    )
+    .toBeGreaterThan(1);
 
-  const joystick = page.getByLabel('Joystick de velocidad objetivo');
+  const joystick = page.getByLabel('Joystick de conducción arcade');
   let center = await centerOf(joystick);
   const session = await context.newCDPSession(page);
 
   await touchStart(session, 1, center.x, center.y);
-  await touchMove(session, 1, center.x + center.width * 0.6, center.y);
-  await expect
-    .poll(() =>
-      page.getByTestId('game-map').getAttribute('data-input-turn').then(Number),
-    )
-    .toBeGreaterThan(0.4);
-  await expect(page.locator('html')).toHaveAttribute(
-    'data-tutorial-target',
-    'select-speed',
-  );
-  await touchEnd(session);
-
-  await touchStart(session, 2, center.x, center.y);
-  await touchMove(session, 2, center.x, center.y - center.width * 0.44);
+  await touchMove(session, 1, center.x, center.y - center.width * 0.44);
   await expect
     .poll(() =>
       page
@@ -144,7 +145,46 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
         .getAttribute('data-input-target-speed')
         .then(Number),
     )
-    .toBeGreaterThan(20);
+    .toBeGreaterThanOrEqual(25);
+  await expect
+    .poll(() =>
+      page
+        .getByTestId('game-map')
+        .getAttribute('data-player-speed-kilometers-per-hour')
+        .then(Number),
+    )
+    .toBeGreaterThan(5);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-tutorial-target',
+    'steer',
+  );
+  await touchEnd(session);
+
+  const headingBeforeTurn = Number(
+    await page
+      .getByTestId('game-map')
+      .getAttribute('data-navigation-physical-heading'),
+  );
+  await touchStart(session, 2, center.x, center.y);
+  await touchMove(session, 2, center.x + center.width * 0.6, center.y);
+  await expect
+    .poll(() =>
+      page
+        .getByTestId('game-map')
+        .getAttribute('data-input-turn')
+        .then(Number),
+    )
+    .toBeGreaterThan(0.4);
+  await expect
+    .poll(async () => {
+      const heading = Number(
+        await page
+          .getByTestId('game-map')
+          .getAttribute('data-navigation-physical-heading'),
+      );
+      return Math.abs(((heading - headingBeforeTurn + 540) % 360) - 180);
+    })
+    .toBeGreaterThanOrEqual(4);
   await expect(page.locator('html')).toHaveAttribute(
     'data-tutorial-target',
     'coast',
