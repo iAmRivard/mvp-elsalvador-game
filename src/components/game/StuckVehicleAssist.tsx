@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { InputController } from '../../game/inputController';
+import type {
+  RouteRejoinBlockReason,
+  RouteRejoinCandidate,
+} from '../../game/routeRejoin';
 import {
   stuckVehicleConfig,
   stuckVehicleHelpFor,
@@ -13,22 +17,32 @@ interface StuckVehicleAssistProps {
 }
 
 interface AssistView {
-  kind: 'none' | 'start-hint' | 'stuck';
+  kind: 'none' | 'start-hint' | 'stuck' | 'rejoin';
   cause: string | null;
   canRetryAcceleration: boolean;
+  rejoinCandidate: RouteRejoinCandidate | null;
+  rejoinBlockedBy: RouteRejoinBlockReason | null;
 }
 
 const EMPTY_VIEW: AssistView = {
   kind: 'none',
   cause: null,
   canRetryAcceleration: false,
+  rejoinCandidate: null,
+  rejoinBlockedBy: null,
 };
 
 function sameAssistView(first: AssistView, second: AssistView): boolean {
   return (
     first.kind === second.kind &&
     first.cause === second.cause &&
-    first.canRetryAcceleration === second.canRetryAcceleration
+    first.canRetryAcceleration === second.canRetryAcceleration &&
+    first.rejoinCandidate?.edgeId === second.rejoinCandidate?.edgeId &&
+    first.rejoinCandidate?.coordinates[0] ===
+      second.rejoinCandidate?.coordinates[0] &&
+    first.rejoinCandidate?.coordinates[1] ===
+      second.rejoinCandidate?.coordinates[1] &&
+    first.rejoinBlockedBy === second.rejoinBlockedBy
   );
 }
 
@@ -77,6 +91,7 @@ export function StuckVehicleAssist({
           state.activeNarrativeEventId ||
           state.activeMissionChoiceObjectiveId,
       );
+      const rejoinEligibility = state.getRouteRejoinEligibility();
       if (now < dismissedUntil.current) {
         setView((current) =>
           sameAssistView(current, EMPTY_VIEW) ? current : EMPTY_VIEW,
@@ -103,6 +118,23 @@ export function StuckVehicleAssist({
             help.canRetryAcceleration &&
             (controlMode === 'arcade-driving' ||
               controlMode === 'target-speed-joystick'),
+          rejoinCandidate: rejoinEligibility.eligible
+            ? rejoinEligibility.candidate
+            : null,
+          rejoinBlockedBy: rejoinEligibility.blockedBy,
+        };
+        setView((current) =>
+          sameAssistView(current, nextView) ? current : nextView,
+        );
+        return;
+      }
+      if (rejoinEligibility.eligible) {
+        const nextView: AssistView = {
+          kind: 'rejoin',
+          cause: null,
+          canRetryAcceleration: false,
+          rejoinCandidate: rejoinEligibility.candidate,
+          rejoinBlockedBy: null,
         };
         setView((current) =>
           sameAssistView(current, nextView) ? current : nextView,
@@ -120,6 +152,8 @@ export function StuckVehicleAssist({
               kind: 'start-hint',
               cause: null,
               canRetryAcceleration: false,
+              rejoinCandidate: null,
+              rejoinBlockedBy: rejoinEligibility.blockedBy,
             }
           : EMPTY_VIEW;
       setView((current) =>
@@ -145,11 +179,14 @@ export function StuckVehicleAssist({
       className="stuck-vehicle-assist"
       aria-live="polite"
       data-stuck-vehicle-assist={view.kind}
+      data-route-rejoin-blocked-by={view.rejoinBlockedBy ?? ''}
     >
       <div>
         <strong>
           {view.kind === 'start-hint'
             ? 'Listo para conducir'
+            : view.kind === 'rejoin'
+              ? 'Fuera de carretera'
             : 'Tu vehículo no está avanzando'}
         </strong>
         <span>
@@ -157,6 +194,10 @@ export function StuckVehicleAssist({
             ? blockedMessages[view.cause]
             : view.kind === 'start-hint'
               ? 'Desliza hacia arriba para arrancar; al soltar mantendrás la marcha.'
+              : view.kind === 'rejoin' && view.rejoinCandidate
+                ? `Hay una vía segura a ${String(
+                    Math.round(view.rejoinCandidate.distanceMeters),
+                  )} m.`
               : `No hubo movimiento durante ${String(
                   stuckVehicleConfig.stationaryDelayMilliseconds / 1_000,
                 )} s.`}
@@ -165,6 +206,25 @@ export function StuckVehicleAssist({
       {view.canRetryAcceleration && (
         <button type="button" onClick={() => input.retryArcadeAcceleration()}>
           Reintentar aceleración
+        </button>
+      )}
+      {view.rejoinCandidate && (
+        <button
+          type="button"
+          onClick={() => {
+            if (
+              useGameStore
+                .getState()
+                .rejoinPlayerToRoad(view.rejoinCandidate!.edgeId)
+            ) {
+              input.clearAllInput();
+              input.resetMobileBoostCompletely();
+              dismissedUntil.current = performance.now() + 1_200;
+              setView(EMPTY_VIEW);
+            }
+          }}
+        >
+          REINCORPORAR
         </button>
       )}
       {controlMode !== 'arcade-driving' && (

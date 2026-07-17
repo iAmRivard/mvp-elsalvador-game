@@ -3,6 +3,7 @@ import { fuelStationConfig } from '../config/fuelStations.config';
 import { fuelStationById } from '../data/fuelStations';
 import { initiallyUnlockedLocationIds, locationById } from '../data/locations';
 import { missionById } from '../data/missions';
+import { restrictedAreaTypeAt } from '../data/restrictedAreas';
 import {
   CHAPTER_ONE_ID,
   chapterRoadClosureEdgeIds,
@@ -45,6 +46,12 @@ import {
 import { distanceBetweenMeters } from '../game/discovery';
 import { isFuelStationAvailable } from '../game/fuelStations';
 import {
+  routeRejoinCandidatesNear,
+  routeRejoinEligibilityFor,
+  type RouteRejoinCandidate,
+  type RouteRejoinEligibility,
+} from '../game/routeRejoin';
+import {
   addInventoryItem as addItemToInventory,
   consumeInventoryItem as consumeItemFromInventory,
 } from '../game/inventory';
@@ -55,6 +62,7 @@ import {
 } from '../game/progression';
 import type { PlayerStepEnvironment } from '../game/movement';
 import type { PlayerRuntime, PlayerTelemetry } from '../types/game';
+import { alignedRoadHeading } from '../roads/initialRoadPosition';
 import {
   onboardingIsActive,
   type OnboardingState,
@@ -213,6 +221,8 @@ interface GameStore extends GameData {
     heading: number,
     distanceMeters: number,
   ) => boolean;
+  getRouteRejoinEligibility: () => RouteRejoinEligibility;
+  rejoinPlayerToRoad: (edgeId: number) => boolean;
   createCheckpoint: (reason: CheckpointReason, safe?: boolean) => void;
   retryFromCheckpoint: () => boolean;
   recoverAtLastSafeCheckpoint: (abandonMission?: boolean) => boolean;
@@ -458,6 +468,63 @@ function checkpointFromState(
     ),
     missionChoiceSelections: { ...state.missionChoiceSelections },
   };
+}
+
+function insideExplicitOffroadObjective(
+  state: Pick<
+    GameStore,
+    'activeMissionId' | 'activeMissionCompletedObjectiveIds'
+  >,
+  position: RoadCoordinates,
+): boolean {
+  const mission = state.activeMissionId
+    ? missionById.get(state.activeMissionId)
+    : null;
+  if (!mission) return false;
+  const completed = new Set(state.activeMissionCompletedObjectiveIds);
+  return mission.objectives.some((objective) => {
+    if (
+      !objective.explicitlyOffroad ||
+      completed.has(objective.id) ||
+      !objectiveIsAvailable(objective, completed)
+    ) {
+      return false;
+    }
+    const coordinates = objectiveCoordinates(objective);
+    return (
+      coordinates !== null &&
+      distanceBetweenMeters(position, coordinates) <= objective.radiusMeters
+    );
+  });
+}
+
+function routeRejoinEligibilityFromState(
+  state: GameStore,
+  candidates: readonly RouteRejoinCandidate[],
+): RouteRejoinEligibility {
+  const origin: RoadCoordinates = [
+    state.telemetry.longitude,
+    state.telemetry.latitude,
+  ];
+  return routeRejoinEligibilityFor({
+    gameActive: state.onboardingState !== 'not-started',
+    roadNetworkReady: state.driving.roadNetworkStatus === 'ready',
+    surface: state.driving.surface,
+    speedKilometersPerHour: state.telemetry.speedKilometersPerHour,
+    paused: state.isPaused,
+    journalOpen: state.isJournalOpen,
+    recoveryActive: state.recoveryReason !== null,
+    narrativeActive: state.activeNarrativeEventId !== null,
+    choiceActive: state.activeMissionChoiceObjectiveId !== null,
+    originRestricted: restrictedAreaTypeAt(origin) !== null,
+    insideExplicitOffroadObjective: insideExplicitOffroadObjective(
+      state,
+      origin,
+    ),
+    routeStatus: state.missionRoute.status,
+    temporarilyClosedEdgeIds: state.temporarilyClosedRoadEdgeIds,
+    candidates,
+  });
 }
 
 function defaultGameData(): GameData {
@@ -860,6 +927,72 @@ export const useGameStore = create<GameStore>((set, get) => ({
       };
     });
     return aligned;
+  },
+  getRouteRejoinEligibility: () => {
+    const state = get();
+    const position: RoadCoordinates = [
+      state.telemetry.longitude,
+      state.telemetry.latitude,
+    ];
+    const preliminary = routeRejoinEligibilityFromState(state, []);
+    if (preliminary.blockedBy !== 'no-road') return preliminary;
+    return routeRejoinEligibilityFromState(
+      state,
+      routeRejoinCandidatesNear(position),
+    );
+  },
+  rejoinPlayerToRoad: (edgeId) => {
+    let rejoined = false;
+    set((state) => {
+      const origin: RoadCoordinates = [
+        state.telemetry.longitude,
+        state.telemetry.latitude,
+      ];
+      const eligibility = routeRejoinEligibilityFromState(
+        state,
+        routeRejoinCandidatesNear(origin),
+      );
+      if (!eligibility.eligible || eligibility.candidate.edgeId !== edgeId) {
+        return state;
+      }
+
+      const telemetry = telemetryFromPlayer({
+        ...state.telemetry,
+        longitude: eligibility.candidate.coordinates[0],
+        latitude: eligibility.candidate.coordinates[1],
+        heading: alignedRoadHeading(
+          state.telemetry.heading,
+          eligibility.candidate.heading,
+          eligibility.candidate.oneWay,
+        ),
+        speedMetersPerSecond: 0,
+      });
+      const checkpoint = checkpointFromState(
+        { ...state, telemetry },
+        'rejoin',
+      );
+      rejoined = true;
+      return {
+        telemetry,
+        lastCheckpoint: checkpoint,
+        lastSafeCheckpoint: checkpoint,
+        isFollowingPlayer: true,
+        playerRuntimeRevision: state.playerRuntimeRevision + 1,
+        missionRoute: {
+          ...state.missionRoute,
+          recalculationRevision:
+            state.missionRoute.recalculationRevision + 1,
+          visualReady: false,
+        },
+        gameplayFeedback: feedback(
+          state,
+          'Vehículo reincorporado a la ruta',
+          'success',
+        ),
+      };
+    });
+    if (rejoined) get().saveGame(true);
+    return rejoined;
   },
   createCheckpoint: (reason, safe = false) =>
     set((state) => {

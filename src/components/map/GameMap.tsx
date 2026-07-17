@@ -93,6 +93,10 @@ import type { ThreeGameLayerController } from '../../map/threeLayer';
 import { shouldUseThreePlayer } from '../../map/threeTransforms';
 import { loadRoadNetwork } from '../../roads/roadNetwork';
 import {
+  clearRouteRejoinRoadSource,
+  setRouteRejoinRoadSource,
+} from '../../roads/routeRejoinRoadSource';
+import {
   allowRoadlessStartup,
   isRoadlessStartupAllowed,
   ROAD_NETWORK_STARTUP_DEADLINE_MILLISECONDS,
@@ -882,6 +886,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             roadEdgesById = new Map(
               network.edges.map((edge) => [edge.id, edge]),
             );
+            setRouteRejoinRoadSource({ index, edgesById: roadEdgesById });
             roadTracker = new RoadTracker(index);
             const currentPlayer =
               gameLoop?.getPlayer() ??
@@ -1731,6 +1736,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       removeMissionRoute?.();
       removeRoadDebugLayer?.();
       removeRoadSurfaceLayer?.();
+      if (roadIndex) clearRouteRejoinRoadSource(roadIndex);
       threeLayer?.remove();
       playerMarker?.remove();
       unbindKeyboard();

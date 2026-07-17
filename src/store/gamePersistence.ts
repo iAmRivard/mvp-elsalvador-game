@@ -267,6 +267,7 @@ const checkpointReasons = new Set<CheckpointReason>([
   'fuel-station',
   'objective',
   'chapter',
+  'rejoin',
 ]);
 
 function sanitizedCheckpoint(value: unknown): CheckpointSnapshot | null {
