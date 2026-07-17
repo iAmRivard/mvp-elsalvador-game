@@ -185,6 +185,11 @@ describe('tutorial obligatorio', () => {
         status: 'road',
         visualReady: true,
         offRoute: false,
+        orientation: {
+          physicalHeading: 0,
+          recommendedHeading: 0,
+          headingDifference: 0,
+        },
         activeNavigation: {
           routeSegmentIndex: 0,
           recommendedHeading: 0,
@@ -217,7 +222,7 @@ describe('tutorial obligatorio', () => {
     });
   });
 
-  it('mantiene visible la guia fallback sin completar mientras calcula la ruta vial', async () => {
+  it('permite completar una guia fallback definitiva por rumbo', async () => {
     const input = new InputController();
     const finish = vi.fn();
     useGameStore.setState((state) => ({
@@ -233,6 +238,11 @@ describe('tutorial obligatorio', () => {
         status: 'fallback',
         visualReady: true,
         offRoute: false,
+        orientation: {
+          physicalHeading: 0,
+          recommendedHeading: 0,
+          headingDifference: 0,
+        },
         activeNavigation: {
           routeSegmentIndex: 0,
           recommendedHeading: 0,
@@ -254,16 +264,6 @@ describe('tutorial obligatorio', () => {
     render(<TutorialHarness input={input} onComplete={finish} />);
 
     expect(screen.getByText('Sigue la guía directa')).toBeTruthy();
-    await act(() => vi.advanceTimersByTimeAsync(1_320));
-    expect(screen.getByText('Sigue la guía directa')).toBeTruthy();
-    expect(finish).not.toHaveBeenCalled();
-
-    act(() => {
-      useGameStore.setState((state) => ({
-        missionRoute: { ...state.missionRoute, status: 'road' },
-      }));
-    });
-    expect(screen.getByText('Sigue la línea cian')).toBeTruthy();
     await act(() => vi.advanceTimersByTimeAsync(900));
     await act(() => vi.advanceTimersByTimeAsync(420));
     expect(screen.getByTestId('free-driving')).toBeTruthy();

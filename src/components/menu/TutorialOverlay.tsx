@@ -68,6 +68,9 @@ export function TutorialOverlay({
   const activeNavigation = useGameStore(
     (state) => state.missionRoute.activeNavigation,
   );
+  const routeHeadingDifference = useGameStore(
+    (state) => state.missionRoute.orientation.headingDifference,
+  );
   const drivingSurface = useGameStore((state) => state.driving.surface);
   const roadNetworkStatus = useGameStore(
     (state) => state.driving.roadNetworkStatus,
@@ -107,26 +110,25 @@ export function TutorialOverlay({
     telemetry.speedMetersPerSecond > 0 &&
     coastConditionIsMet(diagnostics, telemetry.speedKilometersPerHour);
   const fallbackRoute = routeStatus === 'fallback';
-  const fallbackCompletionAllowed =
-    fallbackRoute && roadNetworkStatus === 'unavailable';
   const routeVisible =
     routeVisualReady && (routeStatus === 'road' || fallbackRoute);
-  const routeCompletionVisible =
-    routeVisualReady && (routeStatus === 'road' || fallbackCompletionAllowed);
   const routeFollowingValid =
     !hasBlockingOverlay &&
     !isPaused &&
     routeFollowingIsValid({
-      routeVisible: routeCompletionVisible,
+      routeVisible,
       speedKilometersPerHour: telemetry.speedKilometersPerHour,
       forwardSpeedMetersPerSecond: telemetry.speedMetersPerSecond,
       offRoute: routeOffRoute,
       requiresRejoin: activeNavigation?.requiresRejoin ?? true,
       surface: drivingSurface,
       roadNetworkReady: roadNetworkStatus === 'ready',
-      fallbackMode: fallbackCompletionAllowed,
+      fallbackMode: fallbackRoute,
       distanceToRouteMeters: activeNavigation?.distanceToRouteMeters ?? null,
       maximumDistanceToRouteMeters: routingConfig.routeRejoinDistanceMeters,
+      headingDifferenceDegrees: routeHeadingDifference,
+      maximumHeadingDifferenceDegrees:
+        routingConfig.tutorialRouteHeadingToleranceDegrees,
       reversing:
         diagnostics.mobileCruise.reversing ||
         telemetry.speedMetersPerSecond < -0.14,
@@ -229,7 +231,7 @@ export function TutorialOverlay({
         id: 'route',
         title: fallbackRoute ? 'Sigue la guía directa' : 'Sigue la línea cian',
         description: fallbackRoute
-          ? 'La red vial no respondió; avanza con la guía directa para continuar.'
+          ? 'No hay una ruta vial disponible; avanza con la guía directa para continuar.'
           : 'Conduce sobre el tramo brillante de la ruta.',
         completed: routeFollowCompleted && routeFollowingValid,
         available: routeVisible,

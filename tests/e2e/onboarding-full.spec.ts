@@ -228,14 +228,11 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   let steeringTouchId = 10;
 
   await touchStart(session, 4, center.x, center.y);
-  await touchMove(session, 4, center.x, center.y - center.width * 0.44);
+  await touchMove(session, 4, center.x, center.y - center.width * 0.24);
   await expect(page.getByTestId('game-map')).toHaveAttribute(
     'data-input-cruise-reverse-state',
     'forward',
   );
-  await touchEnd(session);
-  await touchStart(session, 5, center.x, center.y);
-  await touchMove(session, 5, center.x, center.y - center.width * 0.44);
   await expect
     .poll(() =>
       page
@@ -243,7 +240,8 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
         .getAttribute('data-input-target-speed')
         .then(Number),
     )
-    .toBeGreaterThan(20);
+    .toBeGreaterThanOrEqual(15);
+  await touchEnd(session);
   await expect
     .poll(() =>
       page
@@ -252,7 +250,6 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
         .then(Number),
     )
     .toBeGreaterThan(5);
-  await touchEnd(session);
 
   const gameMap = page.getByTestId('game-map');
   const rejoinDeadline = Date.now() + 18_000;
@@ -295,6 +292,43 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   await expect
     .poll(() => gameMap.getAttribute('data-input-target-speed').then(Number))
     .toBeGreaterThan(50);
+  await touchEnd(session);
+
+  steeringTouchId += 1;
+  await touchStart(session, steeringTouchId, center.x, center.y);
+  await touchMove(
+    session,
+    steeringTouchId,
+    center.x,
+    center.y + center.width * 0.44,
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-input-cruise-reverse-state',
+    'braking-to-stop',
+  );
+  await touchEnd(session);
+  await expect
+    .poll(() =>
+      gameMap
+        .getAttribute('data-player-speed-kilometers-per-hour')
+        .then(Number),
+    )
+    .toBeLessThan(1);
+  await expect(gameMap).toHaveAttribute(
+    'data-input-cruise-reverse-state',
+    'reverse-armed',
+  );
+  steeringTouchId += 1;
+  await touchStart(session, steeringTouchId, center.x, center.y);
+  await touchMove(
+    session,
+    steeringTouchId,
+    center.x,
+    center.y - center.width * 0.24,
+  );
+  await expect
+    .poll(() => gameMap.getAttribute('data-input-target-speed').then(Number))
+    .toBeGreaterThanOrEqual(25);
   await touchEnd(session);
 
   const objectiveAdvice = page.locator('[data-contextual-advice="objective"]');

@@ -3,6 +3,7 @@ export const routingConfig = {
   routeDeviationDistanceMeters: 250,
   routeRejoinDistanceMeters: 24,
   headingAlignmentThresholdDegrees: 18,
+  tutorialRouteHeadingToleranceDegrees: 45,
   stoppedGuidanceSpeedKilometersPerHour: 2,
   stoppedGuidanceHeadingDifferenceDegrees: 45,
   deviationCheckIntervalMilliseconds: 1_000,

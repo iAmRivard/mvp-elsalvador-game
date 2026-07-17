@@ -55,7 +55,7 @@ const TARGETS_LAYER_ID = 'active-mission-targets-circles';
 export function routeOriginMovedBeyondTolerance(
   origin: RoadCoordinates,
   currentPosition: RoadCoordinates,
-  toleranceMeters = routingConfig.routeRejoinDistanceMeters,
+  toleranceMeters: number = routingConfig.routeRejoinDistanceMeters,
 ): boolean {
   return distanceBetweenMeters(origin, currentPosition) > toleranceMeters;
 }
@@ -286,6 +286,46 @@ function fallbackDurationSeconds(distanceMeters: number): number {
       travelConfig.normalMaximumSpeedMetersPerSecond *
       routingConfig.averageCruisingSpeedRatio)
   );
+}
+
+export function directFallbackNavigationProgress(
+  position: RoadCoordinates,
+  destination: RoadCoordinates,
+  physicalHeading: number,
+) {
+  const coordinates: RoadCoordinates[] = [position, destination];
+  const instructions = generateNavigationInstructions(coordinates);
+  const progress = navigationProgress(
+    position,
+    coordinates,
+    instructions,
+    physicalHeading,
+    0,
+  );
+  const distanceMeters = distanceBetweenMeters(position, destination);
+  const nextInstruction =
+    distanceMeters <= routingConfig.routeRejoinDistanceMeters
+      ? (instructions.at(-1) ?? null)
+      : (instructions[0] ?? null);
+  return {
+    ...progress,
+    nextInstruction,
+    distanceToNextInstructionMeters: distanceMeters,
+    distanceToRouteMeters: 0,
+    offRoute: false,
+    rejoinCoordinates: [],
+    activeNavigation: progress.activeNavigation
+      ? {
+          ...progress.activeNavigation,
+          maneuverType:
+            nextInstruction?.type ?? progress.activeNavigation.maneuverType,
+          maneuverCoordinates: destination,
+          distanceToManeuverMeters: distanceMeters,
+          distanceToRouteMeters: 0,
+          requiresRejoin: false,
+        }
+      : null,
+  };
 }
 
 export function addMissionRoute(
@@ -539,7 +579,7 @@ export function addMissionRoute(
     mapContainer.dataset.navigationLastPositionLongitude = String(position[0]);
     mapContainer.dataset.navigationLastPositionLatitude = String(position[1]);
     if (
-      routeMode !== 'road' ||
+      routeMode === null ||
       routeCoordinates.length < 2 ||
       routeInstructions.length === 0
     ) {
@@ -559,6 +599,8 @@ export function addMissionRoute(
       mapContainer.dataset.navigationRecommendedHeading = '';
       mapContainer.dataset.navigationPhysicalHeading =
         physicalHeading.toFixed(1);
+      mapContainer.dataset.navigationHeadingDifference = '';
+      mapContainer.dataset.navigationDistanceToRoute = '';
       mapContainer.dataset.navigationNextType = '';
       mapContainer.dataset.navigationNextDistance = '0';
       useGameStore.getState().setMissionNavigation({
@@ -570,13 +612,22 @@ export function addMissionRoute(
       });
       return;
     }
-    const progress = navigationProgress(
-      position,
-      routeCoordinates,
-      routeInstructions,
-      physicalHeading,
-      lastKnownSegmentIndex,
-    );
+    // Fallback is direct bearing guidance, not a road corridor. Keep its
+    // GeoJSON stable and update only the in-memory navigation projection.
+    const progress =
+      routeMode === 'fallback'
+        ? directFallbackNavigationProgress(
+            position,
+            routeCoordinates.at(-1)!,
+            physicalHeading,
+          )
+        : navigationProgress(
+            position,
+            routeCoordinates,
+            routeInstructions,
+            physicalHeading,
+            lastKnownSegmentIndex,
+          );
     const gameState = useGameStore.getState();
     const reversing = vehicleIsReversing(
       gameState.telemetry.speedMetersPerSecond,
@@ -587,7 +638,9 @@ export function addMissionRoute(
       immediateSource,
       immediateSourceSnapshot,
       'immediate',
-      reversing ? [] : progress.immediateCoordinates,
+      reversing || routeMode === 'fallback'
+        ? []
+        : progress.immediateCoordinates,
     );
     setLineSourceData(
       rejoinSource,
@@ -642,7 +695,9 @@ export function addMissionRoute(
       container.dataset.navigationArrowLatitude = String(
         arrowPosition[1],
       );
-      container.dataset.navigationArrowFallback = 'false';
+      container.dataset.navigationArrowFallback = String(
+        routeMode === 'fallback',
+      );
     }
     const container = map.getContainer();
     container.dataset.navigationReversing = String(reversing);
@@ -656,6 +711,10 @@ export function addMissionRoute(
     container.dataset.navigationRecommendedHeading =
       progress.activeNavigation?.recommendedHeading.toFixed(1) ?? '';
     container.dataset.navigationPhysicalHeading = physicalHeading.toFixed(1);
+    container.dataset.navigationHeadingDifference =
+      orientation.headingDifference?.toFixed(1) ?? '';
+    container.dataset.navigationDistanceToRoute =
+      progress.activeNavigation?.distanceToRouteMeters.toFixed(1) ?? '';
     container.dataset.navigationNextType = progress.nextInstruction?.type ?? '';
     container.dataset.navigationNextDistance = String(
       Math.round(progress.distanceToNextInstructionMeters ?? 0),
@@ -678,6 +737,8 @@ export function addMissionRoute(
     setLineSourceData(immediateSource, immediateSourceSnapshot, 'empty', []);
     setLineSourceData(rejoinSource, rejoinSourceSnapshot, 'empty', []);
     maneuverMarkerElement.hidden = true;
+    mapContainer.dataset.navigationHeadingDifference = '';
+    mapContainer.dataset.navigationDistanceToRoute = '';
     exposeRoute(null, 0);
     useGameStore.getState().setMissionRoute({
       status: 'idle',
@@ -974,5 +1035,7 @@ export function addMissionRoute(
     delete mapContainer.dataset.missionRouteFuelColor;
     delete mapContainer.dataset.navigationTargetKind;
     delete mapContainer.dataset.navigationTargetId;
+    delete mapContainer.dataset.navigationHeadingDifference;
+    delete mapContainer.dataset.navigationDistanceToRoute;
   };
 }

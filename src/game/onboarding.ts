@@ -119,6 +119,8 @@ export interface RouteFollowingObservation {
   fallbackMode: boolean;
   distanceToRouteMeters: number | null;
   maximumDistanceToRouteMeters: number;
+  headingDifferenceDegrees: number | null;
+  maximumHeadingDifferenceDegrees: number;
   reversing: boolean;
 }
 
@@ -130,18 +132,26 @@ export function routeFollowingIsValid(
     observation.speedKilometersPerHour >= 5 &&
     observation.forwardSpeedMetersPerSecond > 0 &&
     !observation.reversing;
+  const routePositionIsValid =
+    !observation.requiresRejoin &&
+    observation.distanceToRouteMeters !== null &&
+    observation.distanceToRouteMeters <=
+      observation.maximumDistanceToRouteMeters;
+  const routeHeadingIsValid =
+    observation.headingDifferenceDegrees !== null &&
+    Number.isFinite(observation.headingDifferenceDegrees) &&
+    Math.abs(observation.headingDifferenceDegrees) <=
+      observation.maximumHeadingDifferenceDegrees;
   if (observation.fallbackMode) {
-    return movementIsValid && !observation.roadNetworkReady;
+    return movementIsValid && routeHeadingIsValid;
   }
   return (
     movementIsValid &&
     !observation.offRoute &&
-    !observation.requiresRejoin &&
+    routePositionIsValid &&
+    routeHeadingIsValid &&
     observation.surface !== 'offroad' &&
-    observation.roadNetworkReady &&
-    observation.distanceToRouteMeters !== null &&
-    observation.distanceToRouteMeters <=
-      observation.maximumDistanceToRouteMeters
+    observation.roadNetworkReady
   );
 }
 

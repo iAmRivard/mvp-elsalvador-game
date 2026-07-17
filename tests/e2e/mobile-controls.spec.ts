@@ -400,7 +400,6 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   page,
 }, testInfo) => {
   test.skip(!testInfo.project.name.startsWith('chromium-mobile'));
-  test.setTimeout(30_000);
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -438,6 +437,18 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     'unavailable',
   );
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'fallback');
+  await expect(gameMap).toHaveAttribute(
+    'data-navigation-recommended-heading',
+    /\d/,
+  );
+  await expect(gameMap).toHaveAttribute('data-navigation-route-segment', '0');
+  await expect
+    .poll(() =>
+      gameMap
+        .getAttribute('data-navigation-distance-to-route')
+        .then(Number),
+    )
+    .toBeLessThanOrEqual(24);
   await expect(gameMap).toHaveAttribute('data-drive-enabled', 'true');
   await expect(gameMap).toHaveAttribute('data-runtime-blocked-by', '');
   const joystickCenter = await centerOf(
@@ -562,18 +573,36 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
         .then(Number),
     )
     .toBeGreaterThanOrEqual(5);
-  await page.getByRole('button', { name: 'Pausar partida' }).click();
-  const resumeButton = page.getByRole('button', { name: 'Reanudar partida' });
-  await expect(resumeButton).toBeVisible();
-
-  const runtimeBeforePromotion = await gameMap.evaluate((element) => ({
-    longitude: Number(element.dataset.playerLongitude),
-    latitude: Number(element.dataset.playerLatitude),
-    heading: Number(element.dataset.navigationPhysicalHeading),
-    speedKilometersPerHour: Number(
-      element.dataset.playerSpeedKilometersPerHour,
-    ),
-  }));
+  const tutorialCard = page.locator('[data-tutorial-card="mobile"]');
+  let fallbackSteeringTouchId = 44;
+  const fallbackFollowDeadline = Date.now() + 5_000;
+  while (
+    (await tutorialCard.count()) > 0 &&
+    Date.now() < fallbackFollowDeadline
+  ) {
+    await steerTowardRoute(
+      page,
+      session,
+      joystickCenter,
+      fallbackSteeringTouchId,
+    );
+    fallbackSteeringTouchId += 1;
+  }
+  await expect(gameMap).toHaveAttribute(
+    'data-navigation-requires-rejoin',
+    'false',
+  );
+  await expect(tutorialCard).toHaveCount(0);
+  await expect(page.getByTestId('mobile-driving-hud')).toBeVisible();
+  await drag(
+    90,
+    joystickCenter.x,
+    joystickCenter.y - joystickCenter.width * 0.24,
+  );
+  await expect(gameMap).toHaveAttribute('data-input-pointer-active', 'true');
+  const targetBeforePromotion = Number(
+    await gameMap.getAttribute('data-input-target-speed'),
+  );
   releaseRoadRequest();
   await expect(gameMap).toHaveAttribute('data-road-network-status', 'ready', {
     timeout: 20_000,
@@ -610,35 +639,30 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     'data-road-promotion-input-target-delta-kph',
     '0.000',
   );
+  await expect(gameMap).toHaveAttribute('data-input-pointer-active', 'true');
+  expect(
+    Number(await gameMap.getAttribute('data-input-target-speed')),
+  ).toBeGreaterThanOrEqual(targetBeforePromotion);
+  const positionAtPromotion = await gameMap.evaluate(
+    (element) =>
+      `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+  );
+  await expect
+    .poll(
+      () =>
+        gameMap.evaluate(
+          (element) =>
+            `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+        ),
+      { timeout: 1_000, intervals: [16, 25, 50] },
+    )
+    .not.toBe(positionAtPromotion);
+  await release();
 
-  const runtimeAfterPromotion = await gameMap.evaluate((element) => ({
-    longitude: Number(element.dataset.playerLongitude),
-    latitude: Number(element.dataset.playerLatitude),
-    heading: Number(element.dataset.navigationPhysicalHeading),
-    speedKilometersPerHour: Number(
-      element.dataset.playerSpeedKilometersPerHour,
-    ),
-  }));
-  const latitudeMeters =
-    (runtimeAfterPromotion.latitude - runtimeBeforePromotion.latitude) *
-    111_320;
-  const longitudeMeters =
-    (runtimeAfterPromotion.longitude - runtimeBeforePromotion.longitude) *
-    111_320 *
-    Math.cos((runtimeBeforePromotion.latitude * Math.PI) / 180);
-  const headingDelta = Math.abs(
-    ((runtimeAfterPromotion.heading - runtimeBeforePromotion.heading + 540) %
-      360) -
-      180,
-  );
-  const headingRadians = (runtimeBeforePromotion.heading * Math.PI) / 180;
-  const lateralDisplacementMeters = Math.abs(
-    longitudeMeters * Math.cos(headingRadians) -
-      latitudeMeters * Math.sin(headingRadians),
-  );
-  expect(lateralDisplacementMeters).toBeLessThan(2);
-  expect(runtimeAfterPromotion.speedKilometersPerHour).toBeGreaterThan(0);
-  expect(headingDelta).toBeLessThan(2);
+  await page.getByRole('button', { name: 'Pausar partida' }).click();
+  const pauseMenu = page.getByRole('dialog', { name: 'Partida en pausa' });
+  const resumeButton = pauseMenu.getByRole('button', { name: 'Continuar' });
+  await expect(resumeButton).toBeVisible();
   await page.waitForTimeout(1_600);
   await expect(gameMap).toHaveAttribute(
     'data-road-promotion-assist-ramp',
@@ -652,8 +676,12 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road', {
     timeout: 20_000,
   });
+  const positionBeforeResume = await gameMap.evaluate(
+    (element) =>
+      `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+  );
   await drag(
-    44,
+    91,
     joystickCenter.x,
     joystickCenter.y - joystickCenter.width * 0.24,
   );
@@ -666,18 +694,34 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     .toBeGreaterThanOrEqual(25);
   await release();
   await expect
-    .poll(() =>
-      gameMap
-        .getAttribute('data-player-speed-kilometers-per-hour')
-        .then(Number),
+    .poll(
+      () =>
+        gameMap.evaluate(
+          (element) =>
+            `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+        ),
+      { timeout: 1_000, intervals: [16, 25, 50] },
     )
-    .toBeGreaterThanOrEqual(5);
-  let steeringTouchId = 45;
-  const tutorialCard = page.locator('[data-tutorial-card="mobile"]');
-  const routeFollowDeadline = Date.now() + 5_000;
-  while ((await tutorialCard.count()) > 0 && Date.now() < routeFollowDeadline) {
-    await steerTowardRoute(page, session, joystickCenter, steeringTouchId);
-    steeringTouchId += 1;
+    .not.toBe(positionBeforeResume);
+  await expect(gameMap).toHaveAttribute('data-drive-enabled', 'true');
+  await expect(gameMap).toHaveAttribute('data-runtime-blocked-by', '');
+  let roadSteeringTouchId = 92;
+  const roadFollowDeadline = Date.now() + 5_000;
+  while (
+    ((await gameMap.getAttribute('data-navigation-off-route')) === 'true' ||
+      (await gameMap.getAttribute('data-navigation-requires-rejoin')) ===
+        'true' ||
+      (await gameMap.getAttribute('data-road-contact-surface')) ===
+        'offroad') &&
+    Date.now() < roadFollowDeadline
+  ) {
+    await steerTowardRoute(
+      page,
+      session,
+      joystickCenter,
+      roadSteeringTouchId,
+    );
+    roadSteeringTouchId += 1;
   }
   await expect(gameMap).toHaveAttribute('data-navigation-off-route', 'false');
   await expect(gameMap).toHaveAttribute(

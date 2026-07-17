@@ -143,6 +143,8 @@ describe('reglas de onboarding', () => {
       fallbackMode: false,
       distanceToRouteMeters: 24,
       maximumDistanceToRouteMeters: 24,
+      headingDifferenceDegrees: 0,
+      maximumHeadingDifferenceDegrees: 18,
       reversing: false,
     };
     expect(routeFollowingIsValid(valid)).toBe(true);
@@ -163,6 +165,9 @@ describe('reglas de onboarding', () => {
     expect(
       routeFollowingIsValid({ ...valid, distanceToRouteMeters: 24.01 }),
     ).toBe(false);
+    expect(
+      routeFollowingIsValid({ ...valid, headingDifferenceDegrees: 18.01 }),
+    ).toBe(false);
     expect(routeFollowingIsValid({ ...valid, reversing: true })).toBe(false);
     expect(
       routeFollowingIsValid({
@@ -170,8 +175,43 @@ describe('reglas de onboarding', () => {
         roadNetworkReady: false,
         fallbackMode: true,
         surface: 'offroad',
+      }),
+    ).toBe(true);
+    expect(
+      routeFollowingIsValid({
+        ...valid,
+        roadNetworkReady: false,
+        fallbackMode: true,
+        surface: 'offroad',
         requiresRejoin: true,
+      }),
+    ).toBe(true);
+    expect(
+      routeFollowingIsValid({
+        ...valid,
+        roadNetworkReady: false,
+        fallbackMode: true,
+        surface: 'offroad',
         distanceToRouteMeters: null,
+      }),
+    ).toBe(true);
+    expect(
+      routeFollowingIsValid({
+        ...valid,
+        roadNetworkReady: false,
+        fallbackMode: true,
+        surface: 'offroad',
+        headingDifferenceDegrees: null,
+      }),
+    ).toBe(false);
+    expect(
+      routeFollowingIsValid({
+        ...valid,
+        fallbackMode: true,
+        roadNetworkReady: true,
+        surface: 'offroad',
+        maximumHeadingDifferenceDegrees: 45,
+        headingDifferenceDegrees: 45,
       }),
     ).toBe(true);
     expect(
@@ -179,6 +219,17 @@ describe('reglas de onboarding', () => {
         ...valid,
         fallbackMode: true,
         roadNetworkReady: true,
+        surface: 'offroad',
+        maximumHeadingDifferenceDegrees: 45,
+        headingDifferenceDegrees: 45.01,
+      }),
+    ).toBe(false);
+    expect(
+      routeFollowingIsValid({
+        ...valid,
+        fallbackMode: true,
+        roadNetworkReady: true,
+        headingDifferenceDegrees: Number.NaN,
       }),
     ).toBe(false);
   });
