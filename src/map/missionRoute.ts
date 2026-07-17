@@ -36,6 +36,7 @@ import { useGameStore } from '../store/gameStore';
 import type { RoadCoordinates } from '../types/roads';
 import type { RouteNavigationInstruction } from '../types/navigation';
 import { createTrailingUpdateScheduler } from './trailingUpdateScheduler';
+import { createNavigationGuidanceElement } from './navigationGuidanceMarker';
 
 const ROUTE_SOURCE_ID = 'active-mission-route';
 const ROAD_CASING_LAYER_ID = 'active-mission-route-casing';
@@ -47,7 +48,7 @@ const REJOIN_LAYER_ID = 'active-mission-route-rejoin-line';
 const IMMEDIATE_SOURCE_ID = 'active-mission-route-immediate';
 const IMMEDIATE_LAYER_ID = 'active-mission-route-immediate-line';
 const IMMEDIATE_CHEVRON_LAYER_ID = 'active-mission-route-immediate-chevrons';
-const NAVIGATION_ARROW_LOOKAHEAD_METERS = 42;
+const NAVIGATION_ARROW_LOOKAHEAD_METERS = 90;
 const TARGETS_SOURCE_ID = 'active-mission-targets';
 const TARGETS_LAYER_ID = 'active-mission-targets-circles';
 
@@ -411,16 +412,7 @@ export function addMissionRoute(
     },
   });
 
-  const maneuverMarkerElement = document.createElement('div');
-  maneuverMarkerElement.className =
-    'mission-route-arrow navigation-guidance-arrow';
-  maneuverMarkerElement.setAttribute('role', 'img');
-  maneuverMarkerElement.setAttribute(
-    'aria-label',
-    'Dirección recomendada de la ruta',
-  );
-  maneuverMarkerElement.textContent = '⌃';
-  maneuverMarkerElement.hidden = true;
+  const maneuverMarkerElement = createNavigationGuidanceElement();
   const maneuverMarker = new Marker({
     element: maneuverMarkerElement,
     anchor: 'center',
@@ -621,10 +613,16 @@ export function addMissionRoute(
       activeNavigation: progress.activeNavigation,
       orientation,
     });
+    const arrowPosition = navigationArrowPosition(
+      progress.immediateCoordinates,
+      0,
+      NAVIGATION_ARROW_LOOKAHEAD_METERS,
+    );
     if (
       reversing ||
       !progress.activeNavigation ||
-      orientation.headingDifference === null
+      orientation.headingDifference === null ||
+      !arrowPosition
     ) {
       maneuverMarkerElement.hidden = true;
       const container = map.getContainer();
@@ -632,24 +630,19 @@ export function addMissionRoute(
       container.dataset.navigationArrowLatitude = '';
       container.dataset.navigationArrowFallback = '';
     } else {
-      const arrowPosition = navigationArrowPosition(
-        progress.immediateCoordinates,
-        0,
-        NAVIGATION_ARROW_LOOKAHEAD_METERS,
-      );
       maneuverMarker
-        .setLngLat(arrowPosition ?? position)
-        .setOffset(arrowPosition ? [0, 0] : [0, -40])
+        .setLngLat(arrowPosition)
+        .setOffset([0, 0])
         .setRotation(progress.activeNavigation.recommendedHeading);
       maneuverMarkerElement.hidden = false;
       const container = map.getContainer();
       container.dataset.navigationArrowLongitude = String(
-        (arrowPosition ?? position)[0],
+        arrowPosition[0],
       );
       container.dataset.navigationArrowLatitude = String(
-        (arrowPosition ?? position)[1],
+        arrowPosition[1],
       );
-      container.dataset.navigationArrowFallback = String(!arrowPosition);
+      container.dataset.navigationArrowFallback = 'false';
     }
     const container = map.getContainer();
     container.dataset.navigationReversing = String(reversing);
