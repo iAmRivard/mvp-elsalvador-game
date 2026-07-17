@@ -25,6 +25,11 @@ import { autoThrottleConfig } from '../../config/mobileControls.config';
 import { vehicleStateConfig } from '../../config/vehicleState.config';
 import { missionById } from '../../data/missions';
 import { restrictedAreaTypeAt } from '../../data/restrictedAreas';
+import {
+  vehicleDefinitionFor,
+  vehicleRuntimeFor,
+  vehicleSkinFor,
+} from '../../data/vehicles';
 import { detectDeviceProfile } from '../../game/deviceProfile';
 import {
   buildFollowCameraUpdate,
@@ -90,7 +95,10 @@ import {
   type MapRuntimeErrorClassification,
   type MapLoadingStage,
 } from '../../map/mapStartup';
-import { createPlayerMarkerElement } from '../../map/playerMarker';
+import {
+  applyPlayerMarkerSkin,
+  createPlayerMarkerElement,
+} from '../../map/playerMarker';
 import { PlayerVisualUpdateCoordinator } from '../../map/playerVisualUpdates';
 import {
   registerPmtilesProtocol,
@@ -321,6 +329,16 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     containerRef.current.dataset.followingPlayer = String(
       useGameStore.getState().isFollowingPlayer,
     );
+    let activeVehicleDefinition = vehicleDefinitionFor(
+      useGameStore.getState().selectedVehicleId,
+    );
+    let activeVehicleSkin = vehicleSkinFor(
+      activeVehicleDefinition.id,
+      useGameStore.getState().selectedVehicleSkinId,
+    );
+    let activeVehicleRuntime = vehicleRuntimeFor(activeVehicleDefinition.id);
+    containerRef.current.dataset.selectedVehicleId = activeVehicleDefinition.id;
+    containerRef.current.dataset.selectedVehicleSkinId = activeVehicleSkin.id;
 
     if (!deviceProfile.isCompact) {
       map.addControl(
@@ -744,8 +762,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       const profileOverride = deviceProfile.isTouch
         ? timestampMilliseconds < recoveryCameraUntil
           ? 'recovery'
-          : presentationMode === 'interaction' &&
-              speedKilometersPerHour <= 10
+          : presentationMode === 'interaction' && speedKilometersPerHour <= 10
             ? 'interaction'
             : null
         : null;
@@ -786,10 +803,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             : profileOverride === 'interaction'
               ? 'mobileInteraction'
               : cameraMode === 'fast'
-            ? 'mobileFast'
-            : cameraMode === 'driving'
-              ? 'mobileDriving'
-              : 'mobileStopped'
+                ? 'mobileFast'
+                : cameraMode === 'driving'
+                  ? 'mobileDriving'
+                  : 'mobileStopped'
           : cameraMode === 'fast'
             ? 'fast'
             : cameraMode === 'driving'
@@ -1010,24 +1027,26 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       const elements: HTMLElement[] = [];
       const occlusions: GameplayOcclusion[] = [];
       for (const { selector, kind } of SAFE_VIEWPORT_OCCLUDERS) {
-        document.querySelectorAll<HTMLElement>(selector).forEach((element, index) => {
-          const rect = element.getBoundingClientRect();
-          const style = window.getComputedStyle(element);
-          if (
-            rect.width <= 0 ||
-            rect.height <= 0 ||
-            style.display === 'none' ||
-            style.visibility === 'hidden'
-          ) {
-            return;
-          }
-          elements.push(element);
-          occlusions.push({
-            id: `${selector}:${String(index)}`,
-            kind,
-            rect: gameplayRectFromDomRect(rect),
+        document
+          .querySelectorAll<HTMLElement>(selector)
+          .forEach((element, index) => {
+            const rect = element.getBoundingClientRect();
+            const style = window.getComputedStyle(element);
+            if (
+              rect.width <= 0 ||
+              rect.height <= 0 ||
+              style.display === 'none' ||
+              style.visibility === 'hidden'
+            ) {
+              return;
+            }
+            elements.push(element);
+            occlusions.push({
+              id: `${selector}:${String(index)}`,
+              kind,
+              rect: gameplayRectFromDomRect(rect),
+            });
           });
-        });
       }
       return { elements, occlusions };
     };
@@ -1255,61 +1274,64 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         }, ROAD_NETWORK_STARTUP_DEADLINE_MILLISECONDS);
         void loadRoadNetwork()
           .then(
-          ({
-            network,
-            index,
-            loadDurationMilliseconds,
-            fileSizeBytes,
-            metrics,
-          }) => {
-            if (!effectActive || roadNetworkSettled) return;
-            roadNetworkSettled = true;
-            if (roadNetworkStartupDeadline !== null) {
-              window.clearTimeout(roadNetworkStartupDeadline);
-              roadNetworkStartupDeadline = null;
-            }
-            removeRoadSurfaceLayer = addPlayableRoadSurfaceLayer(map, network);
-            roadIndex = index;
-            roadEdgesById = new Map(
-              network.edges.map((edge) => [edge.id, edge]),
-            );
-            setRouteRejoinRoadSource({ index, edgesById: roadEdgesById });
-            roadTracker = new RoadTracker(index);
-            const currentPlayer =
-              gameLoop?.getPlayer() ??
-              runtimeFromTelemetry(useGameStore.getState().telemetry);
-            validateInitialRoadPosition(currentPlayer);
-            const validatedPlayer = runtimeFromTelemetry(
-              useGameStore.getState().telemetry,
-            );
-            roadContact = roadTracker.update(
-              [validatedPlayer.longitude, validatedPlayer.latitude],
-              roadContextFor(validatedPlayer),
-            );
-            roadNetworkEnabled = true;
-            useGameStore.getState().setRoadNetworkStatus('ready');
-            if (containerRef.current) {
-              containerRef.current.dataset.roadNetworkStatus = 'ready';
-              containerRef.current.dataset.roadLoadMs =
-                loadDurationMilliseconds.toFixed(1);
-              containerRef.current.dataset.roadFileBytes =
-                String(fileSizeBytes);
-              containerRef.current.dataset.roadDownloadMs =
-                metrics.downloadDurationMilliseconds.toFixed(1);
-              containerRef.current.dataset.roadParseMs =
-                metrics.parseDurationMilliseconds.toFixed(1);
-              containerRef.current.dataset.roadValidationMs =
-                metrics.validationDurationMilliseconds.toFixed(1);
-              containerRef.current.dataset.roadIndexMs =
-                metrics.indexDurationMilliseconds.toFixed(1);
-              containerRef.current.dataset.roadMemoryMb = (
-                metrics.approximateMemoryBytes /
-                1024 /
-                1024
-              ).toFixed(1);
-            }
-            finishStartup();
-          },
+            ({
+              network,
+              index,
+              loadDurationMilliseconds,
+              fileSizeBytes,
+              metrics,
+            }) => {
+              if (!effectActive || roadNetworkSettled) return;
+              roadNetworkSettled = true;
+              if (roadNetworkStartupDeadline !== null) {
+                window.clearTimeout(roadNetworkStartupDeadline);
+                roadNetworkStartupDeadline = null;
+              }
+              removeRoadSurfaceLayer = addPlayableRoadSurfaceLayer(
+                map,
+                network,
+              );
+              roadIndex = index;
+              roadEdgesById = new Map(
+                network.edges.map((edge) => [edge.id, edge]),
+              );
+              setRouteRejoinRoadSource({ index, edgesById: roadEdgesById });
+              roadTracker = new RoadTracker(index);
+              const currentPlayer =
+                gameLoop?.getPlayer() ??
+                runtimeFromTelemetry(useGameStore.getState().telemetry);
+              validateInitialRoadPosition(currentPlayer);
+              const validatedPlayer = runtimeFromTelemetry(
+                useGameStore.getState().telemetry,
+              );
+              roadContact = roadTracker.update(
+                [validatedPlayer.longitude, validatedPlayer.latitude],
+                roadContextFor(validatedPlayer),
+              );
+              roadNetworkEnabled = true;
+              useGameStore.getState().setRoadNetworkStatus('ready');
+              if (containerRef.current) {
+                containerRef.current.dataset.roadNetworkStatus = 'ready';
+                containerRef.current.dataset.roadLoadMs =
+                  loadDurationMilliseconds.toFixed(1);
+                containerRef.current.dataset.roadFileBytes =
+                  String(fileSizeBytes);
+                containerRef.current.dataset.roadDownloadMs =
+                  metrics.downloadDurationMilliseconds.toFixed(1);
+                containerRef.current.dataset.roadParseMs =
+                  metrics.parseDurationMilliseconds.toFixed(1);
+                containerRef.current.dataset.roadValidationMs =
+                  metrics.validationDurationMilliseconds.toFixed(1);
+                containerRef.current.dataset.roadIndexMs =
+                  metrics.indexDurationMilliseconds.toFixed(1);
+                containerRef.current.dataset.roadMemoryMb = (
+                  metrics.approximateMemoryBytes /
+                  1024 /
+                  1024
+                ).toFixed(1);
+              }
+              finishStartup();
+            },
           )
           .catch((error: unknown) => {
             if (!effectActive || roadNetworkSettled) return;
@@ -1336,7 +1358,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           });
       }
       playerMarker = new maplibregl.Marker({
-        element: createPlayerMarkerElement(),
+        element: createPlayerMarkerElement(activeVehicleSkin),
         anchor: 'center',
         rotationAlignment: 'map',
         pitchAlignment: 'map',
@@ -1413,6 +1435,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 quality: deviceProfile.quality,
                 mobile: deviceProfile.isCompact,
                 reducedMotion: deviceProfile.reducedMotion,
+                playerModelUrl: activeVehicleDefinition.modelUrl,
+                playerModelScale: activeVehicleDefinition.modelScale,
+                vehicleBodyColor: activeVehicleSkin.bodyColor,
                 onPlayerReady: () => {
                   if (!effectActive) return;
                   playerVisualUpdates?.setFallbackHidden(true);
@@ -1514,6 +1539,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         getMovementOptions: () => {
           const roadContactTimestamp = performance.now();
           return {
+            travel: activeVehicleRuntime.travel,
+            handling: activeVehicleRuntime.handling,
+            fuel: activeVehicleRuntime.fuel,
             steeringSensitivity:
               useSettingsStore.getState().steeringSensitivity,
             roadAssistMode: useSettingsStore.getState().roadAssistMode,
@@ -1657,22 +1685,18 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             const cameraUpdateIntervalMilliseconds =
               activeCameraUpdateIntervalMilliseconds();
             if (
-              !cameraCadenceShouldApply(
-                timestamp,
-                nextCameraUpdateDeadline,
-              )
+              !cameraCadenceShouldApply(timestamp, nextCameraUpdateDeadline)
             ) {
               cameraSkippedByInterval += 1;
               exposeCameraMetrics(timestamp);
               wasFollowing = true;
               return;
             }
-            nextCameraUpdateDeadline =
-              cameraCadenceDeadlineAfterApplication(
-                nextCameraUpdateDeadline,
-                timestamp,
-                cameraUpdateIntervalMilliseconds,
-              );
+            nextCameraUpdateDeadline = cameraCadenceDeadlineAfterApplication(
+              nextCameraUpdateDeadline,
+              timestamp,
+              cameraUpdateIntervalMilliseconds,
+            );
             const isRecentering = !wasFollowing;
             const cameraStartedAt = performance.now();
             const camera = cameraForPlayer(player, timestamp);
@@ -1896,10 +1920,11 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 sample.vehicleDistanceMeters,
                 sample.environment.surface,
                 blockedImpact,
-                selectedMissionChoiceOption(
+                (selectedMissionChoiceOption(
                   state.activeMissionId,
                   state.missionChoiceSelections,
-                )?.conditionMultiplier ?? 1,
+                )?.conditionMultiplier ?? 1) *
+                  activeVehicleRuntime.conditionWearMultiplier,
               );
             }
             if (containerRef.current) {
@@ -1966,6 +1991,32 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       });
 
       unsubscribeRuntime = useGameStore.subscribe((state, previousState) => {
+        if (
+          state.selectedVehicleId !== previousState.selectedVehicleId ||
+          state.selectedVehicleSkinId !== previousState.selectedVehicleSkinId
+        ) {
+          activeVehicleDefinition = vehicleDefinitionFor(
+            state.selectedVehicleId,
+          );
+          activeVehicleSkin = vehicleSkinFor(
+            activeVehicleDefinition.id,
+            state.selectedVehicleSkinId,
+          );
+          activeVehicleRuntime = vehicleRuntimeFor(activeVehicleDefinition.id);
+          const markerElement = playerMarker?.getElement();
+          if (markerElement)
+            applyPlayerMarkerSkin(markerElement, activeVehicleSkin);
+          threeLayer?.setVehicleSkin(
+            activeVehicleSkin.bodyColor,
+            activeVehicleDefinition.modelScale,
+          );
+          if (containerRef.current) {
+            containerRef.current.dataset.selectedVehicleId =
+              activeVehicleDefinition.id;
+            containerRef.current.dataset.selectedVehicleSkinId =
+              activeVehicleSkin.id;
+          }
+        }
         if (
           state.isFollowingPlayer !== previousState.isFollowingPlayer &&
           containerRef.current

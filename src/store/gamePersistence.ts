@@ -1,6 +1,13 @@
 import { initiallyUnlockedLocationIds, locations } from '../data/locations';
 import { inventoryItemById } from '../data/items';
 import { missionById, missions } from '../data/missions';
+import {
+  initialVehicleId,
+  isVehicleId,
+  unlockedVehicleIdsFor,
+  validVehicleSkinId,
+  vehicleDefinitionFor,
+} from '../data/vehicles';
 import { vehicleStateConfig } from '../config/vehicleState.config';
 import { addInventoryItem, sanitizeInventory } from '../game/inventory';
 import { INITIAL_ENERGY, INITIAL_MAX_ENERGY } from '../game/progression';
@@ -9,10 +16,7 @@ import {
   normalizeHeading,
 } from '../game/movement';
 import type { PlayerRuntime } from '../types/game';
-import {
-  isOnboardingState,
-  type OnboardingState,
-} from '../types/onboarding';
+import { isOnboardingState, type OnboardingState } from '../types/onboarding';
 import type {
   CheckpointReason,
   CheckpointSnapshot,
@@ -21,9 +25,10 @@ import type {
   StoryLogEntry,
   VehicleState,
 } from '../types/progression';
+import type { VehicleId } from '../types/vehicles';
 
 export const GAME_SAVE_KEY = 'el-salvador-rutas-perdidas:save';
-export const GAME_SAVE_VERSION = 5;
+export const GAME_SAVE_VERSION = 6;
 
 export interface PersistedNavigationTarget {
   kind: 'mission-start' | 'location' | 'fuel-station';
@@ -48,6 +53,9 @@ export interface PersistedGameData {
   unlockedStoryIds: string[];
   inventory: InventoryEntry[];
   vehicle: VehicleState;
+  selectedVehicleId: VehicleId;
+  selectedVehicleSkinId: string;
+  unlockedVehicleIds: VehicleId[];
   lastCheckpoint: CheckpointSnapshot;
   lastSafeCheckpoint: CheckpointSnapshot;
   currentChapterId: string;
@@ -341,6 +349,22 @@ function sanitizedPlayer(value: unknown): PlayerRuntime {
 function sanitizeGame(value: unknown): PersistedGameData | null {
   if (!isRecord(value)) return null;
   const completedMissionIds = validMissionIds(value.completedMissionIds);
+  const unlockedVehicleIds = unlockedVehicleIdsFor(
+    completedMissionIds,
+    stringArray(value.unlockedVehicleIds),
+  );
+  const selectedVehicleId =
+    isVehicleId(value.selectedVehicleId) &&
+    unlockedVehicleIds.includes(value.selectedVehicleId)
+      ? value.selectedVehicleId
+      : initialVehicleId;
+  const selectedVehicle = vehicleDefinitionFor(selectedVehicleId);
+  const selectedVehicleSkinId = validVehicleSkinId(
+    selectedVehicleId,
+    value.selectedVehicleSkinId,
+  )
+    ? (value.selectedVehicleSkinId as string)
+    : selectedVehicle.defaultSkinId;
   const candidateActiveMissionId =
     typeof value.activeMissionId === 'string' &&
     missionIds.has(value.activeMissionId) &&
@@ -437,6 +461,9 @@ function sanitizeGame(value: unknown): PersistedGameData | null {
     unlockedStoryIds: stringArray(value.unlockedStoryIds),
     inventory,
     vehicle,
+    selectedVehicleId,
+    selectedVehicleSkinId,
+    unlockedVehicleIds,
     lastCheckpoint,
     lastSafeCheckpoint,
     currentChapterId:
@@ -554,7 +581,8 @@ export function parseGameSave(raw: string): LoadGameResult {
     parsed.version === 1 ||
     parsed.version === 2 ||
     parsed.version === 3 ||
-    parsed.version === 4
+    parsed.version === 4 ||
+    parsed.version === 5
   ) {
     const game = sanitizeGame(
       parsed.version === 1

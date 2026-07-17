@@ -34,12 +34,16 @@ export interface ThreeGameLayerOptions {
   quality: GraphicsQuality;
   mobile?: boolean;
   reducedMotion: boolean;
+  playerModelUrl: string;
+  playerModelScale: number;
+  vehicleBodyColor: number;
   onPlayerReady: () => void;
   onPlayerError: () => void;
 }
 
 export interface ThreeGameLayerController {
   updatePlayer: (player: PlayerRuntime) => void;
+  setVehicleSkin: (bodyColor: number, modelScale?: number) => void;
   setDrivingEffects: (offroad: boolean) => void;
   setInteractiveSignal: (state: InteractiveSignalState) => void;
   remove: () => void;
@@ -85,11 +89,15 @@ class ThreeGameLayer implements CustomLayerInterface {
   private brakeLightsUntil = 0;
   private drivingEffects: ThreeDrivingEffectsState = { offroad: false };
   private player: PlayerRuntime | null = null;
+  private playerBodyColor: number;
+  private playerModelScale: number;
   private signal: InteractiveSignalState = { visible: false };
   private disposed = false;
 
   constructor(options: ThreeGameLayerOptions) {
     this.options = options;
+    this.playerBodyColor = options.vehicleBodyColor;
+    this.playerModelScale = options.playerModelScale;
   }
 
   onAdd(map: Map, gl: WebGLRenderingContext | WebGL2RenderingContext): void {
@@ -186,6 +194,20 @@ class ThreeGameLayer implements CustomLayerInterface {
     this.map?.triggerRepaint();
   }
 
+  setVehicleSkin(bodyColor: number, modelScale = this.playerModelScale): void {
+    if (
+      this.playerBodyColor === bodyColor &&
+      this.playerModelScale === modelScale
+    ) {
+      return;
+    }
+    this.playerBodyColor = bodyColor;
+    this.playerModelScale = modelScale;
+    this.applyVehicleSkin();
+    this.applyScreenScales();
+    this.map?.triggerRepaint();
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -200,13 +222,14 @@ class ThreeGameLayer implements CustomLayerInterface {
 
   private async loadPlayer(): Promise<void> {
     try {
-      const asset = await this.loader.loadAsync(modelConfig.playerVehicleUrl);
+      const asset = await this.loader.loadAsync(this.options.playerModelUrl);
       if (this.disposed) {
         disposeObject(asset.scene);
         return;
       }
       this.playerModel = asset.scene;
       this.playerModel.name = 'vehiculo-3d-del-jugador';
+      this.applyVehicleSkin();
       this.addBrakeLights(this.playerModel);
       this.addDustCloud(this.playerModel);
       this.scene.add(this.playerModel);
@@ -252,6 +275,23 @@ class ThreeGameLayer implements CustomLayerInterface {
     this.applyScreenScales();
   }
 
+  private applyVehicleSkin(): void {
+    this.playerModel?.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      const materials = Array.isArray(child.material)
+        ? child.material
+        : [child.material];
+      for (const material of materials) {
+        if (
+          material instanceof THREE.MeshStandardMaterial &&
+          material.name === 'carroceria-ocre'
+        ) {
+          material.color.setHex(this.playerBodyColor);
+        }
+      }
+    });
+  }
+
   private applySignalTransform(): void {
     if (!this.signalModel) return;
     this.signalModel.visible = this.signal.visible;
@@ -279,7 +319,7 @@ class ThreeGameLayer implements CustomLayerInterface {
         threePlayerTargetPixels(this.options.quality, this.options.mobile),
         PLAYER_MODEL_LENGTH,
       );
-      this.playerModel.scale.setScalar(playerScale);
+      this.playerModel.scale.setScalar(playerScale * this.playerModelScale);
     }
     if (this.signalModel) {
       const signalScale = mercatorScaleForScreenSize(
@@ -468,6 +508,8 @@ export function addThreeGameLayer(
 
   return {
     updatePlayer: (player) => layer.updatePlayer(player),
+    setVehicleSkin: (bodyColor, modelScale) =>
+      layer.setVehicleSkin(bodyColor, modelScale),
     setDrivingEffects: (offroad) => layer.setDrivingEffects(offroad),
     setInteractiveSignal: (state) => layer.setInteractiveSignal(state),
     remove: () => {

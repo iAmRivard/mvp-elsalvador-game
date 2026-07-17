@@ -164,4 +164,52 @@ describe('acciones de guardado del estado global', () => {
       recoveryReason: null,
     });
   });
+
+  it('rechaza vehículos bloqueados y persiste una selección válida de inmediato', () => {
+    expect(useGameStore.getState().selectVehicle('volcan-gt')).toBe(false);
+    useGameStore.getState().unlockVehicle('volcan-gt');
+    expect(useGameStore.getState().selectVehicle('volcan-gt')).toBe(true);
+    expect(useGameStore.getState().selectVehicleSkin('volcan-obsidian')).toBe(
+      true,
+    );
+
+    const persisted = JSON.parse(
+      window.localStorage.getItem(GAME_SAVE_KEY)!,
+    ) as {
+      version: number;
+      game: {
+        selectedVehicleId: string;
+        selectedVehicleSkinId: string;
+        unlockedVehicleIds: string[];
+      };
+    };
+    expect(persisted.version).toBe(6);
+    expect(persisted.game).toMatchObject({
+      selectedVehicleId: 'volcan-gt',
+      selectedVehicleSkinId: 'volcan-obsidian',
+      unlockedVehicleIds: ['torogoz', 'volcan-gt'],
+    });
+
+    useGameStore.setState({
+      selectedVehicleId: 'torogoz',
+      selectedVehicleSkinId: 'torogoz-cyan',
+    });
+    expect(useGameStore.getState().loadGame()).toBe(true);
+    expect(useGameStore.getState()).toMatchObject({
+      selectedVehicleId: 'volcan-gt',
+      selectedVehicleSkinId: 'volcan-obsidian',
+    });
+  });
+
+  it('vuelve al vehículo inicial al reiniciar la partida', () => {
+    useGameStore.getState().unlockVehicle('volcan-gt');
+    useGameStore.getState().selectVehicle('volcan-gt');
+    useGameStore.getState().resetGame();
+
+    expect(useGameStore.getState()).toMatchObject({
+      selectedVehicleId: 'torogoz',
+      selectedVehicleSkinId: 'torogoz-cyan',
+      unlockedVehicleIds: ['torogoz'],
+    });
+  });
 });

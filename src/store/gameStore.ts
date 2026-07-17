@@ -3,6 +3,13 @@ import { fuelStationConfig } from '../config/fuelStations.config';
 import { fuelStationById } from '../data/fuelStations';
 import { initiallyUnlockedLocationIds, locationById } from '../data/locations';
 import { missionById } from '../data/missions';
+import {
+  initialVehicleId,
+  isVehicleId,
+  unlockedVehicleIdsFor,
+  validVehicleSkinId,
+  vehicleDefinitionFor,
+} from '../data/vehicles';
 import { restrictedAreaTypeAt } from '../data/restrictedAreas';
 import {
   CHAPTER_ONE_ID,
@@ -63,10 +70,7 @@ import {
 import type { PlayerStepEnvironment } from '../game/movement';
 import type { PlayerRuntime, PlayerTelemetry } from '../types/game';
 import { alignedRoadHeading } from '../roads/initialRoadPosition';
-import {
-  onboardingIsActive,
-  type OnboardingState,
-} from '../types/onboarding';
+import { onboardingIsActive, type OnboardingState } from '../types/onboarding';
 import type {
   ActiveNavigationState,
   NavigationTarget,
@@ -83,6 +87,7 @@ import type {
   StoryLogEntry,
   VehicleState,
 } from '../types/progression';
+import type { VehicleId } from '../types/vehicles';
 import {
   browserGameStorage,
   clearGameSave,
@@ -172,6 +177,9 @@ interface GameData {
   unlockedStoryIds: string[];
   inventory: InventoryEntry[];
   vehicle: VehicleState;
+  selectedVehicleId: VehicleId;
+  selectedVehicleSkinId: string;
+  unlockedVehicleIds: VehicleId[];
   lastCheckpoint: CheckpointSnapshot;
   lastSafeCheckpoint: CheckpointSnapshot;
   currentChapterId: string;
@@ -210,6 +218,9 @@ interface GameStore extends GameData {
   addInventoryItem: (itemId: string, quantity?: number) => void;
   consumeInventoryItem: (itemId: string, quantity?: number) => boolean;
   repairVehicle: (amount: number) => void;
+  unlockVehicle: (vehicleId: string) => boolean;
+  selectVehicle: (vehicleId: string, skinId?: string) => boolean;
+  selectVehicleSkin: (skinId: string) => boolean;
   applyDrivingWear: (
     vehicleDistanceMeters: number,
     surface: RoadSurface,
@@ -574,6 +585,9 @@ function defaultGameData(): GameData {
     unlockedStoryIds: [],
     inventory: [],
     vehicle,
+    selectedVehicleId: initialVehicleId,
+    selectedVehicleSkinId: vehicleDefinitionFor(initialVehicleId).defaultSkinId,
+    unlockedVehicleIds: [initialVehicleId],
     lastCheckpoint: checkpoint,
     lastSafeCheckpoint: checkpoint,
     currentChapterId: 'chapter-1',
@@ -653,6 +667,9 @@ function gameDataFromPersistence(game: PersistedGameData): GameData {
     unlockedStoryIds: [...game.unlockedStoryIds],
     inventory: game.inventory.map((entry) => ({ ...entry })),
     vehicle: { ...game.vehicle },
+    selectedVehicleId: game.selectedVehicleId,
+    selectedVehicleSkinId: game.selectedVehicleSkinId,
+    unlockedVehicleIds: [...game.unlockedVehicleIds],
     lastCheckpoint: structuredClone(game.lastCheckpoint),
     lastSafeCheckpoint: structuredClone(game.lastSafeCheckpoint),
     currentChapterId: game.currentChapterId,
@@ -692,6 +709,9 @@ function persistableGame(state: GameData): PersistedGameData {
     unlockedStoryIds: [...state.unlockedStoryIds],
     inventory: state.inventory.map((entry) => ({ ...entry })),
     vehicle: { ...state.vehicle, fuel: state.telemetry.fuel },
+    selectedVehicleId: state.selectedVehicleId,
+    selectedVehicleSkinId: state.selectedVehicleSkinId,
+    unlockedVehicleIds: [...state.unlockedVehicleIds],
     lastCheckpoint: structuredClone(state.lastCheckpoint),
     lastSafeCheckpoint: structuredClone(state.lastSafeCheckpoint),
     currentChapterId: state.currentChapterId,
@@ -863,11 +883,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
             : surface === 'dirt-road'
               ? vehicleStateConfig.trackConditionPerVehicleMeter *
                 roadConditionMultipliers[surface]
-              : 0) *
-        Math.max(0.1, conditionMultiplier);
+              : 0);
       const damage =
-        distanceDamage +
-        (blockedImpact ? vehicleStateConfig.blockedImpactCondition : 0);
+        (distanceDamage +
+          (blockedImpact ? vehicleStateConfig.blockedImpactCondition : 0)) *
+        Math.max(0.1, conditionMultiplier);
       if (damage <= 0) return state;
       const condition = Math.max(0, state.vehicle.condition - damage);
       const nextWarning = conditionWarningForTransition(
@@ -967,10 +987,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ),
         speedMetersPerSecond: 0,
       });
-      const checkpoint = checkpointFromState(
-        { ...state, telemetry },
-        'rejoin',
-      );
+      const checkpoint = checkpointFromState({ ...state, telemetry }, 'rejoin');
       rejoined = true;
       return {
         telemetry,
@@ -980,8 +997,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         playerRuntimeRevision: state.playerRuntimeRevision + 1,
         missionRoute: {
           ...state.missionRoute,
-          recalculationRevision:
-            state.missionRoute.recalculationRevision + 1,
+          recalculationRevision: state.missionRoute.recalculationRevision + 1,
           visualReady: false,
         },
         gameplayFeedback: feedback(
@@ -1140,6 +1156,47 @@ export const useGameStore = create<GameStore>((set, get) => ({
         visualReady: false,
       },
     })),
+  unlockVehicle: (vehicleId) => {
+    if (!isVehicleId(vehicleId)) return false;
+    set((state) =>
+      state.unlockedVehicleIds.includes(vehicleId)
+        ? state
+        : {
+            unlockedVehicleIds: unlockedVehicleIdsFor(
+              state.completedMissionIds,
+              [...state.unlockedVehicleIds, vehicleId],
+            ),
+          },
+    );
+    get().saveGame(true);
+    return true;
+  },
+  selectVehicle: (vehicleId, skinId) => {
+    const state = get();
+    if (
+      !isVehicleId(vehicleId) ||
+      !state.unlockedVehicleIds.includes(vehicleId)
+    ) {
+      return false;
+    }
+    const vehicle = vehicleDefinitionFor(vehicleId);
+    const selectedVehicleSkinId = validVehicleSkinId(vehicleId, skinId)
+      ? skinId!
+      : state.selectedVehicleId === vehicleId &&
+          validVehicleSkinId(vehicleId, state.selectedVehicleSkinId)
+        ? state.selectedVehicleSkinId
+        : vehicle.defaultSkinId;
+    set({ selectedVehicleId: vehicleId, selectedVehicleSkinId });
+    get().saveGame(true);
+    return true;
+  },
+  selectVehicleSkin: (skinId) => {
+    const state = get();
+    if (!validVehicleSkinId(state.selectedVehicleId, skinId)) return false;
+    set({ selectedVehicleSkinId: skinId });
+    get().saveGame(true);
+    return true;
+  },
   setMissionRouteVisualReady: (visualReady) =>
     set((state) =>
       state.missionRoute.visualReady === visualReady
@@ -1763,8 +1820,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
           mission.id,
           progress.newlyCompletedObjectiveIds,
         );
-        const objectiveFeedback =
-          progress.effects.fuelRestored > 0
+        const narrativeReward = narrativeEventId
+          ? narrativeEventById.get(narrativeEventId)?.reward
+          : undefined;
+        const objectiveFeedback = narrativeReward
+          ? `${narrativeReward.label} en la bitácora`
+          : progress.effects.fuelRestored > 0
             ? `Combustible +${progress.effects.fuelRestored.toFixed(0)}%`
             : progress.effects.conditionRestored > 0
               ? `Condición +${progress.effects.conditionRestored.toFixed(0)}%`
@@ -1808,7 +1869,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
           gameplayFeedback: feedback(
             state,
             objectiveFeedback,
-            completedChoice || progress.effects.addItems.length > 0
+            narrativeReward ||
+              completedChoice ||
+              progress.effects.addItems.length > 0
               ? 'success'
               : 'info',
           ),
@@ -1848,6 +1911,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
       completion = { missionId: mission.id, fuelReward: rewards.fuel };
       const chapterCompleted = isChapterOneFinalMission(mission.id);
+      const completedMissionIds = appendUnique(state.completedMissionIds, [
+        mission.id,
+      ]);
+      const unlockedVehicleIds = unlockedVehicleIdsFor(
+        completedMissionIds,
+        state.unlockedVehicleIds,
+      );
+      const newlyUnlockedVehicle = unlockedVehicleIds.find(
+        (vehicleId) => !state.unlockedVehicleIds.includes(vehicleId),
+      );
       const activeNarrativeEventId = missionCompletionNarrativeEventId(
         mission.id,
       );
@@ -1880,9 +1953,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeMissionId: null,
         activeMissionCompletedObjectiveIds: [],
         activeMissionObjectiveProgress: {},
-        completedMissionIds: appendUnique(state.completedMissionIds, [
-          mission.id,
-        ]),
+        completedMissionIds,
         lastCompletedMissionId: mission.id,
         experience,
         level,
@@ -1904,6 +1975,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           state.unlockedLocationIds,
           rewards.unlockedLocationIds,
         ),
+        unlockedVehicleIds,
         specialItemIds: appendUnique(state.specialItemIds, rewards.itemIds),
         unlockedStoryIds: appendUnique(
           state.unlockedStoryIds,
@@ -1927,7 +1999,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 `Consecuencia de ruta: condición -${String(routeConditionCost)}%`,
                 routeConditionCost >= 8 ? 'warning' : 'info',
               )
-            : state.gameplayFeedback,
+            : newlyUnlockedVehicle
+              ? feedback(
+                  state,
+                  `Vehículo desbloqueado: ${vehicleDefinitionFor(newlyUnlockedVehicle).name}`,
+                  'success',
+                )
+              : state.gameplayFeedback,
         ...narrativeState(
           { storyLogEntries, isPaused: state.isPaused },
           activeNarrativeEventId,

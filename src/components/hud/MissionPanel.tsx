@@ -7,6 +7,7 @@ import {
 import { chapterOneMissionIds } from '../../data/chapter1';
 import { locationById } from '../../data/locations';
 import { missionById, missions, type Mission } from '../../data/missions';
+import { vehicleRuntimeFor } from '../../data/vehicles';
 import {
   estimateFuelAtDestination,
   estimateFuelRange,
@@ -191,6 +192,7 @@ function MissionPanelContent() {
   const closeJournalStore = useGameStore((state) => state.closeJournal);
   const onboardingState = useGameStore((state) => state.onboardingState);
   const telemetry = useGameStore((state) => state.telemetry);
+  const selectedVehicleId = useGameStore((state) => state.selectedVehicleId);
   const presentationMode = useGameStore((state) => state.presentationMode);
   const driving = useGameStore((state) => state.driving);
   const activeMissionId = useGameStore((state) => state.activeMissionId);
@@ -239,15 +241,27 @@ function MissionPanelContent() {
     activeMissionId,
     missionChoiceSelections,
   );
+  const selectedVehicleRuntime = vehicleRuntimeFor(selectedVehicleId);
   const fuelAtDestination =
     collapsed || missionRoute.distanceMeters === null
       ? null
-      : estimateFuelAtDestination(missionRoute.distanceMeters, telemetry.fuel, {
-          fuelMultiplier: selectedChoice?.fuelMultiplier ?? 1,
-        });
+      : estimateFuelAtDestination(
+          missionRoute.distanceMeters,
+          telemetry.fuel,
+          {
+            fuelMultiplier: selectedChoice?.fuelMultiplier ?? 1,
+          },
+          selectedVehicleRuntime.fuel,
+          selectedVehicleRuntime.handling.offroadFuelMultiplier,
+        );
   const rangeMeters = collapsed
     ? 0
-    : estimateFuelRange(telemetry.fuel, driving.surface);
+    : estimateFuelRange(
+        telemetry.fuel,
+        driving.surface,
+        selectedVehicleRuntime.fuel,
+        selectedVehicleRuntime.handling.offroadFuelMultiplier,
+      );
   const reversing = vehicleIsReversing(telemetry.speedMetersPerSecond);
   const navigationGuidance = navigationGuidanceMessage(
     missionRoute.activeNavigation,
@@ -889,11 +903,7 @@ export function MissionPanel() {
     return null;
   }
 
-  if (
-    compactViewport &&
-    !isJournalOpen &&
-    presentationMode !== 'stopped'
-  ) {
+  if (compactViewport && !isJournalOpen && presentationMode !== 'stopped') {
     return null;
   }
 

@@ -2,7 +2,10 @@
 
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
-import { adaptiveMusicGainMultiplier } from '../src/audio/gameAudio';
+import {
+  adaptiveMusicGainMultiplier,
+  vehicleAudioMixFor,
+} from '../src/audio/gameAudio';
 import { musicStateForGame } from '../src/audio/musicState';
 import { audioConfig, musicTrackUrls } from '../src/config/audio.config';
 
@@ -23,6 +26,22 @@ describe('música adaptativa local', () => {
     );
     expect(audioConfig.musicCrossfadeSeconds).toBeGreaterThanOrEqual(1);
     expect(audioConfig.musicCrossfadeSeconds).toBeLessThanOrEqual(2);
+  });
+
+  it('diferencia perfiles de audio sin crear recursos nuevos', () => {
+    const balanced = vehicleAudioMixFor('expedition-balanced', 0.5);
+    const sport = vehicleAudioMixFor('expedition-sport', 0.5);
+    const offroad = vehicleAudioMixFor('expedition-offroad', 0.5);
+
+    expect(sport.enginePlaybackRate).toBeGreaterThan(
+      balanced.enginePlaybackRate,
+    );
+    expect(offroad.enginePlaybackRate).toBeLessThan(
+      balanced.enginePlaybackRate,
+    );
+    expect(offroad.offroadGainMultiplier).toBeGreaterThan(
+      balanced.offroadGainMultiplier,
+    );
   });
 
   it.each(Object.values(musicTrackUrls))(

@@ -126,6 +126,42 @@ describe('estado de misiones y capítulo', () => {
     expect(state.unlockedStoryIds).toContain('registro-transmision-occidente');
   });
 
+  it('entrega un registro durable como primera recompensa de interacción', () => {
+    useGameStore.getState().startMission('la-transmision');
+    useGameStore.getState().dismissNarrativeEvent();
+    useGameStore.getState().advanceActiveMission(
+      {
+        ...useGameStore.getState().telemetry,
+        longitude: -89.191111,
+        latitude: 13.6975,
+      },
+      true,
+    );
+
+    const state = useGameStore.getState();
+    expect(state.activeRadioEventId).toBe('radio-ruta-occidental');
+    expect(state.unlockedStoryIds).toContain('radio-ruta-occidental');
+    expect(state.storyLogEntries).toContainEqual(
+      expect.objectContaining({
+        id: 'radio:radio-ruta-occidental',
+        type: 'radio',
+      }),
+    );
+    expect(state.gameplayFeedback).toMatchObject({
+      message: 'Registro de frecuencia guardado en la bitácora',
+      tone: 'success',
+    });
+
+    useGameStore.getState().advanceActiveMission(state.telemetry, true);
+    expect(
+      useGameStore
+        .getState()
+        .storyLogEntries.filter(
+          (entry) => entry.id === 'radio:radio-ruta-occidental',
+        ),
+    ).toHaveLength(1);
+  });
+
   it('activa un cierre local y recalcula al inspeccionar el bloqueo', () => {
     useGameStore.setState({
       completedMissionIds: ['la-transmision'],
@@ -404,7 +440,8 @@ describe('estado de misiones y capítulo', () => {
     const before = useGameStore.getState();
     const eligibility = before.getRouteRejoinEligibility();
     expect(eligibility.eligible).toBe(true);
-    if (!eligibility.eligible) throw new Error('Expected a safe road candidate');
+    if (!eligibility.eligible)
+      throw new Error('Expected a safe road candidate');
 
     expect(before.rejoinPlayerToRoad(999_999)).toBe(false);
     expect(useGameStore.getState().telemetry).toBe(before.telemetry);
@@ -436,9 +473,7 @@ describe('estado de misiones y capítulo', () => {
     expect(state.activeMissionCompletedObjectiveIds).toEqual(
       before.activeMissionCompletedObjectiveIds,
     );
-    expect(state.playerRuntimeRevision).toBe(
-      before.playerRuntimeRevision + 1,
-    );
+    expect(state.playerRuntimeRevision).toBe(before.playerRuntimeRevision + 1);
     expect(state.missionRoute.recalculationRevision).toBe(
       before.missionRoute.recalculationRevision + 1,
     );
@@ -625,5 +660,19 @@ describe('estado de misiones y capítulo', () => {
       recoveryReason: 'out-of-bounds',
       isPaused: true,
     });
+  });
+
+  it('aplica la durabilidad al desgaste y a los impactos', () => {
+    useGameStore.getState().setRoadNetworkStatus('ready');
+    useGameStore.getState().applyDrivingWear(0, 'offroad', true, 1);
+    const fullImpactDamage = 100 - useGameStore.getState().vehicle.condition;
+
+    useGameStore.setState((state) => ({
+      vehicle: { ...state.vehicle, condition: 100 },
+    }));
+    useGameStore.getState().applyDrivingWear(0, 'offroad', true, 0.5);
+    const durableImpactDamage = 100 - useGameStore.getState().vehicle.condition;
+
+    expect(durableImpactDamage).toBeCloseTo(fullImpactDamage * 0.5, 8);
   });
 });
