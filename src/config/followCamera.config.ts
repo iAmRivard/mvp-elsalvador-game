@@ -120,8 +120,11 @@ export const mobileCameraHysteresis: MobileCameraHysteresis = {
   stoppedExitKilometersPerHour: 6,
   stoppedTransitionDelayMilliseconds: 900,
   drivingTransitionDelayMilliseconds: 240,
-  fastEnterKilometersPerHour: 84,
-  fastExitKilometersPerHour: 74,
+  // Keep the visual speed state and the camera profile in the same band. The
+  // delay below still absorbs short spikes without leaving a fast HUD on the
+  // closer cruise camera.
+  fastEnterKilometersPerHour: 58,
+  fastExitKilometersPerHour: 52,
   fastEnterDelayMilliseconds: 900,
   fastExitDelayMilliseconds: 650,
   interactionMaximumKilometersPerHour: 10,

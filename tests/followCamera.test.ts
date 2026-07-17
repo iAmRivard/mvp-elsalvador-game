@@ -16,6 +16,7 @@ import {
   smoothFollowBearing,
   type FollowCameraOptions,
 } from '../src/game/followCamera';
+import { drivingPresentationThresholds } from '../src/game/drivingPresentation';
 
 const baseCamera: FollowCameraOptions = {
   center: [-89.19, 13.69],
@@ -51,9 +52,9 @@ describe('cámara de seguimiento', () => {
     expect(drivingCameraProfiles.mobileFast.updateIntervalMilliseconds).toBe(
       33,
     );
-    expect(drivingCameraProfile('stopped', true, undefined, 'interaction')).toBe(
-      drivingCameraProfiles.mobileInteraction,
-    );
+    expect(
+      drivingCameraProfile('stopped', true, undefined, 'interaction'),
+    ).toBe(drivingCameraProfiles.mobileInteraction);
     expect(drivingCameraProfile('driving', true, undefined, 'recovery')).toBe(
       drivingCameraProfiles.mobileRecovery,
     );
@@ -257,7 +258,7 @@ describe('cámara de seguimiento', () => {
 
   it('mantiene driving ante picos cortos y entra a fast con velocidad sostenida', () => {
     const base = {
-      speedKilometersPerHour: 86,
+      speedKilometersPerHour: 60,
       previousMode: 'driving' as const,
       hasAlert: false,
       hasInteraction: false,
@@ -281,7 +282,7 @@ describe('cámara de seguimiento', () => {
   it('usa histéresis al volver de fast y no deja que alertas alteren el zoom', () => {
     expect(
       mobileCameraModeForSpeed({
-        speedKilometersPerHour: 76,
+        speedKilometersPerHour: 54,
         previousMode: 'fast',
         timeInStateMilliseconds: 10_000,
         hasAlert: true,
@@ -290,7 +291,7 @@ describe('cámara de seguimiento', () => {
     ).toBe('fast');
     expect(
       mobileCameraModeForSpeed({
-        speedKilometersPerHour: 73,
+        speedKilometersPerHour: 51,
         previousMode: 'fast',
         timeInStateMilliseconds:
           mobileCameraHysteresis.fastExitDelayMilliseconds - 1,
@@ -300,7 +301,7 @@ describe('cámara de seguimiento', () => {
     ).toBe('fast');
     expect(
       mobileCameraModeForSpeed({
-        speedKilometersPerHour: 73,
+        speedKilometersPerHour: 51,
         previousMode: 'fast',
         timeInStateMilliseconds:
           mobileCameraHysteresis.fastExitDelayMilliseconds,
@@ -308,6 +309,15 @@ describe('cámara de seguimiento', () => {
         hasInteraction: false,
       }),
     ).toBe('driving');
+  });
+
+  it('mantiene el perfil r\u00e1pido alineado con la presentaci\u00f3n arcade', () => {
+    expect(mobileCameraHysteresis.fastEnterKilometersPerHour).toBe(
+      drivingPresentationThresholds.fastEnterKilometersPerHour,
+    );
+    expect(mobileCameraHysteresis.fastExitKilometersPerHour).toBe(
+      drivingPresentationThresholds.fastExitKilometersPerHour,
+    );
   });
 
   it('mantiene una cámara cercana durante interacción lenta', () => {
