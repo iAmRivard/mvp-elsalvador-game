@@ -47,6 +47,7 @@ export interface FollowCameraUpdateResult {
 }
 
 export type MobileCameraMode = 'stopped' | 'driving' | 'fast';
+export type ArcadeCameraProfileOverride = 'interaction' | 'recovery' | null;
 
 export interface MobileCameraModeInput {
   speedKilometersPerHour: number;
@@ -277,8 +278,11 @@ export function drivingCameraProfile(
   mode: DrivingPresentationMode,
   mobile: boolean,
   profiles: DrivingCameraProfiles = drivingCameraProfiles,
+  override: ArcadeCameraProfileOverride = null,
 ): DrivingCameraProfile {
   if (mobile) {
+    if (override === 'interaction') return profiles.mobileInteraction;
+    if (override === 'recovery') return profiles.mobileRecovery;
     if (mode === 'fast') return profiles.mobileFast;
     if (mode === 'driving') return profiles.mobileDriving;
     return profiles.mobileStopped;
@@ -291,8 +295,14 @@ export function drivingCameraProfile(
 export function followCameraTarget(
   mode: DrivingPresentationMode,
   mobile = false,
+  override: ArcadeCameraProfileOverride = null,
 ): FollowCameraTarget {
-  const profile = drivingCameraProfile(mode, mobile);
+  const profile = drivingCameraProfile(
+    mode,
+    mobile,
+    drivingCameraProfiles,
+    override,
+  );
   return { zoom: profile.zoom, pitch: profile.pitch };
 }
 

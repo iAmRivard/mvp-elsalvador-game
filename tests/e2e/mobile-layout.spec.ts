@@ -269,6 +269,68 @@ test('colapsa la misión, usa bottom sheet y pausa la guía en reversa', async (
     .toBeGreaterThan(12);
 
   const gameMap = page.getByTestId('game-map');
+  const playerMarker = page.locator('.player-marker');
+  const guidanceMarker = page.locator('.mission-route-arrow');
+  await expect(guidanceMarker).toBeVisible();
+  await expect(playerMarker).toHaveAttribute(
+    'aria-label',
+    'Vehículo del jugador',
+  );
+  await expect(guidanceMarker).toHaveAttribute(
+    'aria-label',
+    'Chevrons de dirección de la ruta',
+  );
+  await expect(
+    guidanceMarker.locator('.navigation-guidance-arrow__chevron'),
+  ).toHaveCount(3);
+  const markerGeometry = await page.evaluate(() => {
+    const player = document.querySelector<HTMLElement>('.player-marker');
+    const vehicle = document.querySelector<HTMLElement>(
+      '.player-marker__vehicle',
+    );
+    const guidance = document.querySelector<HTMLElement>(
+      '.mission-route-arrow',
+    );
+    if (!player || !vehicle || !guidance) return null;
+    const playerRect = player.getBoundingClientRect();
+    const guidanceRect = guidance.getBoundingClientRect();
+    return {
+      player: {
+        x: playerRect.x,
+        y: playerRect.y,
+        width: playerRect.width,
+        height: playerRect.height,
+      },
+      guidance: {
+        x: guidanceRect.x,
+        y: guidanceRect.y,
+        width: guidanceRect.width,
+        height: guidanceRect.height,
+      },
+      vehicleColor: getComputedStyle(vehicle).borderTopColor,
+      guidanceColor: getComputedStyle(guidance).color,
+    };
+  });
+  expect(markerGeometry).not.toBeNull();
+  if (!markerGeometry) throw new Error('No se encontraron ambos marcadores');
+  expect(markerGeometry.guidance.width).toBeLessThan(
+    markerGeometry.player.width,
+  );
+  expect(markerGeometry.guidance.height).toBeLessThan(
+    markerGeometry.player.height,
+  );
+  expect(markerGeometry.vehicleColor).not.toBe(
+    markerGeometry.guidanceColor,
+  );
+  expect(
+    rectanglesOverlap(markerGeometry.player, markerGeometry.guidance),
+    JSON.stringify(markerGeometry),
+  ).toBe(false);
+  await expect(gameMap).toHaveAttribute(
+    'data-player-outside-safe-viewport',
+    'false',
+  );
+
   const targetBeforeJournal = await gameMap.getAttribute(
     'data-input-target-speed',
   );

@@ -92,9 +92,11 @@ try {
   const beginMission = page.getByRole('button', {
     name: /Comenzar investigación/,
   });
-  if (await beginMission.isVisible()) await beginMission.click();
+  await beginMission.waitFor({ state: 'visible' });
+  await beginMission.click();
   const skipTutorial = page.getByRole('button', { name: 'Omitir' });
-  if (await skipTutorial.isVisible()) await skipTutorial.click();
+  await skipTutorial.waitFor({ state: 'visible' });
+  await skipTutorial.click();
   await page.waitForFunction(() => {
     const map = document.querySelector('[data-testid="game-map"]');
     return (
@@ -105,7 +107,9 @@ try {
   const closeRadio = page.getByRole('button', { name: 'Cerrar transmisión' });
   if (await closeRadio.isVisible()) await closeRadio.click();
 
-  const joystick = page.getByLabel('Joystick de velocidad objetivo');
+  const joystick = page.getByLabel(
+    /Joystick de (conducción arcade|velocidad objetivo)/,
+  );
   const joystickBox = await joystick.boundingBox();
   if (!joystickBox) throw new Error('No se encontró el joystick móvil.');
   const centerX = joystickBox.x + joystickBox.width / 2;
@@ -298,7 +302,9 @@ try {
       warmupMilliseconds: 10_000,
       viewport: { width: window.innerWidth, height: window.innerHeight },
       hud: box('[data-testid="mobile-driving-hud"]'),
-      joystick: box('[aria-label="Joystick de velocidad objetivo"]'),
+      joystick: box(
+        '[aria-label="Joystick de conducción arcade"], [aria-label="Joystick de velocidad objetivo"]',
+      ),
       actions: box('.touch-actions'),
       mapDataset: map instanceof HTMLElement ? { ...map.dataset } : {},
       counters: {

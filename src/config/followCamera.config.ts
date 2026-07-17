@@ -2,6 +2,7 @@ export interface DrivingCameraProfile {
   zoom: number;
   pitch: number;
   offsetYRatio: number;
+  safeAnchorYRatio: number;
   updateIntervalMilliseconds: number;
   transitionDurationMilliseconds: number;
 }
@@ -13,6 +14,8 @@ export interface DrivingCameraProfiles {
   mobileStopped: DrivingCameraProfile;
   mobileDriving: DrivingCameraProfile;
   mobileFast: DrivingCameraProfile;
+  mobileInteraction: DrivingCameraProfile;
+  mobileRecovery: DrivingCameraProfile;
 }
 
 export interface FollowCameraTolerances {
@@ -41,6 +44,7 @@ export const drivingCameraProfiles: DrivingCameraProfiles = {
     zoom: 15.55,
     pitch: 56,
     offsetYRatio: 0.17,
+    safeAnchorYRatio: 0.58,
     updateIntervalMilliseconds: 33,
     transitionDurationMilliseconds: 60,
   },
@@ -48,6 +52,7 @@ export const drivingCameraProfiles: DrivingCameraProfiles = {
     zoom: 15.3,
     pitch: 60,
     offsetYRatio: 0.21,
+    safeAnchorYRatio: 0.62,
     updateIntervalMilliseconds: 33,
     transitionDurationMilliseconds: 45,
   },
@@ -55,6 +60,7 @@ export const drivingCameraProfiles: DrivingCameraProfiles = {
     zoom: 15.05,
     pitch: 62,
     offsetYRatio: 0.23,
+    safeAnchorYRatio: 0.6,
     updateIntervalMilliseconds: 33,
     transitionDurationMilliseconds: 40,
   },
@@ -62,6 +68,7 @@ export const drivingCameraProfiles: DrivingCameraProfiles = {
     zoom: 15.65,
     pitch: 55,
     offsetYRatio: 0.19,
+    safeAnchorYRatio: 0.58,
     updateIntervalMilliseconds: 33,
     transitionDurationMilliseconds: 60,
   },
@@ -69,6 +76,7 @@ export const drivingCameraProfiles: DrivingCameraProfiles = {
     zoom: 15.45,
     pitch: 59,
     offsetYRatio: 0.24,
+    safeAnchorYRatio: 0.62,
     updateIntervalMilliseconds: 33,
     transitionDurationMilliseconds: 50,
   },
@@ -76,8 +84,25 @@ export const drivingCameraProfiles: DrivingCameraProfiles = {
     zoom: 15.2,
     pitch: 61,
     offsetYRatio: 0.26,
+    safeAnchorYRatio: 0.6,
     updateIntervalMilliseconds: 33,
     transitionDurationMilliseconds: 45,
+  },
+  mobileInteraction: {
+    zoom: 15.65,
+    pitch: 55,
+    offsetYRatio: 0.19,
+    safeAnchorYRatio: 0.58,
+    updateIntervalMilliseconds: 33,
+    transitionDurationMilliseconds: 60,
+  },
+  mobileRecovery: {
+    zoom: 15.35,
+    pitch: 55,
+    offsetYRatio: 0.21,
+    safeAnchorYRatio: 0.6,
+    updateIntervalMilliseconds: 33,
+    transitionDurationMilliseconds: 80,
   },
 };
 

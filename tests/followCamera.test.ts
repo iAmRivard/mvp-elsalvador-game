@@ -51,6 +51,15 @@ describe('cámara de seguimiento', () => {
     expect(drivingCameraProfiles.mobileFast.updateIntervalMilliseconds).toBe(
       33,
     );
+    expect(drivingCameraProfile('stopped', true, undefined, 'interaction')).toBe(
+      drivingCameraProfiles.mobileInteraction,
+    );
+    expect(drivingCameraProfile('driving', true, undefined, 'recovery')).toBe(
+      drivingCameraProfiles.mobileRecovery,
+    );
+    expect(drivingCameraProfiles.mobileStopped.safeAnchorYRatio).toBe(0.58);
+    expect(drivingCameraProfiles.mobileDriving.safeAnchorYRatio).toBe(0.62);
+    expect(drivingCameraProfiles.mobileFast.safeAnchorYRatio).toBe(0.6);
   });
 
   it('coloca el jugador debajo del centro mediante el ratio del perfil', () => {
