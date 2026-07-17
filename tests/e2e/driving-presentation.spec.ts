@@ -336,7 +336,17 @@ test('no actualiza continuamente el marcador fallback oculto', async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-mobile');
-  await page.addInitScript(() => window.localStorage.clear());
+  await page.addInitScript(() => {
+    window.localStorage.clear();
+    Object.defineProperty(navigator, 'hardwareConcurrency', {
+      configurable: true,
+      value: 8,
+    });
+    Object.defineProperty(navigator, 'deviceMemory', {
+      configurable: true,
+      value: 8,
+    });
+  });
   await enterExpedition(page);
 
   const mapFrame = page.locator('.map-frame');
@@ -360,9 +370,7 @@ test('no actualiza continuamente el marcador fallback oculto', async ({
 
   await page.waitForTimeout(1_100);
   expect(
-    Number(
-      await gameMap.getAttribute('data-camera-fallback-marker-updates'),
-    ),
+    Number(await gameMap.getAttribute('data-camera-fallback-marker-updates')),
   ).toBe(initialFallbackUpdates);
   expect(
     Number(await gameMap.getAttribute('data-camera-three-player-updates')),
