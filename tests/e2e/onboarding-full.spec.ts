@@ -62,7 +62,13 @@ async function steerTowardRoute(
     await gameMap.getAttribute('data-navigation-physical-heading'),
   );
   const target = direction === 'away' ? (recommended + 180) % 360 : recommended;
-  const headingDelta = ((target - physical + 540) % 360) - 180;
+  const shortestHeadingDelta = ((target - physical + 540) % 360) - 180;
+  // Near 180 degrees both directions are equivalent. Commit to the right-hand
+  // turn so successive real touch gestures do not alternate around the tie.
+  const headingDelta =
+    Math.abs(shortestHeadingDelta) >= 170
+      ? Math.abs(shortestHeadingDelta)
+      : shortestHeadingDelta;
   if (!Number.isFinite(headingDelta) || Math.abs(headingDelta) <= 4) {
     await page.waitForTimeout(180);
     return;
