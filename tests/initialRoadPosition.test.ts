@@ -16,7 +16,9 @@ describe('posición inicial segura', () => {
 
   it('alinea una partida nueva y actualiza su checkpoint inicial', () => {
     expect(
-      useGameStore.getState().alignInitialPlayerToRoad([-89.1907, 13.6965], 82),
+      useGameStore
+        .getState()
+        .alignInitialPlayerToRoad([-89.1907, 13.6965], 82, 18),
     ).toBe(true);
     expect(useGameStore.getState()).toMatchObject({
       telemetry: { longitude: -89.1907, latitude: 13.6965, heading: 82 },
@@ -28,11 +30,43 @@ describe('posición inicial segura', () => {
     });
   });
 
+  it('valida sin mover una posicion que ya esta dentro del corredor vial', () => {
+    const initial = useGameStore.getState().telemetry;
+    useGameStore.setState({ hasSavedGame: true });
+
+    expect(
+      useGameStore.getState().alignInitialPlayerToRoad([-89, 14], 90, 3),
+    ).toBe(true);
+    expect(useGameStore.getState()).toMatchObject({
+      telemetry: initial,
+      needsInitialRoadAlignment: false,
+      playerRuntimeRevision: 0,
+    });
+  });
+
+  it('corrige un guardado fuera del corredor sin reemplazar sus checkpoints', () => {
+    const checkpoint = useGameStore.getState().lastSafeCheckpoint;
+    useGameStore.setState({ hasSavedGame: true });
+
+    expect(
+      useGameStore
+        .getState()
+        .alignInitialPlayerToRoad([-89.1907, 13.6965], 82, 24),
+    ).toBe(true);
+    expect(useGameStore.getState()).toMatchObject({
+      telemetry: { longitude: -89.1907, latitude: 13.6965, heading: 82 },
+      lastCheckpoint: checkpoint,
+      lastSafeCheckpoint: checkpoint,
+      needsInitialRoadAlignment: false,
+      playerRuntimeRevision: 1,
+    });
+  });
+
   it('no mueve una partida existente', () => {
     const initialLongitude = useGameStore.getState().telemetry.longitude;
     useGameStore.setState({ needsInitialRoadAlignment: false });
     expect(
-      useGameStore.getState().alignInitialPlayerToRoad([-89, 14], 90),
+      useGameStore.getState().alignInitialPlayerToRoad([-89, 14], 90, 20),
     ).toBe(false);
     expect(useGameStore.getState().telemetry.longitude).toBe(initialLongitude);
   });

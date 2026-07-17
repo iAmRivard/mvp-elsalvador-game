@@ -17,7 +17,10 @@ import {
   followCameraTolerances,
 } from '../../config/followCamera.config';
 import { mapSourceConfig, mapViewConfig } from '../../config/map.config';
-import { roadAssistConfig } from '../../config/roadHandling.config';
+import {
+  roadAssistConfig,
+  savedRoadPositionConfig,
+} from '../../config/roadHandling.config';
 import { autoThrottleConfig } from '../../config/mobileControls.config';
 import { vehicleStateConfig } from '../../config/vehicleState.config';
 import { missionById } from '../../data/missions';
@@ -42,12 +45,14 @@ import {
 } from '../../game/drivingPresentation';
 import { startPlayerGameLoop, type PlayerGameLoop } from '../../game/gameLoop';
 import {
+  distanceBetweenMeters,
   findDiscoverableLocations,
   findNearestLocation,
 } from '../../game/discovery';
 import {
   isInsideValidObjectiveZone,
   nearestPendingObjective,
+  objectiveCoordinates,
   objectiveNarrativeCoordinates,
 } from '../../game/missions';
 import { selectedMissionChoiceOption } from '../../game/missionChoices';
@@ -87,11 +92,12 @@ import type { ThreeGameLayerController } from '../../map/threeLayer';
 import { shouldUseThreePlayer } from '../../map/threeTransforms';
 import { loadRoadNetwork } from '../../roads/roadNetwork';
 import { RoadTracker } from '../../roads/roadTracker';
+import type { RoadSpatialIndex } from '../../roads/spatialIndex';
 import { alignedRoadHeading } from '../../roads/initialRoadPosition';
-import { useGameStore } from '../../store/gameStore';
+import { INITIAL_PLAYER, useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import type { PlayerRuntime, PlayerTelemetry } from '../../types/game';
-import type { RoadContact } from '../../types/roads';
+import type { RoadContact, RoadEdge } from '../../types/roads';
 
 function runtimeFromTelemetry(telemetry: PlayerTelemetry): PlayerRuntime {
   return {
@@ -237,6 +243,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       setLoadingStage('map');
       setErrorMessage('');
     });
+    containerRef.current.dataset.followingPlayer = String(
+      useGameStore.getState().isFollowingPlayer,
+    );
 
     if (!deviceProfile.isCompact) {
       map.addControl(
@@ -308,6 +317,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let threeDrivingEffectsUpdates = 0;
     let effectActive = true;
     let roadTracker: RoadTracker | null = null;
+    let roadIndex: RoadSpatialIndex | null = null;
+    let roadEdgesById: ReadonlyMap<number, RoadEdge> = new Map();
     let roadContact: RoadContact | null = null;
     let activeRouteEdgeIds = new Set(
       useGameStore.getState().missionRoute.activeEdgeIds,
@@ -320,6 +331,100 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let interactionWasActive = false;
     let startupReady = false;
     let fatalMapErrorHandled = false;
+
+    const validateInitialRoadPosition = (player: PlayerRuntime): boolean => {
+      if (!roadIndex || !useGameStore.getState().needsInitialRoadAlignment) {
+        return false;
+      }
+      const state = useGameStore.getState();
+      const currentPosition: [number, number] = [
+        player.longitude,
+        player.latitude,
+      ];
+      const activeMission = state.activeMissionId
+        ? missionById.get(state.activeMissionId)
+        : null;
+      const nearbyObjective = activeMission
+        ? nearestPendingObjective(
+            activeMission,
+            state.activeMissionCompletedObjectiveIds,
+            currentPosition,
+          )
+        : null;
+      const nearbyObjectiveCoordinates = nearbyObjective
+        ? objectiveCoordinates(nearbyObjective.objective)
+        : null;
+      if (
+        state.hasSavedGame &&
+        nearbyObjective &&
+        nearbyObjectiveCoordinates &&
+        distanceBetweenMeters(currentPosition, nearbyObjectiveCoordinates) <=
+          nearbyObjective.objective.radiusMeters
+      ) {
+        return useGameStore
+          .getState()
+          .alignInitialPlayerToRoad(currentPosition, player.heading, 0);
+      }
+      if (!state.hasSavedGame && roadTracker) {
+        const contact = roadTracker.update(
+          currentPosition,
+          roadContextFor(player),
+        );
+        if (
+          !contact ||
+          contact.nearest.distanceMeters >
+            roadAssistConfig.disengageDistanceMeters
+        ) {
+          return false;
+        }
+        return useGameStore
+          .getState()
+          .alignInitialPlayerToRoad(
+            contact.nearest.coordinates,
+            alignedRoadHeading(
+              player.heading,
+              contact.nearest.heading,
+              contact.edge.oneWay,
+            ),
+            contact.nearest.distanceMeters,
+          );
+      }
+      let sourceHeading = player.heading;
+      let nearest = roadIndex.findNearestRoad(
+        currentPosition,
+        savedRoadPositionConfig.validationRadiusMeters,
+      );
+      let distanceFromPlayer = nearest?.distanceMeters;
+
+      if (!nearest) {
+        const recoveryPlayer = state.lastSafeCheckpoint.player;
+        sourceHeading = recoveryPlayer.heading;
+        nearest = roadIndex.findNearestRoad(
+          [recoveryPlayer.longitude, recoveryPlayer.latitude],
+          savedRoadPositionConfig.validationRadiusMeters,
+        );
+        distanceFromPlayer = Number.POSITIVE_INFINITY;
+      }
+      if (!nearest) {
+        sourceHeading = INITIAL_PLAYER.heading;
+        nearest = roadIndex.findNearestRoad(
+          [INITIAL_PLAYER.longitude, INITIAL_PLAYER.latitude],
+          savedRoadPositionConfig.validationRadiusMeters,
+        );
+        distanceFromPlayer = Number.POSITIVE_INFINITY;
+      }
+      if (!nearest) return false;
+
+      const edge = roadEdgesById.get(nearest.edgeId);
+      if (!edge) return false;
+      return useGameStore
+        .getState()
+        .alignInitialPlayerToRoad(
+          nearest.coordinates,
+          alignedRoadHeading(sourceHeading, nearest.heading, edge.oneWay),
+          distanceFromPlayer ?? Number.POSITIVE_INFINITY,
+        );
+    };
 
     const recordMapErrorClassification = (
       classification: MapRuntimeErrorClassification,
@@ -738,30 +843,22 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           }) => {
             if (!effectActive) return;
             removeRoadSurfaceLayer = addPlayableRoadSurfaceLayer(map, network);
+            roadIndex = index;
+            roadEdgesById = new Map(
+              network.edges.map((edge) => [edge.id, edge]),
+            );
             roadTracker = new RoadTracker(index);
             const currentPlayer =
               gameLoop?.getPlayer() ??
               runtimeFromTelemetry(useGameStore.getState().telemetry);
-            roadContact = roadTracker.update(
-              [currentPlayer.longitude, currentPlayer.latitude],
-              roadContextFor(currentPlayer),
+            validateInitialRoadPosition(currentPlayer);
+            const validatedPlayer = runtimeFromTelemetry(
+              useGameStore.getState().telemetry,
             );
-            if (
-              roadContact &&
-              roadContact.nearest.distanceMeters <=
-                roadAssistConfig.disengageDistanceMeters
-            ) {
-              useGameStore
-                .getState()
-                .alignInitialPlayerToRoad(
-                  roadContact.nearest.coordinates,
-                  alignedRoadHeading(
-                    currentPlayer.heading,
-                    roadContact.nearest.heading,
-                    roadContact.edge.oneWay,
-                  ),
-                );
-            }
+            roadContact = roadTracker.update(
+              [validatedPlayer.longitude, validatedPlayer.latitude],
+              roadContextFor(validatedPlayer),
+            );
             roadNetworkEnabled = true;
             useGameStore.getState().setRoadNetworkStatus('ready');
             if (containerRef.current) {
@@ -1353,6 +1450,14 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       });
 
       unsubscribeRuntime = useGameStore.subscribe((state, previousState) => {
+        if (
+          state.isFollowingPlayer !== previousState.isFollowingPlayer &&
+          containerRef.current
+        ) {
+          containerRef.current.dataset.followingPlayer = String(
+            state.isFollowingPlayer,
+          );
+        }
         const objectiveStructureChanged =
           state.activeMissionId !== previousState.activeMissionId ||
           state.activeMissionCompletedObjectiveIds !==
@@ -1385,28 +1490,16 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         if (previousState.recoveryReason && !state.recoveryReason) {
           inputController.resetMobileBoostCompletely();
         }
-        if (state.needsInitialRoadAlignment && roadTracker) {
+        if (state.needsInitialRoadAlignment && roadIndex) {
           const player = runtimeFromTelemetry(state.telemetry);
-          const contact = roadTracker.update(
-            [player.longitude, player.latitude],
-            roadContextFor(player),
-          );
-          if (
-            contact &&
-            contact.nearest.distanceMeters <=
-              roadAssistConfig.disengageDistanceMeters
-          ) {
-            useGameStore
-              .getState()
-              .alignInitialPlayerToRoad(
-                contact.nearest.coordinates,
-                alignedRoadHeading(
-                  player.heading,
-                  contact.nearest.heading,
-                  contact.edge.oneWay,
-                ),
-              );
-            return;
+          const revisionBeforeAlignment = state.playerRuntimeRevision;
+          if (validateInitialRoadPosition(player)) {
+            if (
+              useGameStore.getState().playerRuntimeRevision !==
+              revisionBeforeAlignment
+            ) {
+              return;
+            }
           }
         }
         if (

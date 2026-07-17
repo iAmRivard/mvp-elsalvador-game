@@ -15,6 +15,7 @@ import {
 } from '../data/chapter1';
 import {
   roadConditionMultipliers,
+  savedRoadPositionConfig,
   type RoadSurface,
 } from '../config/roadHandling.config';
 import { vehicleStateConfig } from '../config/vehicleState.config';
@@ -206,6 +207,7 @@ interface GameStore extends GameData {
   alignInitialPlayerToRoad: (
     coordinates: RoadCoordinates,
     heading: number,
+    distanceMeters: number,
   ) => boolean;
   createCheckpoint: (reason: CheckpointReason, safe?: boolean) => void;
   retryFromCheckpoint: () => boolean;
@@ -700,7 +702,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   gameplayFeedback: null,
   storyLogRequest: { section: 'missions', revision: 0 },
   playerRuntimeRevision: 0,
-  needsInitialRoadAlignment: initialLoad.status !== 'loaded',
+  isFollowingPlayer: true,
+  needsInitialRoadAlignment: true,
   hasSavedGame: initialLoad.status === 'loaded',
   lastSavedAt:
     initialLoad.status === 'loaded' ? initialLoad.save.savedAt : null,
@@ -724,8 +727,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         state.telemetry.speedKilometersPerHour ===
           telemetry.speedKilometersPerHour &&
         state.telemetry.fuel === telemetry.fuel &&
-        state.telemetry.totalDistanceMeters ===
-          telemetry.totalDistanceMeters &&
+        state.telemetry.totalDistanceMeters === telemetry.totalDistanceMeters &&
         state.vehicle.fuel === fuel &&
         state.recoveryReason === recoveryReason &&
         state.isPaused === isPaused
@@ -813,10 +815,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
         isPaused: condition <= 0 ? true : state.isPaused,
       };
     }),
-  alignInitialPlayerToRoad: (coordinates, heading) => {
+  alignInitialPlayerToRoad: (coordinates, heading, distanceMeters) => {
     let aligned = false;
     set((state) => {
       if (!state.needsInitialRoadAlignment) return state;
+      aligned = true;
+      if (
+        state.hasSavedGame &&
+        distanceMeters <= savedRoadPositionConfig.alignmentToleranceMeters
+      ) {
+        return { needsInitialRoadAlignment: false };
+      }
       const telemetry = telemetryFromPlayer({
         ...state.telemetry,
         longitude: coordinates[0],
@@ -830,11 +839,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
         'checkpoint-new-game',
         new Date(0).toISOString(),
       );
-      aligned = true;
       return {
         telemetry,
-        lastCheckpoint: checkpoint,
-        lastSafeCheckpoint: checkpoint,
+        lastCheckpoint: state.hasSavedGame ? state.lastCheckpoint : checkpoint,
+        lastSafeCheckpoint: state.hasSavedGame
+          ? state.lastSafeCheckpoint
+          : checkpoint,
         needsInitialRoadAlignment: false,
         playerRuntimeRevision: state.playerRuntimeRevision + 1,
       };
@@ -1921,9 +1931,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
             : game.onboardingState;
       return {
         ...game,
+        isFollowingPlayer: true,
         onboardingState: restoredOnboardingState,
         isPaused:
-          recoveryReason || resumesOnboardingIntroduction ? true : game.isPaused,
+          recoveryReason || resumesOnboardingIntroduction
+            ? true
+            : game.isPaused,
         playerRuntimeRevision: state.playerRuntimeRevision + 1,
         hasSavedGame: true,
         lastSavedAt: loaded.save.savedAt,
@@ -1951,13 +1964,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
               'warning',
             )
           : null,
-        needsInitialRoadAlignment: false,
+        needsInitialRoadAlignment: true,
         temporarilyClosedRoadEdgeIds: chapterRoadClosureEdgeIds(
           loaded.save.game.activeMissionId,
           loaded.save.game.activeMissionCompletedObjectiveIds,
           loaded.save.game.missionChoiceSelections,
         ),
-        missionRoute: defaultMissionRouteState,
+        missionRoute: {
+          ...defaultMissionRouteState,
+          recalculationRevision: state.missionRoute.recalculationRevision + 1,
+        },
       };
     });
     if (loaded.migrated) writeGameSave(loaded.save.game);
