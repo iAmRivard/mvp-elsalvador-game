@@ -39,6 +39,7 @@ import {
   type FollowCameraOptions,
   type MobileCameraMode,
 } from '../../game/followCamera';
+import { runtimeGateFor } from '../../game/runtimeGate';
 import {
   effectiveDrivingSurfaceLabel,
   type DrivingPresentationMode,
@@ -91,6 +92,11 @@ import {
 import type { ThreeGameLayerController } from '../../map/threeLayer';
 import { shouldUseThreePlayer } from '../../map/threeTransforms';
 import { loadRoadNetwork } from '../../roads/roadNetwork';
+import {
+  allowRoadlessStartup,
+  isRoadlessStartupAllowed,
+  ROAD_NETWORK_STARTUP_DEADLINE_MILLISECONDS,
+} from '../../roads/roadStartup';
 import { RoadTracker } from '../../roads/roadTracker';
 import type { RoadSpatialIndex } from '../../roads/spatialIndex';
 import { alignedRoadHeading } from '../../roads/initialRoadPosition';
@@ -324,13 +330,17 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       useGameStore.getState().missionRoute.activeEdgeIds,
     );
     let roadNetworkEnabled = false;
+    let roadNetworkStartupDeadline: number | null = null;
     let lastBlockedImpactTimestamp = Number.NEGATIVE_INFINITY;
     let visualFrameCount = 0;
+    let lastExposedInputLatencySequence = 0;
     let lastFrameSampleTimestamp = performance.now();
     let previousHapticSurface = useGameStore.getState().driving.surface;
     let interactionWasActive = false;
     let startupReady = false;
     let fatalMapErrorHandled = false;
+    let lastRuntimeGateKey = -1;
+    let runtimeSimulationEnabled = false;
 
     const validateInitialRoadPosition = (player: PlayerRuntime): boolean => {
       if (!roadIndex || !useGameStore.getState().needsInitialRoadAlignment) {
@@ -832,8 +842,28 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       if (containerRef.current) {
         containerRef.current.dataset.roadNetworkStatus = 'loading';
       }
-      void loadRoadNetwork()
-        .then(
+      let roadNetworkSettled = false;
+      const finishRoadlessStartup = (reason: 'shared-fallback' | 'timeout') => {
+        if (!effectActive || roadNetworkSettled) return;
+        roadNetworkSettled = true;
+        roadNetworkEnabled = false;
+        useGameStore.getState().setRoadNetworkStatus('unavailable');
+        if (containerRef.current) {
+          containerRef.current.dataset.roadNetworkStatus = 'unavailable';
+          containerRef.current.dataset.roadNetworkFallbackReason = reason;
+        }
+        finishStartup();
+      };
+      if (isRoadlessStartupAllowed()) {
+        finishRoadlessStartup('shared-fallback');
+      }
+      if (!roadNetworkSettled) {
+        roadNetworkStartupDeadline = window.setTimeout(() => {
+          allowRoadlessStartup();
+          finishRoadlessStartup('timeout');
+        }, ROAD_NETWORK_STARTUP_DEADLINE_MILLISECONDS);
+        void loadRoadNetwork()
+          .then(
           ({
             network,
             index,
@@ -841,7 +871,12 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             fileSizeBytes,
             metrics,
           }) => {
-            if (!effectActive) return;
+            if (!effectActive || roadNetworkSettled) return;
+            roadNetworkSettled = true;
+            if (roadNetworkStartupDeadline !== null) {
+              window.clearTimeout(roadNetworkStartupDeadline);
+              roadNetworkStartupDeadline = null;
+            }
             removeRoadSurfaceLayer = addPlayableRoadSurfaceLayer(map, network);
             roadIndex = index;
             roadEdgesById = new Map(
@@ -883,25 +918,31 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             }
             finishStartup();
           },
-        )
-        .catch((error: unknown) => {
-          if (!effectActive) return;
-          roadNetworkEnabled = false;
-          useGameStore.getState().setRoadNetworkStatus('unavailable');
-          recordMapErrorClassification(
-            classifyMapRuntimeError(error, {
-              startupComplete: startupReady,
-              resourceKind: 'road-network',
-              primaryStyleUrl: mapSourceConfig.styleUrl,
-              primaryArchiveUrl: mapSourceConfig.archiveUrl,
-              primarySourceId: mapSourceConfig.sourceId,
-            }),
-          );
-          if (containerRef.current) {
-            containerRef.current.dataset.roadNetworkStatus = 'unavailable';
-          }
-          finishStartup();
-        });
+          )
+          .catch((error: unknown) => {
+            if (!effectActive || roadNetworkSettled) return;
+            roadNetworkSettled = true;
+            if (roadNetworkStartupDeadline !== null) {
+              window.clearTimeout(roadNetworkStartupDeadline);
+              roadNetworkStartupDeadline = null;
+            }
+            roadNetworkEnabled = false;
+            useGameStore.getState().setRoadNetworkStatus('unavailable');
+            recordMapErrorClassification(
+              classifyMapRuntimeError(error, {
+                startupComplete: startupReady,
+                resourceKind: 'road-network',
+                primaryStyleUrl: mapSourceConfig.styleUrl,
+                primaryArchiveUrl: mapSourceConfig.archiveUrl,
+                primarySourceId: mapSourceConfig.sourceId,
+              }),
+            );
+            if (containerRef.current) {
+              containerRef.current.dataset.roadNetworkStatus = 'unavailable';
+            }
+            finishStartup();
+          });
+      }
       playerMarker = new maplibregl.Marker({
         element: createPlayerMarkerElement(),
         anchor: 'center',
@@ -1045,7 +1086,38 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         input: inputController,
         isPaused: () => {
           const state = useGameStore.getState();
-          return !startupReady || state.isPaused || state.isJournalOpen;
+          const runtimeGateKey =
+            Number(startupReady) |
+            (Number(fatalMapErrorHandled) << 1) |
+            (Number(state.isPaused) << 2) |
+            (Number(state.isJournalOpen) << 3) |
+            (Number(state.activeNarrativeEventId !== null) << 4) |
+            (Number(state.activeMissionChoiceObjectiveId !== null) << 5) |
+            (Number(state.recoveryReason !== null) << 6) |
+            (Number(state.vehicle.condition > 0) << 7);
+          if (runtimeGateKey !== lastRuntimeGateKey) {
+            lastRuntimeGateKey = runtimeGateKey;
+            const gate = runtimeGateFor({
+              startupReady,
+              fatalMapError: fatalMapErrorHandled,
+              paused: state.isPaused,
+              journalOpen: state.isJournalOpen,
+              narrativeActive: state.activeNarrativeEventId !== null,
+              missionChoiceActive:
+                state.activeMissionChoiceObjectiveId !== null,
+              recoveryActive: state.recoveryReason !== null,
+              vehicleEnabled: state.vehicle.condition > 0,
+            });
+            runtimeSimulationEnabled = gate.simulationEnabled;
+            if (containerRef.current) {
+              containerRef.current.dataset.driveEnabled = String(
+                gate.drivingInputEnabled,
+              );
+              containerRef.current.dataset.runtimeBlockedBy =
+                gate.blockedBy ?? '';
+            }
+          }
+          return !runtimeSimulationEnabled;
         },
         getMovementOptions: () => {
           const roadContactTimestamp = performance.now();
@@ -1125,10 +1197,13 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             visualFrameCount = 0;
             lastFrameSampleTimestamp = timestamp;
           }
-          playerVisualUpdates?.update(
-            player,
-            gameLoop?.getSurface() === 'offroad',
-          );
+          if (playerVisualUpdates) {
+            playerVisualUpdates.update(
+              player,
+              gameLoop?.getSurface() === 'offroad',
+            );
+            inputController.markInputVisualFrame(timestamp);
+          }
 
           const isFollowing = useGameStore.getState().isFollowingPlayer;
           if (!isFollowing) {
@@ -1269,8 +1344,12 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             containerRef.current.dataset.inputInteract = String(
               inputDiagnostics.interact,
             );
-            if (performanceMetricsEnabled) {
-              const inputLatency = inputController.getInputLatencyDiagnostics();
+            const inputLatency = inputController.getInputLatencyDiagnostics();
+            if (
+              inputLatency.sequence !== lastExposedInputLatencySequence &&
+              inputLatency.inputToFirstVisualMilliseconds !== null
+            ) {
+              lastExposedInputLatencySequence = inputLatency.sequence;
               containerRef.current.dataset.inputLatencySequence = String(
                 inputLatency.sequence,
               );
@@ -1282,6 +1361,17 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 ) ?? '';
               containerRef.current.dataset.inputConsumptionLatencyMs =
                 inputLatency.inputConsumptionLatencyMilliseconds?.toFixed(3) ??
+                '';
+              containerRef.current.dataset.inputFirstPositionLatencyMs =
+                inputLatency.inputToFirstPositionMilliseconds?.toFixed(3) ?? '';
+              containerRef.current.dataset.inputFirstVisualLatencyMs =
+                inputLatency.inputToFirstVisualMilliseconds.toFixed(3);
+              containerRef.current.dataset.inputConsumptionToPositionLatencyMs =
+                inputLatency.consumptionToFirstPositionMilliseconds?.toFixed(
+                  3,
+                ) ?? '';
+              containerRef.current.dataset.inputConsumptionToVisualLatencyMs =
+                inputLatency.consumptionToFirstVisualMilliseconds?.toFixed(3) ??
                 '';
             }
             containerRef.current.dataset.inputPointerActive = String(
@@ -1618,6 +1708,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     return () => {
       effectActive = false;
       window.cancelAnimationFrame(loadingFrame);
+      if (roadNetworkStartupDeadline !== null) {
+        window.clearTimeout(roadNetworkStartupDeadline);
+      }
       map.off('load', handleLoad);
       map.off('dragstart', handleManualCameraStart);
       map.off('zoomstart', handleManualCameraStart);

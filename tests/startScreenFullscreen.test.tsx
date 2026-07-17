@@ -1,13 +1,23 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { StartScreen } from '../src/components/menu/StartScreen';
+import {
+  START_PREPARATION_DEADLINE_MILLISECONDS,
+  StartScreen,
+} from '../src/components/menu/StartScreen';
+import { loadRoadNetwork } from '../src/roads/roadNetwork';
 import { useGameStore } from '../src/store/gameStore';
 
 vi.mock('../src/roads/roadNetwork', () => ({
-  loadRoadNetwork: vi.fn(() => new Promise(() => undefined)),
-  retryRoadNetworkLoad: vi.fn(() => new Promise(() => undefined)),
+  loadRoadNetwork: vi.fn(() => Promise.resolve(undefined)),
+  retryRoadNetworkLoad: vi.fn(() => Promise.resolve(undefined)),
 }));
 vi.mock('../src/roads/roadWorkerClient', () => ({
   preloadRoadWorker: vi.fn(() => Promise.resolve(null)),
@@ -26,9 +36,13 @@ describe('inicio opcional en pantalla completa', () => {
     });
   });
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
 
-  it('inicia la expedición desde el mismo gesto de fullscreen', () => {
+  it('inicia la expedición desde el mismo gesto de fullscreen al estar listo', async () => {
     const onContinueFullscreen = vi.fn();
     render(
       <StartScreen
@@ -38,9 +52,12 @@ describe('inicio opcional en pantalla completa', () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Comenzar en pantalla completa' }),
-    );
+    const button = screen.getByRole('button', {
+      name: 'Comenzar en pantalla completa',
+    });
+    expect(button).toHaveProperty('disabled', true);
+    await waitFor(() => expect(button).toHaveProperty('disabled', false));
+    fireEvent.click(button);
     expect(onContinueFullscreen).toHaveBeenCalledOnce();
   });
 
@@ -59,5 +76,30 @@ describe('inicio opcional en pantalla completa', () => {
     expect(
       screen.queryByRole('button', { name: 'Comenzar en pantalla completa' }),
     ).toBeNull();
+  });
+
+  it('habilita un fallback recuperable si la preparación no responde', async () => {
+    vi.useFakeTimers();
+    vi.mocked(loadRoadNetwork).mockReturnValueOnce(new Promise(() => undefined));
+    render(
+      <StartScreen
+        onContinue={vi.fn()}
+        onContinueFullscreen={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    const button = screen.getByRole('button', {
+      name: 'Comenzar expedición',
+    });
+    expect(button).toHaveProperty('disabled', true);
+    await vi.advanceTimersByTimeAsync(
+      START_PREPARATION_DEADLINE_MILLISECONDS,
+    );
+    expect(button).toHaveProperty('disabled', false);
+    expect(
+      screen.getByText(/modo compatible sin asistencia vial completa/i),
+    ).toBeTruthy();
   });
 });

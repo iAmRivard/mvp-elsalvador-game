@@ -5,6 +5,11 @@ import { locations } from '../../data/locations';
 import { progressCounter } from '../../game/progressCounters';
 import { loadRoadNetwork, retryRoadNetworkLoad } from '../../roads/roadNetwork';
 import { preloadRoadWorker } from '../../roads/roadWorkerClient';
+import {
+  allowRoadlessStartup,
+  beginRoadNetworkStartupAttempt,
+  ROAD_NETWORK_STARTUP_DEADLINE_MILLISECONDS,
+} from '../../roads/roadStartup';
 import { useGameStore } from '../../store/gameStore';
 import { fullscreenSupported } from '../../game/fullscreen';
 import { SettingsDialog } from './SettingsDialog';
@@ -19,12 +24,15 @@ interface StartScreenProps {
 type PreparationStage =
   'map' | 'roads' | 'routes' | 'ready' | 'fallback' | 'error';
 
+export const START_PREPARATION_DEADLINE_MILLISECONDS =
+  ROAD_NETWORK_STARTUP_DEADLINE_MILLISECONDS;
+
 const preparationLabels: Readonly<Record<PreparationStage, string>> = {
   map: 'Preparando mapa…',
   roads: 'Preparando carreteras…',
   routes: 'Preparando rutas…',
   ready: 'Listo para conducir',
-  fallback: 'Rutas listas en modo compatible',
+  fallback: 'Rutas listas en modo compatible sin asistencia vial completa',
   error: 'No se pudo preparar la red vial',
 };
 
@@ -71,35 +79,48 @@ export function StartScreen({
     completedMissionIds,
   );
   const distance = useGameStore((state) => state.telemetry.totalDistanceMeters);
+  const preparationReady =
+    preparationStage === 'ready' || preparationStage === 'fallback';
 
   useEffect(() => {
     let active = true;
+    let deadlineReached = false;
+    beginRoadNetworkStartupAttempt();
+    const deadline = window.setTimeout(() => {
+      if (!active) return;
+      deadlineReached = true;
+      allowRoadlessStartup();
+      setPreparationStage('fallback');
+    }, START_PREPARATION_DEADLINE_MILLISECONDS);
     const prepare = async () => {
       try {
         setPreparationStage('map');
         await import('../map/GameMap');
-        if (!active) return;
+        if (!active || deadlineReached) return;
         setPreparationStage('roads');
         await (preparationAttempt === 0
           ? loadRoadNetwork()
           : retryRoadNetworkLoad());
-        if (!active) return;
+        if (!active || deadlineReached) return;
         setPreparationStage('routes');
         try {
           const workerMetrics = await preloadRoadWorker();
-          if (active) {
+          if (active && !deadlineReached) {
             setPreparationStage(workerMetrics ? 'ready' : 'fallback');
           }
         } catch {
-          if (active) setPreparationStage('fallback');
+          if (active && !deadlineReached) setPreparationStage('fallback');
         }
       } catch {
-        if (active) setPreparationStage('error');
+        if (active && !deadlineReached) setPreparationStage('error');
+      } finally {
+        if (!deadlineReached) window.clearTimeout(deadline);
       }
     };
     void prepare();
     return () => {
       active = false;
+      window.clearTimeout(deadline);
     };
   }, [preparationAttempt]);
 
@@ -154,6 +175,7 @@ export function StartScreen({
             type="button"
             className="start-button start-button--primary"
             onClick={onContinue}
+            disabled={!preparationReady}
           >
             {hasSavedGame ? 'Continuar expedición' : 'Comenzar expedición'}
           </button>
@@ -162,6 +184,7 @@ export function StartScreen({
               type="button"
               className="start-button"
               onClick={onContinueFullscreen}
+              disabled={!preparationReady}
             >
               {hasSavedGame
                 ? 'Continuar en pantalla completa'
@@ -173,6 +196,7 @@ export function StartScreen({
               type="button"
               className="start-button"
               onClick={() => setConfirmingNewGame(true)}
+              disabled={!preparationReady}
             >
               Nueva partida
             </button>

@@ -74,7 +74,7 @@ describe('integración de onboarding con la primera misión', () => {
       activeNarrativeEventId: null,
       isPaused: false,
     });
-    expect(await screen.findByText('Gira el vehículo')).toBeTruthy();
+    expect(await screen.findByText('Elige tu velocidad')).toBeTruthy();
     expect(useGameStore.getState().completedMissionIds).not.toContain(
       'la-transmision',
     );

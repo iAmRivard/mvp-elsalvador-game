@@ -55,7 +55,10 @@ import {
 } from '../game/progression';
 import type { PlayerStepEnvironment } from '../game/movement';
 import type { PlayerRuntime, PlayerTelemetry } from '../types/game';
-import type { OnboardingState } from '../types/onboarding';
+import {
+  onboardingIsActive,
+  type OnboardingState,
+} from '../types/onboarding';
 import type {
   ActiveNavigationState,
   NavigationTarget,
@@ -133,6 +136,7 @@ export interface MissionRouteRuntimeState {
   activeNavigation: ActiveNavigationState | null;
   orientation: VehicleOrientation;
   recalculationRevision: number;
+  visualReady: boolean;
 }
 
 interface GameData {
@@ -217,12 +221,16 @@ interface GameStore extends GameData {
   setMissionRoute: (
     route: Omit<
       MissionRouteRuntimeState,
-      'recalculationRevision' | 'activeNavigation' | 'orientation'
+      | 'recalculationRevision'
+      | 'activeNavigation'
+      | 'orientation'
+      | 'visualReady'
     > &
       Partial<
         Pick<MissionRouteRuntimeState, 'activeNavigation' | 'orientation'>
       >,
   ) => void;
+  setMissionRouteVisualReady: (ready: boolean) => void;
   setMissionNavigation: (
     navigation: Pick<
       MissionRouteRuntimeState,
@@ -376,6 +384,7 @@ function narrativeState(
     activeRadioEventId: null,
     storyLogEntries,
     isPaused: true,
+    isJournalOpen: false,
   };
 }
 
@@ -675,6 +684,7 @@ const defaultMissionRouteState: MissionRouteRuntimeState = {
     headingDifference: null,
   },
   recalculationRevision: 0,
+  visualReady: false,
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -994,8 +1004,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeNavigation: route.activeNavigation ?? null,
         orientation: route.orientation ?? state.missionRoute.orientation,
         recalculationRevision: state.missionRoute.recalculationRevision,
+        visualReady: false,
       },
     })),
+  setMissionRouteVisualReady: (visualReady) =>
+    set((state) =>
+      state.missionRoute.visualReady === visualReady
+        ? state
+        : {
+            missionRoute: { ...state.missionRoute, visualReady },
+          },
+    ),
   setMissionNavigation: (navigation) =>
     set((state) => {
       if (
@@ -1456,6 +1475,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         : null;
       if (!mission) return state;
       if (state.isPaused) return state;
+      if (isInteracting && onboardingIsActive(state.onboardingState)) {
+        return state;
+      }
 
       const completedObjectiveIds = new Set(
         state.activeMissionCompletedObjectiveIds,
@@ -1858,14 +1880,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     })),
   setOnboardingState: (onboardingState) => set({ onboardingState }),
   openJournal: (journalSection = 'history') =>
-    set((state) => ({
-      isJournalOpen: true,
-      journalSection,
-      storyLogRequest: {
-        section: journalSection,
-        revision: state.storyLogRequest.revision + 1,
-      },
-    })),
+    set((state) =>
+      state.recoveryReason ||
+      state.activeNarrativeEventId ||
+      state.activeMissionChoiceObjectiveId
+        ? state
+        : {
+            isJournalOpen: true,
+            journalSection,
+            storyLogRequest: {
+              section: journalSection,
+              revision: state.storyLogRequest.revision + 1,
+            },
+          },
+    ),
   closeJournal: () => set({ isJournalOpen: false }),
   setInsideValidObjectiveZone: (insideValidObjectiveZone) =>
     set((state) =>
@@ -1883,14 +1911,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
           },
     ),
   requestStoryLog: (section = 'history') =>
-    set((state) => ({
-      isJournalOpen: true,
-      journalSection: section,
-      storyLogRequest: {
-        section,
-        revision: state.storyLogRequest.revision + 1,
-      },
-    })),
+    set((state) =>
+      state.recoveryReason ||
+      state.activeNarrativeEventId ||
+      state.activeMissionChoiceObjectiveId
+        ? state
+        : {
+            isJournalOpen: true,
+            journalSection: section,
+            storyLogRequest: {
+              section,
+              revision: state.storyLogRequest.revision + 1,
+            },
+          },
+    ),
   dismissGameplayFeedback: () => set({ gameplayFeedback: null }),
   dismissLevelUp: () => set({ lastLevelUp: null }),
   saveGame: (silent = false) => {

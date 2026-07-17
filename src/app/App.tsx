@@ -4,6 +4,7 @@ import { GameActions } from '../components/hud/GameActions';
 import { FuelAssist } from '../components/hud/FuelAssist';
 import { GameplayToast } from '../components/hud/GameplayToast';
 import { GameAudioBridge } from '../components/audio/GameAudioBridge';
+import { StuckVehicleAssist } from '../components/game/StuckVehicleAssist';
 import { CurrentRegion } from '../components/hud/CurrentRegion';
 import { LevelUpToast } from '../components/hud/LevelUpToast';
 import { MissionPanel } from '../components/hud/MissionPanel';
@@ -150,9 +151,13 @@ export function App() {
             onboardingState === 'completed' || onboardingState === 'skipped'
           }
           allowDiscovery={!showTutorial}
-          allowStory={!isJournalOpen}
+          allowStory
           onTutorialComplete={() => setPaused(false)}
           onTutorialSkip={() => setPaused(false)}
+        />
+        <StuckVehicleAssist
+          input={inputController}
+          enabled={!showTutorial && onboardingState !== 'introducing'}
         />
         <LevelUpToast />
         {diagnosticsEnabled && <DiagnosticsPanel input={inputController} />}
