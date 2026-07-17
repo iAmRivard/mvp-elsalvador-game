@@ -1,147 +1,134 @@
-# Arcade Core v0.3.0 - informe de playtest automatizado
+# Arcade Core v0.3.0 — informe de playtest automatizado
 
-## Objetivo
+## Objetivo y problemas priorizados
 
-Convertir el primer recorrido en una conduccion arcade inmediata, legible y
+Convertir el primer recorrido en conducción arcade inmediata, legible y
 recuperable sin borrar modos avanzados ni romper guardados, misiones, rutas,
-PWA o despliegue autonomo.
+PWA o despliegue autónomo.
 
-## Problemas priorizados y resultado
+1. **Arranque inmóvil.** La velocidad objetivo iniciaba en 0 y el tutorial
+   podía pedir giro sin movimiento.
+2. **Offroad confundido con bloqueo.** Existía un límite universal de 25% sin
+   gracia ni reincorporación.
+3. **Jerarquía visual y cámara.** Vehículo/navegación competían visualmente y
+   la cámara usaba el canvas completo, no el espacio libre de controles.
 
-1. **Arranque inmovil.** El modo de velocidad objetivo comenzaba en 0 y el
-   tutorial podia pedir giro sin movimiento. Nueva partida usa
-   `arcade-driving`, el primer gesto acelera, soltar conserva crucero y frenar
-   no arma reversa hasta detener-soltar-volver a bajar.
-2. **Offroad confundido con bloqueo.** Se elimino el 25% universal, se agrego
-   gracia de 1750 ms y ocho misses, superficies separadas y reincorporacion
-   segura hasta 120 m sin penalizacion.
-3. **Jerarquia visual y camara.** El vehiculo usa silueta/color propios; la
-   navegacion usa tres chevrons dorados. La camara sigue un
-   `SafeGameplayViewport` y perfiles stopped/cruise/fast/interaction/recovery.
+## Resultado funcional
 
-## Cambios funcionales
-
-- Modo nuevo `arcade-driving`, predeterminado solo para partidas nuevas.
-- Preferencias validas de partidas anteriores se conservan.
-- Detector puro de vehiculo inmovil y ayuda con causa real.
-- Accion `REINCORPORAR`: valida via, distancia, objetivo offroad, zona
-  restringida y narrativa; alinea posicion/heading, limpia input, recalcula
-  ruta y guarda checkpoint.
-- Multiplicadores arcade: track/dirt 45%, via no clasificada 80%, offroad 60%,
-  con agarre y consumo por vehiculo.
-- HUD movil en una fila, vitales saludables discretos, descubrimiento 2.75 s y
-  radio compacta. Area util medida: 75.6-75.7%.
-- Feedback ligero ya local: luces de freno, polvo solo en terreno, audio por
-  velocidad/perfil, haptics existentes y respeto a reduced motion.
+- `arcade-driving` es el modo predeterminado solo para partidas nuevas.
+- El primer gesto acelera, soltar conserva crucero y frenar no arma reversa
+  hasta detenerse, soltar y volver a arrastrar hacia abajo.
+- Partidas anteriores conservan preferencias válidas y reciben aviso de la
+  nueva opción sin bloquear acciones.
+- Detector puro de vehículo inmóvil y ayuda compacta con la causa real.
+- `REINCORPORAR` valida vía, distancia máxima de 120 m, objetivo offroad, zona
+  restringida y narrativa; alinea posición/heading, limpia input, recalcula
+  ruta y guarda checkpoint sin castigo.
+- Offroad arcade: gracia de 1750 ms y ocho misses, 60% normal, 45% terreno
+  difícil/track y 80% vía no clasificada o reincorporación cercana.
+- Vehículo y navegación tienen clases, colores, tamaños y etiquetas distintas;
+  la navegación usa chevrons y menor jerarquía.
+- Cámara con `SafeGameplayViewport`, perfiles
+  stopped/cruise/fast/interaction/recovery e histéresis adaptativa.
+- HUD móvil compacto, vitales saludables discretos, descubrimiento de 2.75 s,
+  radio compacta y área útil automatizada de 72.0–81.2%.
+- Feedback ligero: vehículo más legible, luces de freno, polvo solo en tierra,
+  audio por velocidad/perfil y respeto a `prefers-reduced-motion`.
 - Primer evento entrega un fragmento de historia persistente e idempotente.
-- Catalogo `VehicleDefinition`, tres arquetipos, skins, estadisticas reales,
-  unlocks, seleccion persistente y migracion de save v6.
-- Garaje movil sin Three en titulo; el GLB se carga al conducir.
-- PWA v0.3.0 precachea shell, chunks, worker, fuentes, red vial y ambos GLB con
-  identidad SHA. Nunca intercepta PMTiles/Range y rechaza un manifiesto de otro
-  build antes de abrir caches.
-- Menus muestran version y SHA del build.
+- Catálogo `VehicleDefinition`, tres arquetipos, skins, estadísticas aplicadas,
+  unlocks, selección persistente y migración save v6.
+- Garaje móvil sin importar Three.js en el título; el GLB se carga al conducir.
+- PWA v0.3.0 con identidad de build; no intercepta PMTiles ni Range Requests.
 
-## Vehiculos
+## Vehículos y assets provisionales
 
-| Vehiculo   | Perfil                                               | Desbloqueo                       |
-| ---------- | ---------------------------------------------------- | -------------------------------- |
-| Torogoz    | equilibrado y durable                                | inicial                          |
-| Volcan GT  | mas velocidad/aceleracion, menos offroad y autonomia | completar `la-transmision`       |
-| Coyote 4x4 | mas agarre/durabilidad, menor velocidad              | completar `senales-en-suchitoto` |
+| Vehículo | Perfil | Desbloqueo |
+|---|---|---|
+| Torogoz | equilibrado y durable | inicial |
+| Volcán GT | más velocidad/aceleración, menor offroad/autonomía | completar `la-transmision` |
+| Coyote 4x4 | más agarre/durabilidad, menor velocidad máxima | completar `senales-en-suchitoto` |
 
-Los tres usan temporalmente `/models/expedition-vehicle.glb` (34,056 bytes,
-312 triangulos, sin texturas ni URI externas) con skins claramente distintas.
-Es un asset provisional, no tres modelos definitivos.
+Los tres reutilizan temporalmente `/models/expedition-vehicle.glb` (34 056
+bytes, 312 triángulos, sin texturas ni URI externas) con skins distintas. Es
+un asset provisional, no tres modelos definitivos. No se cargan tres GLB.
 
 ## Guardados
 
-- Save version 6.
-- Versiones sin version/0 y 1-5 migran al vehiculo inicial si faltan campos.
-- IDs desconocidos, seleccion bloqueada y skin invalida hacen fallback seguro.
+- Save version 6; fixtures sin versión/0 y versiones 1–5 migran.
+- Campos de vehículo ausentes o IDs/skins inválidos hacen fallback a Torogoz.
 - Desbloqueos se derivan retroactivamente de misiones completadas.
-- Se conservan mision, objetivo, inventario, XP, descubrimientos, combustible,
-  condicion, checkpoints, bitacora, posicion y control valido.
+- Se conservan misión, objetivo, inventario, XP, descubrimientos, combustible,
+  condición, checkpoints, bitácora, posición y control válido.
 
 ## Evidencia automatizada
 
-- Unitarias antes del bloque: 403; candidato antes del cierre documental: 486.
-- Movimiento arcade: diez ejecuciones funcionales 10/10. Cinco conservaron
-  telemetria detallada: mediana visible 269 ms, 20 km/h 849 ms y 30 km/h
-  1123 ms.
-- Controles completos: 15/15 en cinco repeticiones del archivo movil.
-- Onboarding con touch real: maniobra <15 s, evento <45 s, recompensa <90 s.
-- Primeros cinco minutos: 3/3 sesiones de 300 s sobre el runtime
-  `59896382b0fbf5f531951907ed19890f6bc9b543`, 0 ms inmovil, cero
-  recuperaciones, 11 capturas por sesion y evento/recompensa entre 2099 y
-  2275 ms (mediana 2104 ms).
+- Baseline: 403 unitarias aprobadas y 57 E2E aprobadas, sin fallos.
+- Movimiento arcade: 10/10 repeticiones funcionales; cinco conservaron
+  telemetría detallada con movimiento visible mediano de 269 ms, 20 km/h en
+  849 ms y 30 km/h en 1123 ms.
+- Fallback y promoción vial: 5/5 repeticiones fortalecidas; el mismo pointer
+  permanece activo hasta observar desplazamiento real tras promover a `road`.
+- Onboarding completo con interacciones reales: aprobado tras exigir guía
+  fallback accionable y progreso directo que reduce distancia hasta `arrive`.
+- Primeros cinco minutos: 3/3 sesiones de 300 s sobre
+  `9677ff8a213ca9edc7ab18d506307720ea44f750`, cero tiempo inmóvil, cero
+  recuperaciones, 11 capturas por sesión y evento/recompensa en 2102–2159 ms.
 - Garaje: UI real, bloqueado no seleccionable, una solicitud GLB, canvas no
-  recreado y persistencia despues de reload.
-- PWA: primera instalacion y reload offline del shell, todos los assets del
-  manifiesto, red vial, ambos GLB, ciclo de update, mision activa diferida y
-  Range 206/1024 sin cache.
-- Rendimiento: tres repeticiones; p95 33.4 ms, 0 frames >50/100 ms, camara p95
-  1.7 ms (rango 1.7-1.8), RoadTracker p95 0.1 ms (0.1-0.2).
-- E2E completo: 65 aprobadas, 57 omitidas y un flake de giro en U reproducido.
-  El gesto se corrigio sin ampliar timeouts y el onboarding aprobo luego 3/3;
-  la matriz completa se repite antes del push.
+  recreado y persistencia después de reload.
+- PWA: instalación, reload offline del shell, assets versionados, red vial,
+  ambos GLB, ciclo de update, misión activa diferida y Range 206/1024 sin cache.
+- Rendimiento comparable 3×3: p95 33.4 ms, 0 frames >50/100 ms, cámara p95
+  final 2.0 ms y RoadTracker p95 0.1 ms. El promedio y frames >33 ms empeoran;
+  no se afirma una mejora global de fluidez.
+- La matriz completa se vuelve a ejecutar antes del push.
 
-## Automatizacion de primeros cinco minutos
+## Automatización de cinco minutos
 
-Ejecutar con build/preview de produccion:
+Con build/preview de producción:
 
 ```bash
 npm run capture:arcade-five-minutes -- http://127.0.0.1:4173 artifacts/five-minutes-run-1
 ```
 
-El runner limpia almacenamiento, usa clicks y touch CDP reales, conduce,
-orienta hacia la ruta, escucha la señal y usa reincorporacion visible si hace
-falta. Captura 0, 1, 3, 8, 15, 30, 45, 75, 120, 180 y 300 s y escribe
-`session.json`. No completa objetivos ni asigna recompensas mediante store.
+El runner rechaza worktrees sucios o builds obsoletos, limpia almacenamiento,
+usa clicks y touch CDP reales, conduce, orienta hacia la ruta, escucha la señal
+y usa reincorporación visible si hace falta. No completa objetivos ni asigna
+recompensas mediante store.
 
 ## Hallazgos de subagentes
 
-Hechos confirmados antes de implementar:
+Hechos confirmados:
 
-- Profiler: camara/MapLibre/Three y fanout UI eran los costes principales;
-  RoadTracker no era cuello de botella.
-- Onboarding: narrativa/tutorial/gates podian dejar el primer gesto sin una
-  explicacion coherente y el mini navegador competia con controles basicos.
-- Experiencia: objetivo 0, penalizacion offroad, flecha parecida al jugador,
-  canvas completo para camara y exceso de tarjetas eran los cinco problemas
-  principales.
-- Regression reviewer: detecto Escape que despausaba tras abrir garaje, stats
-  incompletas (audio, combustible offroad, impacto), GLB fuera de PWA y
-  readiness prematuro. Tambien detecto fanout de desgaste/audio, precache
-  incompleto y avisos de migracion que cubrian acciones. Los P0/P1
-  fundamentados se corrigieron y probaron; queda una revision final tras la
-  matriz completa.
+- **Performance profiler:** cámara/MapLibre/Three y el fanout UI eran los
+  costes principales; RoadTracker no era cuello de botella.
+- **Onboarding auditor:** narrativa/tutorial/gates podían dejar el primer gesto
+  sin explicación y el mini navegador competía con controles básicos.
+- **Gameplay experience auditor:** objetivo 0, penalización offroad, flecha
+  parecida al jugador, cámara sobre canvas y exceso de tarjetas eran los cinco
+  problemas principales.
+- **Regression reviewers:** detectaron pausa incorrecta desde garaje, stats
+  incompletas, assets PWA/readiness, aviso de migración bloqueante, contrato
+  fallback permisivo e identidad de capturas débil. Los P0/P1 fundamentados se
+  corrigieron y probaron. Se ejecuta una revisión final después de la matriz.
 
-Inferencias que requieren telefono:
+## Riesgos pendientes y validación física
 
-- Que la aceleracion se sienta ligera y no solo rapida.
-- Que tamaño de joystick, audio, haptics y camara sean comodos.
-- Que el HUD siga legible al sol y que no aparezcan fatiga/mareo/calor.
+- Throughput y frames >33 ms del headless empeoraron aunque p95, >50 ms y
+  >100 ms conservaron el gate. Debe medirse en teléfonos reales.
+- Los tres vehículos comparten GLB provisional. Un modelo futuro distinto
+  requiere reemplazo y disposición imperativa de recursos Three.js.
+- Falta confirmar focus trap/restauración de foco del garaje en una auditoría
+  dedicada de teclado.
+- ETA de routing sigue siendo aproximada.
+- PMTiles/Range se excluyen deliberadamente del service worker; no se promete
+  mapa completo offline en la primera sesión.
+- Automatización no confirma diversión, comodidad, sensación de velocidad,
+  vibración, temperatura, batería, mareo, fatiga, sol ni sonido real.
 
-## Riesgos P2
+## Próximo playtest
 
-- Un futuro vehiculo con `modelUrl` diferente necesita reemplazo imperativo y
-  disposicion durante el mapa; el candidato actual comparte un unico GLB.
-- El garaje tiene semantica modal y Escape seguro, pero falta probar focus trap
-  y restauracion en una auditoria dedicada de teclado.
-- ETA de routing sigue siendo aproximada; fisica, rango HUD y audio si usan el
-  perfil seleccionado.
-- La diferencia de FPS throughput frente a la unica corrida baseline debe
-  repetirse en telefono aunque no haya frames >50/100 ms.
-- La PWA puede reabrir shell, red vial y assets ya precacheados sin conexion,
-  pero no promete mapa completo offline: PMTiles y Range se excluyen de forma
-  deliberada para no cachear parciales incorrectos.
-- Diversion y sensacion de velocidad no se declaran aprobadas por automatizacion.
-
-## Siguiente playtest
-
-Cinco personas sin explicar controles, alternando navegador/PWA. Registrar
-tiempo al primer movimiento, errores de reversa, uso espontaneo de
-reincorporacion, confusion vehiculo/ruta, carga visual, preferencia de vehiculo,
-calor y bateria. Consolidar observaciones antes de assets definitivos o nuevas
-misiones.
+Cinco personas sin explicar controles, alternando navegador y PWA. Registrar
+tiempo al primer movimiento, errores de reversa, uso espontáneo de
+reincorporación, confusión vehículo/ruta, carga visual, preferencia de vehículo,
+calor y batería. Consolidar observaciones antes de reemplazar assets o agregar
+contenido.
