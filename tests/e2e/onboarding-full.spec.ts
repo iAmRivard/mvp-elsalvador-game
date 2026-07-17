@@ -90,12 +90,14 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
     window.sessionStorage.clear();
   });
   await page.goto('/');
+  const sessionStartedAt = Date.now();
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
 
   const introduction = page.getByRole('dialog', {
     name: 'Una señal de auxilio',
   });
   await expect(introduction).toBeVisible();
+  expect(Date.now() - sessionStartedAt).toBeLessThan(45_000);
   await expect(introduction).toContainText('JUEGO EN PAUSA');
   await expect(page.locator('[data-tutorial-card="mobile"]')).toHaveCount(0);
   await expect(page.getByTestId('mobile-driving-hud')).toHaveCount(0);
@@ -103,6 +105,7 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   await introduction
     .getByRole('button', { name: 'Comenzar investigación' })
     .click();
+  const drivingStartedAt = Date.now();
   const tutorialStartedAt = Date.now();
   await expect(introduction).toBeHidden();
   await expect(page.locator('html')).toHaveAttribute(
@@ -169,10 +172,7 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   await touchMove(session, 2, center.x + center.width * 0.6, center.y);
   await expect
     .poll(() =>
-      page
-        .getByTestId('game-map')
-        .getAttribute('data-input-turn')
-        .then(Number),
+      page.getByTestId('game-map').getAttribute('data-input-turn').then(Number),
     )
     .toBeGreaterThan(0.4);
   await expect
@@ -185,6 +185,7 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
       return Math.abs(((heading - headingBeforeTurn + 540) % 360) - 180);
     })
     .toBeGreaterThanOrEqual(4);
+  expect(Date.now() - drivingStartedAt).toBeLessThan(15_000);
   await expect(page.locator('html')).toHaveAttribute(
     'data-tutorial-target',
     'coast',
@@ -339,6 +340,10 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   await expect(
     page.locator('.radio-message:not(.radio-message--compact)'),
   ).toBeVisible();
+  await expect(
+    page.getByText('Registro de frecuencia guardado', { exact: true }),
+  ).toBeVisible();
+  expect(Date.now() - sessionStartedAt).toBeLessThan(90_000);
   const compactRadio = page.getByRole('button', {
     name: 'Expandir transmisión de radio',
   });

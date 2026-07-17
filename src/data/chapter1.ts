@@ -21,6 +21,10 @@ export interface NarrativeEvent {
   message: string;
   objectiveSummary?: string;
   actionLabel?: string;
+  reward?: {
+    kind: 'story-fragment' | 'discovery' | 'item';
+    label: string;
+  };
 }
 
 export const narrativeEvents: readonly NarrativeEvent[] = [
@@ -45,6 +49,10 @@ export const narrativeEvents: readonly NarrativeEvent[] = [
       'La señal es más clara fuera de la capital. La ruta cian conduce al repetidor de Las Delicias, donde podrás registrar su origen.',
     objectiveSummary: 'Sigue la ruta cian hasta el repetidor marcado.',
     actionLabel: 'Cerrar',
+    reward: {
+      kind: 'story-fragment',
+      label: 'Registro de frecuencia guardado',
+    },
   },
   {
     id: 'radio-camino-bloqueado',

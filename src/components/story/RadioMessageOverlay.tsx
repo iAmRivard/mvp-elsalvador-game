@@ -35,10 +35,7 @@ function RadioMessageContent({
     ) {
       return;
     }
-    const timer = window.setTimeout(
-      onCompact,
-      RADIO_FULL_PREVIEW_MILLISECONDS,
-    );
+    const timer = window.setTimeout(onCompact, RADIO_FULL_PREVIEW_MILLISECONDS);
     return () => window.clearTimeout(timer);
   }, [displayMode, event, mobileViewport, onCompact]);
 
@@ -88,6 +85,15 @@ function RadioMessageContent({
         </header>
         <span className="radio-message__speaker">{event.speaker}</span>
         <p>{event.message}</p>
+        {event.reward && (
+          <div
+            className="radio-message__reward"
+            data-gameplay-reward={event.reward.kind}
+          >
+            <strong>Recompensa</strong>
+            <span>{event.reward.label}</span>
+          </div>
+        )}
         {event.objectiveSummary && (
           <p className="radio-message__objective">
             <strong>Objetivo:</strong>{' '}
