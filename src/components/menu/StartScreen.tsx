@@ -14,6 +14,7 @@ import { useGameStore } from '../../store/gameStore';
 import { fullscreenSupported } from '../../game/fullscreen';
 import { SettingsDialog } from './SettingsDialog';
 import { InstallExperienceHint } from '../pwa/InstallExperienceHint';
+import { VehicleGarageDialog } from '../garage/VehicleGarageDialog';
 
 interface StartScreenProps {
   onContinue: () => void;
@@ -54,6 +55,7 @@ export function StartScreen({
   onNewGame,
 }: StartScreenProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [garageOpen, setGarageOpen] = useState(false);
   const [confirmingNewGame, setConfirmingNewGame] = useState(false);
   const [preparationStage, setPreparationStage] =
     useState<PreparationStage>('map');
@@ -95,8 +97,7 @@ export function StartScreen({
     const prepare = async () => {
       try {
         setPreparationStage('map');
-        await import('../map/GameMap');
-        if (!active || deadlineReached) return;
+        const mapModuleReady = import('../map/GameMap');
         setPreparationStage('roads');
         await (preparationAttempt === 0
           ? loadRoadNetwork()
@@ -104,7 +105,10 @@ export function StartScreen({
         if (!active || deadlineReached) return;
         setPreparationStage('routes');
         try {
-          const workerMetrics = await preloadRoadWorker();
+          const [workerMetrics] = await Promise.all([
+            preloadRoadWorker(),
+            mapModuleReady,
+          ]);
           if (active && !deadlineReached) {
             setPreparationStage(workerMetrics ? 'ready' : 'fallback');
           }
@@ -192,14 +196,23 @@ export function StartScreen({
             </button>
           )}
           {hasSavedGame && (
-            <button
-              type="button"
-              className="start-button"
-              onClick={() => setConfirmingNewGame(true)}
-              disabled={!preparationReady}
-            >
-              Nueva partida
-            </button>
+            <>
+              <button
+                type="button"
+                className="start-button"
+                onClick={() => setGarageOpen(true)}
+              >
+                Garaje
+              </button>
+              <button
+                type="button"
+                className="start-button"
+                onClick={() => setConfirmingNewGame(true)}
+                disabled={!preparationReady}
+              >
+                Nueva partida
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -268,6 +281,10 @@ export function StartScreen({
       <SettingsDialog
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+      />
+      <VehicleGarageDialog
+        open={garageOpen}
+        onClose={() => setGarageOpen(false)}
       />
     </section>
   );

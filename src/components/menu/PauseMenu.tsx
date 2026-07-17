@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { SettingsDialog } from './SettingsDialog';
 import { FullscreenButton } from '../pwa/FullscreenButton';
+import { VehicleGarageDialog } from '../garage/VehicleGarageDialog';
 
 interface PauseMenuProps {
   onExitToTitle: () => void;
@@ -9,14 +10,17 @@ interface PauseMenuProps {
 
 export function PauseMenu({ onExitToTitle }: PauseMenuProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [garageOpen, setGarageOpen] = useState(false);
   const level = useGameStore((state) => state.level);
   const experience = useGameStore((state) => state.experience);
   const setPaused = useGameStore((state) => state.setPaused);
   const saveGame = useGameStore((state) => state.saveGame);
   const saveMessage = useGameStore((state) => state.saveMessage);
-  const setOnboardingState = useGameStore(
-    (state) => state.setOnboardingState,
-  );
+  const setOnboardingState = useGameStore((state) => state.setOnboardingState);
+
+  if (garageOpen) {
+    return <VehicleGarageDialog open onClose={() => setGarageOpen(false)} />;
+  }
 
   return (
     <div className="pause-menu-backdrop">
@@ -52,6 +56,9 @@ export function PauseMenu({ onExitToTitle }: PauseMenuProps) {
           </button>
           <button type="button" onClick={() => setSettingsOpen(true)}>
             Controles
+          </button>
+          <button type="button" onClick={() => setGarageOpen(true)}>
+            Garaje
           </button>
           <button
             type="button"
