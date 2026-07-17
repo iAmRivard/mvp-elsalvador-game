@@ -70,4 +70,25 @@ describe('posición inicial segura', () => {
     ).toBe(false);
     expect(useGameStore.getState().telemetry.longitude).toBe(initialLongitude);
   });
+
+  it('acepta la posicion runtime sin moverla cuando ya se condujo en fallback', () => {
+    const telemetry = {
+      ...useGameStore.getState().telemetry,
+      longitude: -89.2,
+      latitude: 13.7,
+      heading: 143,
+      speedMetersPerSecond: 8,
+      speedKilometersPerHour: 28.8,
+      totalDistanceMeters: 42,
+    };
+    useGameStore.setState({ telemetry, playerRuntimeRevision: 7 });
+
+    useGameStore.getState().acceptCurrentPlayerRoadPosition();
+
+    expect(useGameStore.getState()).toMatchObject({
+      telemetry,
+      needsInitialRoadAlignment: false,
+      playerRuntimeRevision: 7,
+    });
+  });
 });

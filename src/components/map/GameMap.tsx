@@ -17,6 +17,7 @@ import {
   followCameraTolerances,
 } from '../../config/followCamera.config';
 import { mapSourceConfig, mapViewConfig } from '../../config/map.config';
+import { movementSubstepConfig } from '../../config/movementSubstep.config';
 import {
   roadAssistConfig,
   savedRoadPositionConfig,
@@ -45,6 +46,10 @@ import {
   type MobileCameraMode,
 } from '../../game/followCamera';
 import { runtimeGateFor } from '../../game/runtimeGate';
+import {
+  advanceRoadAssistActiveElapsedMilliseconds,
+  roadAssistMultiplierForLatePromotion,
+} from '../../game/roadPromotion';
 import {
   AdaptiveCameraCadenceController,
   cameraCadenceDeadlineAfterApplication,
@@ -479,6 +484,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       useGameStore.getState().missionRoute.activeEdgeIds,
     );
     let roadNetworkEnabled = false;
+    let lateRoadPromotionAssistElapsedMilliseconds: number | null = null;
+    let lateRoadPromotionAssistLastActiveTimestamp: number | null = null;
+    let lateRoadPromotionAssistFirstActiveSamplePending = false;
     let roadNetworkStartupDeadline: number | null = null;
     let lastBlockedImpactTimestamp = Number.NEGATIVE_INFINITY;
     let visualFrameCount = 0;
@@ -1224,7 +1232,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       inputController.resetMobileBoostCompletely();
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') clearInterruptedInput();
+      if (document.visibilityState === 'hidden') {
+        clearInterruptedInput();
+        lateRoadPromotionAssistLastActiveTimestamp = null;
+      }
       adaptiveCameraCadence.resetSampling(performance.now());
       resetCameraUpdateDeadline(performance.now());
     };
@@ -1252,6 +1263,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       const initialPlayer = runtimeFromTelemetry(
         useGameStore.getState().telemetry,
       );
+      const initialRoadLoadDistanceMeters =
+        useGameStore.getState().telemetry.totalDistanceMeters;
       useGameStore.getState().setRoadNetworkStatus('loading');
       if (containerRef.current) {
         containerRef.current.dataset.roadNetworkStatus = 'loading';
@@ -1304,9 +1317,52 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             const currentPlayer =
               gameLoop?.getPlayer() ??
               runtimeFromTelemetry(useGameStore.getState().telemetry);
-            validateInitialRoadPosition(currentPlayer);
-            const validatedPlayer = runtimeFromTelemetry(
-              useGameStore.getState().telemetry,
+            const currentState = useGameStore.getState();
+            const alignmentRevisionBefore = currentState.playerRuntimeRevision;
+            const inputTargetBeforePromotion =
+              inputController.getDiagnostics().mobileCruise
+                .targetSpeedKilometersPerHour;
+            const movedDuringRoadlessStartup =
+              roadlessStartupFinished &&
+              (Math.abs(
+                currentState.telemetry.totalDistanceMeters -
+                  initialRoadLoadDistanceMeters,
+              ) >= 0.25 ||
+                distanceBetweenMeters(
+                  [currentPlayer.longitude, currentPlayer.latitude],
+                  [initialPlayer.longitude, initialPlayer.latitude],
+                ) >= 1 ||
+                Math.abs(currentPlayer.speedMetersPerSecond) >= 0.25);
+            let alignmentOutcome = 'validated';
+            if (movedDuringRoadlessStartup) {
+              currentState.acceptCurrentPlayerRoadPosition();
+              alignmentOutcome = 'preserved-runtime';
+              lateRoadPromotionAssistElapsedMilliseconds = 0;
+              lateRoadPromotionAssistLastActiveTimestamp = null;
+              lateRoadPromotionAssistFirstActiveSamplePending = true;
+            } else if (!validateInitialRoadPosition(currentPlayer)) {
+              currentState.acceptCurrentPlayerRoadPosition();
+              alignmentOutcome = 'accepted-current';
+            }
+            const validatedPlayer =
+              gameLoop?.getPlayer() ??
+              runtimeFromTelemetry(useGameStore.getState().telemetry);
+            const promotionRuntimeDisplacementMeters = distanceBetweenMeters(
+              [currentPlayer.longitude, currentPlayer.latitude],
+              [validatedPlayer.longitude, validatedPlayer.latitude],
+            );
+            const promotionRuntimeHeadingDelta = Math.abs(
+              ((validatedPlayer.heading - currentPlayer.heading + 540) % 360) -
+                180,
+            );
+            const promotionRuntimeSpeedDeltaKilometersPerHour =
+              Math.abs(
+                validatedPlayer.speedMetersPerSecond -
+                  currentPlayer.speedMetersPerSecond,
+              ) * 3.6;
+            const promotionInputTargetDeltaKilometersPerHour = Math.abs(
+              inputController.getDiagnostics().mobileCruise
+                .targetSpeedKilometersPerHour - inputTargetBeforePromotion,
             );
             roadContact = roadTracker.update(
               [validatedPlayer.longitude, validatedPlayer.latitude],
@@ -1314,8 +1370,28 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             );
             roadNetworkEnabled = true;
             useGameStore.getState().setRoadNetworkStatus('ready');
+            useGameStore.getState().requestMissionRouteRecalculation();
             if (containerRef.current) {
               containerRef.current.dataset.roadNetworkStatus = 'ready';
+              containerRef.current.dataset.roadNetworkPromotedFromFallback =
+                String(roadlessStartupFinished);
+              containerRef.current.dataset.initialRoadAlignmentOutcome =
+                alignmentOutcome;
+              containerRef.current.dataset.initialRoadAlignmentRevisionDelta =
+                String(
+                  useGameStore.getState().playerRuntimeRevision -
+                    alignmentRevisionBefore,
+                );
+              containerRef.current.dataset.roadPromotionAssistRamp =
+                movedDuringRoadlessStartup ? 'active' : 'not-needed';
+              containerRef.current.dataset.roadPromotionRuntimeDisplacementMeters =
+                promotionRuntimeDisplacementMeters.toFixed(3);
+              containerRef.current.dataset.roadPromotionRuntimeHeadingDelta =
+                promotionRuntimeHeadingDelta.toFixed(3);
+              containerRef.current.dataset.roadPromotionRuntimeSpeedDeltaKph =
+                promotionRuntimeSpeedDeltaKilometersPerHour.toFixed(3);
+              containerRef.current.dataset.roadPromotionInputTargetDeltaKph =
+                promotionInputTargetDeltaKilometersPerHour.toFixed(3);
               containerRef.current.dataset.roadLoadMs =
                 loadDurationMilliseconds.toFixed(1);
               containerRef.current.dataset.roadFileBytes =
@@ -1530,6 +1606,12 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               vehicleEnabled: state.vehicle.condition > 0,
             });
             runtimeSimulationEnabled = gate.simulationEnabled;
+            if (
+              !runtimeSimulationEnabled &&
+              lateRoadPromotionAssistElapsedMilliseconds !== null
+            ) {
+              lateRoadPromotionAssistLastActiveTimestamp = null;
+            }
             if (containerRef.current) {
               containerRef.current.dataset.driveEnabled = String(
                 gate.drivingInputEnabled,
@@ -1542,6 +1624,39 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         },
         getMovementOptions: () => {
           const roadContactTimestamp = performance.now();
+          let latePromotionAssistMultiplier = 1;
+          if (lateRoadPromotionAssistElapsedMilliseconds !== null) {
+            lateRoadPromotionAssistElapsedMilliseconds =
+              advanceRoadAssistActiveElapsedMilliseconds(
+                lateRoadPromotionAssistElapsedMilliseconds,
+                lateRoadPromotionAssistLastActiveTimestamp,
+                roadContactTimestamp,
+                movementSubstepConfig.maximumDeltaTimeSeconds * 1_000,
+              );
+            lateRoadPromotionAssistLastActiveTimestamp = roadContactTimestamp;
+            latePromotionAssistMultiplier =
+              roadAssistMultiplierForLatePromotion(
+                0,
+                lateRoadPromotionAssistElapsedMilliseconds,
+              );
+            if (lateRoadPromotionAssistFirstActiveSamplePending) {
+              lateRoadPromotionAssistFirstActiveSamplePending = false;
+              if (containerRef.current) {
+                containerRef.current.dataset.roadPromotionFirstActiveAssistMultiplier =
+                  latePromotionAssistMultiplier.toFixed(3);
+              }
+            }
+          }
+          if (
+            lateRoadPromotionAssistElapsedMilliseconds !== null &&
+            latePromotionAssistMultiplier >= 1
+          ) {
+            lateRoadPromotionAssistElapsedMilliseconds = null;
+            lateRoadPromotionAssistLastActiveTimestamp = null;
+            if (containerRef.current) {
+              containerRef.current.dataset.roadPromotionAssistRamp = 'complete';
+            }
+          }
           return {
             travel: activeVehicleRuntime.travel,
             handling: activeVehicleRuntime.handling,
@@ -1550,8 +1665,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               useSettingsStore.getState().steeringSensitivity,
             roadAssistMode: useSettingsStore.getState().roadAssistMode,
             roadAssistStrengthMultiplier: deviceProfile.isTouch
-              ? roadAssistConfig.mobileStrengthMultiplier
-              : 1,
+              ? roadAssistConfig.mobileStrengthMultiplier *
+                latePromotionAssistMultiplier
+              : latePromotionAssistMultiplier,
             roadNetworkEnabled,
             roadContact,
             roadContactAt: roadTracker

@@ -121,9 +121,7 @@ describe('tutorial obligatorio', () => {
     ).toBeTruthy();
     act(() => input.setTouchThrottle(0.6));
     await act(() => vi.advanceTimersByTimeAsync(420));
-    expect(
-      screen.getByText('Gira en movimiento'),
-    ).toBeTruthy();
+    expect(screen.getByText('Gira en movimiento')).toBeTruthy();
   });
 
   it('no acepta un giro automático sin intención lateral del jugador', async () => {
@@ -217,6 +215,59 @@ describe('tutorial obligatorio', () => {
       activeMissionId: 'la-transmision',
       activeMissionCompletedObjectiveIds: [],
     });
+  });
+
+  it('mantiene visible la guia fallback sin completar mientras calcula la ruta vial', async () => {
+    const input = new InputController();
+    const finish = vi.fn();
+    useGameStore.setState((state) => ({
+      onboardingState: 'navigation-basics',
+      activeMissionId: 'la-transmision',
+      telemetry: {
+        ...state.telemetry,
+        speedMetersPerSecond: 15 / 3.6,
+        speedKilometersPerHour: 15,
+      },
+      missionRoute: {
+        ...state.missionRoute,
+        status: 'fallback',
+        visualReady: true,
+        offRoute: false,
+        activeNavigation: {
+          routeSegmentIndex: 0,
+          recommendedHeading: 0,
+          maneuverType: 'continue',
+          maneuverCoordinates: [-89.2, 13.71],
+          distanceToManeuverMeters: 100,
+          distanceToRouteMeters: 0,
+          requiresRejoin: false,
+        },
+      },
+      driving: {
+        ...state.driving,
+        surface: 'primary',
+        roadNetworkStatus: 'ready',
+      },
+      isPaused: false,
+    }));
+
+    render(<TutorialHarness input={input} onComplete={finish} />);
+
+    expect(screen.getByText('Sigue la guía directa')).toBeTruthy();
+    await act(() => vi.advanceTimersByTimeAsync(1_320));
+    expect(screen.getByText('Sigue la guía directa')).toBeTruthy();
+    expect(finish).not.toHaveBeenCalled();
+
+    act(() => {
+      useGameStore.setState((state) => ({
+        missionRoute: { ...state.missionRoute, status: 'road' },
+      }));
+    });
+    expect(screen.getByText('Sigue la línea cian')).toBeTruthy();
+    await act(() => vi.advanceTimersByTimeAsync(900));
+    await act(() => vi.advanceTimersByTimeAsync(420));
+    expect(screen.getByTestId('free-driving')).toBeTruthy();
+    expect(finish).toHaveBeenCalledTimes(1);
   });
 
   it('omitir cambia solo el onboarding y conserva la misión', () => {

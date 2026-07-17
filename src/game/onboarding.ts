@@ -130,7 +130,9 @@ export function routeFollowingIsValid(
     observation.speedKilometersPerHour >= 5 &&
     observation.forwardSpeedMetersPerSecond > 0 &&
     !observation.reversing;
-  if (observation.fallbackMode) return movementIsValid;
+  if (observation.fallbackMode) {
+    return movementIsValid && !observation.roadNetworkReady;
+  }
   return (
     movementIsValid &&
     !observation.offRoute &&

@@ -59,9 +59,7 @@ export function TutorialOverlay({
   const brakeIntentObserved = useRef(false);
   const controlMode = useSettingsStore((state) => state.controlMode);
   const telemetry = useGameStore((state) => state.telemetry);
-  const [steerStartHeading, setSteerStartHeading] = useState(
-    telemetry.heading,
-  );
+  const [steerStartHeading, setSteerStartHeading] = useState(telemetry.heading);
   const routeStatus = useGameStore((state) => state.missionRoute.status);
   const routeVisualReady = useGameStore(
     (state) => state.missionRoute.visualReady,
@@ -99,31 +97,34 @@ export function TutorialOverlay({
 
   const hasBlockingOverlay = Boolean(
     recoveryReason ||
-      activeNarrativeEventId ||
-      activeMissionChoiceObjectiveId ||
-      isJournalOpen,
+    activeNarrativeEventId ||
+    activeMissionChoiceObjectiveId ||
+    isJournalOpen,
   );
   const coastEligible =
     !hasBlockingOverlay &&
     !isPaused &&
     telemetry.speedMetersPerSecond > 0 &&
     coastConditionIsMet(diagnostics, telemetry.speedKilometersPerHour);
-  const fallbackRoute =
-    routeStatus === 'fallback' && roadNetworkStatus === 'unavailable';
+  const fallbackRoute = routeStatus === 'fallback';
+  const fallbackCompletionAllowed =
+    fallbackRoute && roadNetworkStatus === 'unavailable';
   const routeVisible =
     routeVisualReady && (routeStatus === 'road' || fallbackRoute);
+  const routeCompletionVisible =
+    routeVisualReady && (routeStatus === 'road' || fallbackCompletionAllowed);
   const routeFollowingValid =
     !hasBlockingOverlay &&
     !isPaused &&
     routeFollowingIsValid({
-      routeVisible,
+      routeVisible: routeCompletionVisible,
       speedKilometersPerHour: telemetry.speedKilometersPerHour,
       forwardSpeedMetersPerSecond: telemetry.speedMetersPerSecond,
       offRoute: routeOffRoute,
       requiresRejoin: activeNavigation?.requiresRejoin ?? true,
       surface: drivingSurface,
       roadNetworkReady: roadNetworkStatus === 'ready',
-      fallbackMode: fallbackRoute,
+      fallbackMode: fallbackCompletionAllowed,
       distanceToRouteMeters: activeNavigation?.distanceToRouteMeters ?? null,
       maximumDistanceToRouteMeters: routingConfig.routeRejoinDistanceMeters,
       reversing:
@@ -167,11 +168,7 @@ export function TutorialOverlay({
   ]);
 
   useEffect(() => {
-    if (
-      stepIndex !== 4 ||
-      !routeFollowingValid ||
-      activeMissionId === null
-    )
+    if (stepIndex !== 4 || !routeFollowingValid || activeMissionId === null)
       return;
     const timeout = window.setTimeout(
       () => setRouteFollowCompleted(true),
@@ -209,10 +206,7 @@ export function TutorialOverlay({
         completed:
           telemetry.speedKilometersPerHour >= 5 &&
           Math.abs(diagnostics.turn) > 0.4 &&
-          headingDifferenceDegrees(
-            telemetry.heading,
-            steerStartHeading,
-          ) >= 4,
+          headingDifferenceDegrees(telemetry.heading, steerStartHeading) >= 4,
         available: telemetry.speedKilometersPerHour >= 5,
       },
       {

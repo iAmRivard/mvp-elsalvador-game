@@ -146,13 +146,23 @@ describe('reglas de onboarding', () => {
       reversing: false,
     };
     expect(routeFollowingIsValid(valid)).toBe(true);
-    expect(routeFollowingIsValid({ ...valid, routeVisible: false })).toBe(false);
-    expect(routeFollowingIsValid({ ...valid, speedKilometersPerHour: 4.99 })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, routeVisible: false })).toBe(
+      false,
+    );
+    expect(
+      routeFollowingIsValid({ ...valid, speedKilometersPerHour: 4.99 }),
+    ).toBe(false);
     expect(routeFollowingIsValid({ ...valid, offRoute: true })).toBe(false);
-    expect(routeFollowingIsValid({ ...valid, requiresRejoin: true })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, requiresRejoin: true })).toBe(
+      false,
+    );
     expect(routeFollowingIsValid({ ...valid, surface: 'offroad' })).toBe(false);
-    expect(routeFollowingIsValid({ ...valid, roadNetworkReady: false })).toBe(false);
-    expect(routeFollowingIsValid({ ...valid, distanceToRouteMeters: 24.01 })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, roadNetworkReady: false })).toBe(
+      false,
+    );
+    expect(
+      routeFollowingIsValid({ ...valid, distanceToRouteMeters: 24.01 }),
+    ).toBe(false);
     expect(routeFollowingIsValid({ ...valid, reversing: true })).toBe(false);
     expect(
       routeFollowingIsValid({
@@ -164,6 +174,13 @@ describe('reglas de onboarding', () => {
         distanceToRouteMeters: null,
       }),
     ).toBe(true);
+    expect(
+      routeFollowingIsValid({
+        ...valid,
+        fallbackMode: true,
+        roadNetworkReady: true,
+      }),
+    ).toBe(false);
   });
 
   it('reconoce solo el objetivo de misión por proximidad o visibilidad sostenida', () => {

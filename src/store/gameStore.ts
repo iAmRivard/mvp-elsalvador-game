@@ -242,6 +242,7 @@ interface GameStore extends GameData {
     heading: number,
     distanceMeters: number,
   ) => boolean;
+  acceptCurrentPlayerRoadPosition: () => void;
   getRouteRejoinEligibility: () => RouteRejoinEligibility;
   rejoinPlayerToRoad: (edgeId: number) => boolean;
   createCheckpoint: (reason: CheckpointReason, safe?: boolean) => void;
@@ -979,6 +980,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
     return aligned;
   },
+  acceptCurrentPlayerRoadPosition: () =>
+    set((state) =>
+      state.needsInitialRoadAlignment
+        ? { needsInitialRoadAlignment: false }
+        : state,
+    ),
   getRouteRejoinEligibility: () => {
     const state = get();
     const position: RoadCoordinates = [
