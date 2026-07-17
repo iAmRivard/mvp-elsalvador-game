@@ -9,10 +9,10 @@ const outputDirectory = resolve(
 );
 const observationMilliseconds = 30_000;
 const warmupMilliseconds = 10_000;
-const captureSchemaVersion = 3;
+const captureSchemaVersion = 4;
 const referenceViewport = { width: 392, height: 850 };
 const referenceDeviceScaleFactor = 2;
-const measuredSha = (() => {
+const repositorySha = (() => {
   try {
     return execFileSync('git', ['rev-parse', 'HEAD'], {
       encoding: 'utf8',
@@ -21,6 +21,21 @@ const measuredSha = (() => {
     return null;
   }
 })();
+const worktreeStatus = (() => {
+  try {
+    return execFileSync('git', ['status', '--porcelain'], {
+      encoding: 'utf8',
+    }).trim();
+  } catch {
+    return null;
+  }
+})();
+if (!repositorySha || worktreeStatus === null) {
+  throw new Error('No se pudo verificar la identidad del repositorio.');
+}
+if (worktreeStatus.length > 0) {
+  throw new Error('La captura requiere un worktree limpio.');
+}
 await mkdir(outputDirectory, { recursive: true });
 
 function percentile(sortedValues, percentage) {
@@ -95,6 +110,14 @@ try {
     }
   });
   await page.goto(baseUrl);
+  const buildSha = await page
+    .locator('[data-build-sha]')
+    .getAttribute('data-build-sha');
+  if (!repositorySha || !buildSha || repositorySha !== buildSha) {
+    throw new Error(
+      `La captura no corresponde al checkout actual: repo=${repositorySha ?? 'n/d'}, build=${buildSha ?? 'n/d'}.`,
+    );
+  }
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
   const beginMission = page.getByRole('button', {
     name: /Comenzar investigación/,
@@ -108,7 +131,8 @@ try {
     const map = document.querySelector('[data-testid="game-map"]');
     return (
       map instanceof HTMLElement &&
-      ['ready', 'unavailable'].includes(map.dataset.roadNetworkStatus ?? '')
+      map.dataset.roadNetworkStatus === 'ready' &&
+      map.dataset.missionRouteMode === 'road'
     );
   });
   const closeRadio = page.getByRole('button', { name: 'Cerrar transmisión' });
@@ -477,9 +501,19 @@ try {
   )
     ? inputConsumptionLatency
     : null;
+  if (
+    metrics.mapDataset.roadNetworkStatus !== 'ready' ||
+    metrics.mapDataset.missionRouteMode !== 'road'
+  ) {
+    throw new Error(
+      'El escenario vial cambió de red o ruta durante la captura.',
+    );
+  }
   metrics.captureMetadata = {
     schemaVersion: captureSchemaVersion,
-    measuredSha,
+    measuredSha: buildSha,
+    repositorySha,
+    buildSha,
     baseUrl,
     capturedAt: new Date().toISOString(),
     browserName: 'chromium',
@@ -504,7 +538,8 @@ try {
       },
       storage: 'clean',
       onboarding: 'narrative-closed-tutorial-skipped',
-      roadNetwork: 'ready-or-degraded-after-startup-gate',
+      roadNetworkStatus: metrics.mapDataset.roadNetworkStatus,
+      missionRouteMode: metrics.mapDataset.missionRouteMode,
     },
     cameraTimingScope:
       'map camera call, exposeCameraTarget and follow-state bookkeeping',

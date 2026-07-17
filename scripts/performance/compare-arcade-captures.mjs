@@ -34,9 +34,24 @@ async function loadGroup(directory, label) {
       metrics: JSON.parse(await readFile(path, 'utf8')),
     })),
   );
-  const shas = new Set(
-    captures.map(({ metrics }) => metrics.captureMetadata?.measuredSha),
-  );
+  const shas = new Set();
+  for (const { path, metrics } of captures) {
+    const metadata = metrics.captureMetadata ?? {};
+    const { measuredSha, repositorySha, buildSha } = metadata;
+    if (
+      typeof repositorySha !== 'string' ||
+      typeof buildSha !== 'string' ||
+      repositorySha.length === 0 ||
+      buildSha.length === 0 ||
+      repositorySha !== buildSha ||
+      measuredSha !== buildSha
+    ) {
+      throw new Error(
+        `${label}: identidad repo/build inválida en ${path}.`,
+      );
+    }
+    shas.add(buildSha);
+  }
   if (shas.size !== 1 || shas.has(null) || shas.has(undefined)) {
     throw new Error(
       `${label}: las corridas no comparten un SHA medido válido.`,

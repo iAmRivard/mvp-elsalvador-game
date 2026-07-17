@@ -18,6 +18,22 @@ const repositorySha = (() => {
     return null;
   }
 })();
+const worktreeStatus = (() => {
+  try {
+    return execFileSync('git', ['status', '--porcelain'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return null;
+  }
+})();
+if (!repositorySha || worktreeStatus === null) {
+  throw new Error('No se pudo verificar la identidad del repositorio.');
+}
+if (worktreeStatus.length > 0) {
+  throw new Error('La captura requiere un worktree limpio.');
+}
 const captureTimes = [0, 1, 3, 8, 15, 30, 45, 75, 120, 180, 300]
   .map((seconds) => seconds * 1_000)
   .filter((milliseconds) => milliseconds <= durationMilliseconds);
@@ -59,6 +75,11 @@ try {
   const buildSha = await page
     .locator('[data-build-sha]')
     .getAttribute('data-build-sha');
+  if (!buildSha || buildSha !== repositorySha) {
+    throw new Error(
+      `La captura no corresponde al checkout actual: repo=${repositorySha}, build=${buildSha ?? 'n/d'}.`,
+    );
+  }
   await page.getByRole('button', { name: /Comenzar expedici.n/ }).click();
   await page.getByRole('button', { name: /Comenzar investigaci.n/ }).click();
   const skip = page.getByRole('button', { name: 'Omitir' });
@@ -183,6 +204,10 @@ try {
       roadNetworkStatus:
         mapElement instanceof HTMLElement
           ? (mapElement.dataset.roadNetworkStatus ?? null)
+          : null,
+      missionRouteMode:
+        mapElement instanceof HTMLElement
+          ? (mapElement.dataset.missionRouteMode ?? null)
           : null,
     };
   });
