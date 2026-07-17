@@ -9,7 +9,9 @@ const outputDirectory = resolve(
 );
 const observationMilliseconds = 30_000;
 const warmupMilliseconds = 10_000;
-const captureSchemaVersion = 2;
+const captureSchemaVersion = 3;
+const referenceViewport = { width: 392, height: 850 };
+const referenceDeviceScaleFactor = 2;
 const measuredSha = (() => {
   try {
     return execFileSync('git', ['rev-parse', 'HEAD'], {
@@ -56,7 +58,12 @@ function summarize(values) {
 
 const browser = await chromium.launch({ headless: true });
 try {
-  const context = await browser.newContext({ ...devices['Pixel 7'] });
+  const context = await browser.newContext({
+    ...devices['Pixel 7'],
+    viewport: referenceViewport,
+    screen: referenceViewport,
+    deviceScaleFactor: referenceDeviceScaleFactor,
+  });
   const page = await context.newPage();
   await page.addInitScript(() => {
     window.localStorage.clear();
@@ -301,6 +308,8 @@ try {
       observationMilliseconds: 30_000,
       warmupMilliseconds: 10_000,
       viewport: { width: window.innerWidth, height: window.innerHeight },
+      deviceScaleFactor: window.devicePixelRatio,
+      userAgent: window.navigator.userAgent,
       hud: box('[data-testid="mobile-driving-hud"]'),
       joystick: box(
         '[aria-label="Joystick de conducción arcade"], [aria-label="Joystick de velocidad objetivo"]',
@@ -473,6 +482,8 @@ try {
     measuredSha,
     baseUrl,
     capturedAt: new Date().toISOString(),
+    browserName: 'chromium',
+    browserVersion: browser.version(),
     buildMode:
       metrics.mapDataset.performanceProfilingEnabled === 'true'
         ? 'production-profiling'
@@ -480,13 +491,28 @@ try {
     performanceProfilingEnabled:
       metrics.mapDataset.performanceProfilingEnabled === 'true',
     diagnosticsEnabled: metrics.mapDataset.diagnosticsEnabled === 'true',
+    scenario: {
+      id: 'arcade-core-road-cruise-v1',
+      viewport: referenceViewport,
+      deviceScaleFactor: referenceDeviceScaleFactor,
+      warmupMilliseconds,
+      observationMilliseconds,
+      touchGesture: {
+        source: 'cdp-touch',
+        verticalTravelJoystickRatio: 0.44,
+        targetKilometersPerHour: 58,
+      },
+      storage: 'clean',
+      onboarding: 'narrative-closed-tutorial-skipped',
+      roadNetwork: 'ready-or-degraded-after-startup-gate',
+    },
     cameraTimingScope:
       'map camera call, exposeCameraTarget and follow-state bookkeeping',
     inputTimingScope:
       'event to stored, next game-loop consumption and next animation frame; presentation latency unavailable',
   };
   await writeFile(
-    resolve(outputDirectory, 'v0.2.5.3-mobile-metrics.json'),
+    resolve(outputDirectory, 'arcade-core-mobile-metrics.json'),
     `${JSON.stringify(metrics, null, 2)}\n`,
     'utf8',
   );
