@@ -102,9 +102,7 @@ describe('modos móviles de conducción', () => {
     const input = new InputController();
     render(<TouchControls input={input} />);
 
-    expect(
-      screen.getByLabelText('Joystick de conducción arcade'),
-    ).toBeTruthy();
+    expect(screen.getByLabelText('Joystick de conducción arcade')).toBeTruthy();
     act(() => input.setTargetSpeedJoystick(0.5, 0));
     expect(screen.getByTestId('mobile-cruise-target').textContent).toContain(
       'OBJETIVO 25 km/h',
@@ -144,5 +142,19 @@ describe('modos móviles de conducción', () => {
     act(() => useGameStore.getState().closeJournal());
     expect(screen.getByLabelText('Controles táctiles')).toBeTruthy();
     expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(35);
+  });
+
+  it('informa en el titulo sin cubrir una sesion de juego activa', () => {
+    useSettingsStore.setState({
+      controlMode: 'classic-buttons',
+      arcadeDrivingPromptDismissed: false,
+    });
+    const { rerender } = render(
+      <RecommendedControlsPrompt gameplayActive={false} />,
+    );
+
+    expect(screen.getByTestId('controls-migration')).toBeTruthy();
+    rerender(<RecommendedControlsPrompt gameplayActive />);
+    expect(screen.queryByTestId('controls-migration')).toBeNull();
   });
 });

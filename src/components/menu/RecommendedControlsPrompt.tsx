@@ -6,7 +6,11 @@ import { onboardingIsActive } from '../../types/onboarding';
 const mobileControlsQuery =
   '(hover: none), (pointer: coarse), (max-width: 600px)';
 
-export function RecommendedControlsPrompt() {
+export function RecommendedControlsPrompt({
+  gameplayActive = false,
+}: {
+  gameplayActive?: boolean;
+}) {
   const [mobileContext, setMobileContext] = useState(() =>
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia(mobileControlsQuery).matches
@@ -25,12 +29,12 @@ export function RecommendedControlsPrompt() {
   const blockedByGameplayOverlay = useGameStore((state) =>
     Boolean(
       state.isPaused ||
-        state.isJournalOpen ||
-        state.recoveryReason ||
-        state.activeNarrativeEventId ||
-        state.activeRadioEventId ||
-        state.activeMissionChoiceObjectiveId ||
-        onboardingIsActive(state.onboardingState),
+      state.isJournalOpen ||
+      state.recoveryReason ||
+      state.activeNarrativeEventId ||
+      state.activeRadioEventId ||
+      state.activeMissionChoiceObjectiveId ||
+      onboardingIsActive(state.onboardingState),
     ),
   );
   useEffect(() => {
@@ -43,6 +47,7 @@ export function RecommendedControlsPrompt() {
   }, []);
 
   if (
+    gameplayActive ||
     !mobileContext ||
     dismissed ||
     controlMode === 'arcade-driving' ||
@@ -57,12 +62,13 @@ export function RecommendedControlsPrompt() {
       role="status"
       aria-label="Nuevo control móvil"
       data-controls-migration="arcade"
+      data-testid="controls-migration"
     >
       <span>Nuevo control móvil</span>
       <h2>Conducción Arcade</h2>
       <p>
-        Desliza hacia arriba para arrancar al instante y suelta para mantener
-        la marcha.
+        Desliza hacia arriba para arrancar al instante y suelta para mantener la
+        marcha.
       </p>
       <div>
         <button

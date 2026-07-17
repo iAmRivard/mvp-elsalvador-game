@@ -4104,6 +4104,15 @@ html[data-tutorial-target='objective'] .map-canvas {
   font-size: 1.15rem;
 }
 
+.stuck-vehicle-assist[data-stuck-vehicle-assist='start-hint'] {
+  pointer-events: none;
+}
+
+.stuck-vehicle-assist[data-stuck-vehicle-assist='start-hint']
+  .stuck-vehicle-assist__dismiss {
+  pointer-events: auto;
+}
+
 @media (max-width: 600px), (pointer: coarse) {
   .stuck-vehicle-assist {
     left: 50%;

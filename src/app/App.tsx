@@ -176,7 +176,7 @@ export function App() {
             }}
           />
         )}
-      <RecommendedControlsPrompt />
+      <RecommendedControlsPrompt gameplayActive={sessionStarted} />
       <ServiceWorkerUpdatePrompt deferUpdate={Boolean(activeMissionId)} />
     </main>
   );

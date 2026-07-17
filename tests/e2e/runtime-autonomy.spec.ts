@@ -165,8 +165,8 @@ async function expandMissionJournal(page: Page) {
       for (const candidate of [
         details,
         drivingHud,
-        viewObjective,
         expandMissions,
+        viewObjective,
       ]) {
         if ((await candidate.count()) === 0) continue;
         try {
@@ -284,7 +284,16 @@ test('carga el mapa sin solicitudes a terceros', async ({
     'data-driving-surface-label',
     /Vía secundaria|Calle residencial|Vía terciaria|Zona del objetivo/,
   );
-  await expect(gameMap).toHaveAttribute('data-follow-offset-y', /^[1-9]\d*$/);
+  await expect(gameMap).toHaveAttribute('data-follow-offset-y', /^-?\d+$/);
+  await expect(gameMap).toHaveAttribute(
+    'data-player-outside-safe-viewport',
+    'false',
+  );
+  const safePlayerRatio = Number(
+    await gameMap.getAttribute('data-safe-player-y-ratio'),
+  );
+  expect(safePlayerRatio).toBeGreaterThanOrEqual(0.55);
+  expect(safePlayerRatio).toBeLessThanOrEqual(0.65);
   const stoppedZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
   expect(stoppedZoom).toBeGreaterThan(15.5);
 

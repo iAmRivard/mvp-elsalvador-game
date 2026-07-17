@@ -1257,9 +1257,11 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         containerRef.current.dataset.roadNetworkStatus = 'loading';
       }
       let roadNetworkSettled = false;
+      let roadlessStartupFinished = false;
       const finishRoadlessStartup = (reason: 'shared-fallback' | 'timeout') => {
-        if (!effectActive || roadNetworkSettled) return;
-        roadNetworkSettled = true;
+        if (!effectActive || roadNetworkSettled || roadlessStartupFinished)
+          return;
+        roadlessStartupFinished = true;
         roadNetworkEnabled = false;
         useGameStore.getState().setRoadNetworkStatus('unavailable');
         if (containerRef.current) {
@@ -1271,96 +1273,94 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       if (isRoadlessStartupAllowed()) {
         finishRoadlessStartup('shared-fallback');
       }
-      if (!roadNetworkSettled) {
+      if (!roadlessStartupFinished) {
         roadNetworkStartupDeadline = window.setTimeout(() => {
           allowRoadlessStartup();
           finishRoadlessStartup('timeout');
         }, ROAD_NETWORK_STARTUP_DEADLINE_MILLISECONDS);
-        void loadRoadNetwork()
-          .then(
-            ({
-              network,
-              index,
-              loadDurationMilliseconds,
-              fileSizeBytes,
-              metrics,
-            }) => {
-              if (!effectActive || roadNetworkSettled) return;
-              roadNetworkSettled = true;
-              if (roadNetworkStartupDeadline !== null) {
-                window.clearTimeout(roadNetworkStartupDeadline);
-                roadNetworkStartupDeadline = null;
-              }
-              removeRoadSurfaceLayer = addPlayableRoadSurfaceLayer(
-                map,
-                network,
-              );
-              roadIndex = index;
-              roadEdgesById = new Map(
-                network.edges.map((edge) => [edge.id, edge]),
-              );
-              setRouteRejoinRoadSource({ index, edgesById: roadEdgesById });
-              roadTracker = new RoadTracker(index);
-              const currentPlayer =
-                gameLoop?.getPlayer() ??
-                runtimeFromTelemetry(useGameStore.getState().telemetry);
-              validateInitialRoadPosition(currentPlayer);
-              const validatedPlayer = runtimeFromTelemetry(
-                useGameStore.getState().telemetry,
-              );
-              roadContact = roadTracker.update(
-                [validatedPlayer.longitude, validatedPlayer.latitude],
-                roadContextFor(validatedPlayer),
-              );
-              roadNetworkEnabled = true;
-              useGameStore.getState().setRoadNetworkStatus('ready');
-              if (containerRef.current) {
-                containerRef.current.dataset.roadNetworkStatus = 'ready';
-                containerRef.current.dataset.roadLoadMs =
-                  loadDurationMilliseconds.toFixed(1);
-                containerRef.current.dataset.roadFileBytes =
-                  String(fileSizeBytes);
-                containerRef.current.dataset.roadDownloadMs =
-                  metrics.downloadDurationMilliseconds.toFixed(1);
-                containerRef.current.dataset.roadParseMs =
-                  metrics.parseDurationMilliseconds.toFixed(1);
-                containerRef.current.dataset.roadValidationMs =
-                  metrics.validationDurationMilliseconds.toFixed(1);
-                containerRef.current.dataset.roadIndexMs =
-                  metrics.indexDurationMilliseconds.toFixed(1);
-                containerRef.current.dataset.roadMemoryMb = (
-                  metrics.approximateMemoryBytes /
-                  1024 /
-                  1024
-                ).toFixed(1);
-              }
-              finishStartup();
-            },
-          )
-          .catch((error: unknown) => {
+      }
+      void loadRoadNetwork()
+        .then(
+          ({
+            network,
+            index,
+            loadDurationMilliseconds,
+            fileSizeBytes,
+            metrics,
+          }) => {
             if (!effectActive || roadNetworkSettled) return;
             roadNetworkSettled = true;
             if (roadNetworkStartupDeadline !== null) {
               window.clearTimeout(roadNetworkStartupDeadline);
               roadNetworkStartupDeadline = null;
             }
-            roadNetworkEnabled = false;
-            useGameStore.getState().setRoadNetworkStatus('unavailable');
-            recordMapErrorClassification(
-              classifyMapRuntimeError(error, {
-                startupComplete: startupReady,
-                resourceKind: 'road-network',
-                primaryStyleUrl: mapSourceConfig.styleUrl,
-                primaryArchiveUrl: mapSourceConfig.archiveUrl,
-                primarySourceId: mapSourceConfig.sourceId,
-              }),
+            removeRoadSurfaceLayer = addPlayableRoadSurfaceLayer(map, network);
+            roadIndex = index;
+            roadEdgesById = new Map(
+              network.edges.map((edge) => [edge.id, edge]),
             );
+            setRouteRejoinRoadSource({ index, edgesById: roadEdgesById });
+            roadTracker = new RoadTracker(index);
+            const currentPlayer =
+              gameLoop?.getPlayer() ??
+              runtimeFromTelemetry(useGameStore.getState().telemetry);
+            validateInitialRoadPosition(currentPlayer);
+            const validatedPlayer = runtimeFromTelemetry(
+              useGameStore.getState().telemetry,
+            );
+            roadContact = roadTracker.update(
+              [validatedPlayer.longitude, validatedPlayer.latitude],
+              roadContextFor(validatedPlayer),
+            );
+            roadNetworkEnabled = true;
+            useGameStore.getState().setRoadNetworkStatus('ready');
             if (containerRef.current) {
-              containerRef.current.dataset.roadNetworkStatus = 'unavailable';
+              containerRef.current.dataset.roadNetworkStatus = 'ready';
+              containerRef.current.dataset.roadLoadMs =
+                loadDurationMilliseconds.toFixed(1);
+              containerRef.current.dataset.roadFileBytes =
+                String(fileSizeBytes);
+              containerRef.current.dataset.roadDownloadMs =
+                metrics.downloadDurationMilliseconds.toFixed(1);
+              containerRef.current.dataset.roadParseMs =
+                metrics.parseDurationMilliseconds.toFixed(1);
+              containerRef.current.dataset.roadValidationMs =
+                metrics.validationDurationMilliseconds.toFixed(1);
+              containerRef.current.dataset.roadIndexMs =
+                metrics.indexDurationMilliseconds.toFixed(1);
+              containerRef.current.dataset.roadMemoryMb = (
+                metrics.approximateMemoryBytes /
+                1024 /
+                1024
+              ).toFixed(1);
             }
             finishStartup();
-          });
-      }
+          },
+        )
+        .catch((error: unknown) => {
+          if (!effectActive || roadNetworkSettled) return;
+          roadNetworkSettled = true;
+          if (roadNetworkStartupDeadline !== null) {
+            window.clearTimeout(roadNetworkStartupDeadline);
+            roadNetworkStartupDeadline = null;
+          }
+          roadNetworkEnabled = false;
+          useGameStore.getState().setRoadNetworkStatus('unavailable');
+          if (roadlessStartupFinished) return;
+          recordMapErrorClassification(
+            classifyMapRuntimeError(error, {
+              startupComplete: startupReady,
+              resourceKind: 'road-network',
+              primaryStyleUrl: mapSourceConfig.styleUrl,
+              primaryArchiveUrl: mapSourceConfig.archiveUrl,
+              primarySourceId: mapSourceConfig.sourceId,
+            }),
+          );
+          if (containerRef.current) {
+            containerRef.current.dataset.roadNetworkStatus = 'unavailable';
+          }
+          finishStartup();
+        });
       playerMarker = new maplibregl.Marker({
         element: createPlayerMarkerElement(activeVehicleSkin),
         anchor: 'center',
