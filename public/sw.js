@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'rutas-perdidas-';
-const CACHE_VERSION = 'v0.2.5.3';
+const CACHE_VERSION = 'v0.3.0';
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `${CACHE_PREFIX}static-${CACHE_VERSION}`;
 const APP_SHELL = [
@@ -51,6 +51,13 @@ function isHashedStaticAsset(url) {
   );
 }
 
+function isVersionedLocalModel(url) {
+  return (
+    url.pathname.startsWith('/models/') &&
+    url.pathname.toLowerCase().endsWith('.glb')
+  );
+}
+
 function isMapArchiveRequest(request, url) {
   return (
     request.headers.has('range') ||
@@ -89,19 +96,16 @@ function respondNetworkFirst(event) {
 
 function respondCacheFirst(event) {
   const request = event.request;
-  const cached = caches.match(request);
-  const response = cached.then((match) => match || fetch(request));
+  const response = caches.open(STATIC_CACHE).then(async (cache) => {
+    const match = await cache.match(request);
+    if (match) return match;
+    const networkResponse = await fetch(request);
+    if (networkResponse.ok) {
+      await cache.put(request, networkResponse.clone());
+    }
+    return networkResponse;
+  });
 
-  event.waitUntil(
-    Promise.all([cached, response])
-      .then(([match, finalResponse]) => {
-        if (match || !finalResponse.ok) return undefined;
-        return caches
-          .open(STATIC_CACHE)
-          .then((cache) => cache.put(request, finalResponse.clone()));
-      })
-      .catch(() => undefined),
-  );
   event.respondWith(response);
 }
 
@@ -121,7 +125,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (isHashedStaticAsset(url)) {
+  if (isHashedStaticAsset(url) || isVersionedLocalModel(url)) {
     respondCacheFirst(event);
   }
 });

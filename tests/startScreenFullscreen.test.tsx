@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -42,6 +43,22 @@ describe('inicio opcional en pantalla completa', () => {
     vi.clearAllMocks();
   });
 
+  it('muestra la version y el SHA del build', () => {
+    render(
+      <StartScreen
+        onContinue={vi.fn()}
+        onContinueFullscreen={vi.fn()}
+        onNewGame={vi.fn()}
+      />,
+    );
+
+    const identity = screen.getByTestId('build-identity');
+    expect(identity.textContent).toMatch(/^v0\.3\.0 · /);
+    expect(identity.getAttribute('data-build-sha')).toMatch(
+      /^(?:local|[0-9a-f]{7,40})$/,
+    );
+  });
+
   it('inicia la expedición desde el mismo gesto de fullscreen al estar listo', async () => {
     const onContinueFullscreen = vi.fn();
     render(
@@ -62,9 +79,12 @@ describe('inicio opcional en pantalla completa', () => {
   });
 
   it('oculta la sugerencia cuando ya corre como aplicación instalada', () => {
-    vi.mocked(window.matchMedia).mockImplementation((query) => ({
-      matches: query === '(display-mode: standalone)',
-    }) as MediaQueryList);
+    vi.mocked(window.matchMedia).mockImplementation(
+      (query) =>
+        ({
+          matches: query === '(display-mode: standalone)',
+        }) as MediaQueryList,
+    );
     render(
       <StartScreen
         onContinue={vi.fn()}
@@ -80,7 +100,9 @@ describe('inicio opcional en pantalla completa', () => {
 
   it('habilita un fallback recuperable si la preparación no responde', async () => {
     vi.useFakeTimers();
-    vi.mocked(loadRoadNetwork).mockReturnValueOnce(new Promise(() => undefined));
+    vi.mocked(loadRoadNetwork).mockReturnValueOnce(
+      new Promise(() => undefined),
+    );
     render(
       <StartScreen
         onContinue={vi.fn()}
@@ -89,14 +111,18 @@ describe('inicio opcional en pantalla completa', () => {
       />,
     );
 
-    await vi.advanceTimersByTimeAsync(0);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
     const button = screen.getByRole('button', {
       name: 'Comenzar expedición',
     });
     expect(button).toHaveProperty('disabled', true);
-    await vi.advanceTimersByTimeAsync(
-      START_PREPARATION_DEADLINE_MILLISECONDS,
-    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(
+        START_PREPARATION_DEADLINE_MILLISECONDS,
+      );
+    });
     expect(button).toHaveProperty('disabled', false);
     expect(
       screen.getByText(/modo compatible sin asistencia vial completa/i),

@@ -13,6 +13,7 @@ import {
 import { useGameStore } from '../../store/gameStore';
 import { fullscreenSupported } from '../../game/fullscreen';
 import { SettingsDialog } from './SettingsDialog';
+import { BuildIdentity } from './BuildIdentity';
 import { InstallExperienceHint } from '../pwa/InstallExperienceHint';
 import { VehicleGarageDialog } from '../garage/VehicleGarageDialog';
 
@@ -249,6 +250,7 @@ export function StartScreen({
         <small className="start-screen__offline">
           Mapa y progreso disponibles sin servicios externos
         </small>
+        <BuildIdentity />
       </div>
 
       {confirmingNewGame && (

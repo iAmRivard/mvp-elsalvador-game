@@ -11,6 +11,8 @@ function booleanFlag(value: string | undefined, fallback: boolean): boolean {
 
 export const gameConfig = {
   title: import.meta.env.VITE_GAME_TITLE || 'El Salvador: Rutas Perdidas',
+  version: typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : '0.3.0',
+  buildSha: typeof __BUILD_SHA__ === 'string' ? __BUILD_SHA__ : 'local',
   enableTerrain: booleanFlag(import.meta.env.VITE_ENABLE_TERRAIN, false),
   enableThreePlayer: booleanFlag(
     import.meta.env.VITE_ENABLE_THREE_PLAYER,

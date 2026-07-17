@@ -65,7 +65,7 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
 
   await page.evaluate(async () => {
     const cacheName = (await caches.keys()).find((key) =>
-      key.includes('shell-v0.2.5.3'),
+      key.includes('shell-v0.3.0'),
     );
     if (!cacheName) throw new Error('No se encontró el shell cache.');
     const cache = await caches.open(cacheName);
@@ -81,7 +81,9 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
   await expect(page.locator('body')).not.toContainText('STALE-PWA-SHELL');
 
   await installUpdateCandidate(page, 'skip-waiting');
-  await expect(page.getByText('Nueva versión lista para instalar.')).toBeVisible();
+  await expect(
+    page.getByText('Nueva versión lista para instalar.'),
+  ).toBeVisible();
   await page.evaluate(() => {
     sessionStorage.setItem('pwa-controller-changes', '0');
     navigator.serviceWorker.addEventListener(
@@ -106,9 +108,7 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
     .toBe('1');
   await expect
     .poll(() =>
-      page.evaluate(
-        () => navigator.serviceWorker.controller?.scriptURL ?? '',
-      ),
+      page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? ''),
     )
     .toContain('candidate=skip-waiting');
 
@@ -120,7 +120,7 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
   const cacheFirstResult = await page.evaluate(async (assetUrl) => {
     if (!assetUrl) throw new Error('No se encontró un asset con hash.');
     const cacheName = (await caches.keys()).find((key) =>
-      key.includes('static-v0.2.5.3'),
+      key.includes('static-v0.3.0'),
     );
     if (!cacheName) throw new Error('No se encontró el static cache.');
     const cache = await caches.open(cacheName);
@@ -133,6 +133,27 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
     return fetch(assetUrl).then((response) => response.text());
   }, hashedAsset);
   expect(cacheFirstResult).toBe('CACHE_FIRST_SENTINEL');
+
+  const modelContentType = await page.evaluate(async () => {
+    const modelUrl = '/models/expedition-vehicle.glb';
+    const first = await fetch(modelUrl);
+    if (!first.ok) throw new Error('No se pudo cargar el modelo local.');
+    await first.arrayBuffer();
+    return first.headers.get('content-type') ?? '';
+  });
+  expect(modelContentType).toContain('model/gltf-binary');
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const cacheName = (await caches.keys()).find((key) =>
+          key.includes('static-v0.3.0'),
+        );
+        if (!cacheName) return false;
+        const cache = await caches.open(cacheName);
+        return Boolean(await cache.match('/models/expedition-vehicle.glb'));
+      }),
+    )
+    .toBe(true);
 
   const rangeResult = await page.evaluate(async () => {
     const request = new Request('/maps/el-salvador.pmtiles', {
@@ -158,5 +179,7 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
       'Nueva versión lista. Podrás actualizar al terminar la misión.',
     ),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Actualizar ahora' })).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Actualizar ahora' }),
+  ).toBeDisabled();
 });

@@ -32,7 +32,7 @@ jobs:
         run: npm ci && npx playwright install --with-deps chromium
 
       - name: Construir imagen de prueba
-        run: docker build --tag rutas-perdidas:test .
+        run: docker build --build-arg BUILD_SHA="$GITHUB_SHA" --tag rutas-perdidas:test .
 
       - name: Iniciar contenedor
         run: docker run --detach --rm --name rutas-perdidas --publish 8080:80 rutas-perdidas:test

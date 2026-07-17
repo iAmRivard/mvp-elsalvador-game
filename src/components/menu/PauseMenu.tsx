@@ -3,6 +3,7 @@ import { useGameStore } from '../../store/gameStore';
 import { SettingsDialog } from './SettingsDialog';
 import { FullscreenButton } from '../pwa/FullscreenButton';
 import { VehicleGarageDialog } from '../garage/VehicleGarageDialog';
+import { BuildIdentity } from './BuildIdentity';
 
 interface PauseMenuProps {
   onExitToTitle: () => void;
@@ -82,6 +83,7 @@ export function PauseMenu({ onExitToTitle }: PauseMenuProps) {
           </button>
         </div>
         <small>También puedes presionar Escape para continuar.</small>
+        <BuildIdentity />
       </section>
       <SettingsDialog
         open={settingsOpen}

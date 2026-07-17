@@ -1,7 +1,7 @@
 {
   "name": "el-salvador-rutas-perdidas",
   "private": true,
-  "version": "0.2.5.3",
+  "version": "0.3.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -21,6 +21,7 @@
     "generate:audio": "node scripts/audio/generate-audio.mjs",
     "generate:icons": "node scripts/assets/generate-pwa-icons.mjs",
     "capture:driving-ux": "node scripts/visual/capture-driving-ux.mjs",
+    "capture:arcade-five-minutes": "node scripts/visual/capture-arcade-five-minutes.mjs",
     "download:roads": "sh scripts/roads/download-source.sh",
     "build:roads": "node scripts/roads/build-road-network.mjs",
     "check:roads": "node scripts/roads/validate-road-network.mjs",
