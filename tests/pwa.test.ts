@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 import {
   exitGameFullscreen,
@@ -32,6 +33,7 @@ describe('experiencia PWA', () => {
     expect(serviceWorker).toContain("RELEASE_VERSION = 'v0.3.0'");
     expect(serviceWorker).toContain("BUILD_VERSION = '__BUILD_SHA__'");
     expect(serviceWorker).toContain("'/precache-manifest.json'");
+    expect(serviceWorker).toContain('manifest.buildIdentity !== BUILD_VERSION');
     expect(serviceWorker).toContain("'/data/roads/western-corridor.json'");
     expect(serviceWorker).toContain("request.mode === 'navigate'");
     expect(serviceWorker).toContain('isHashedStaticAsset(url)');
@@ -41,6 +43,57 @@ describe('experiencia PWA', () => {
     expect(readFileSync(resolve('index.html'), 'utf8')).toContain(
       '/manifest.webmanifest',
     );
+  });
+
+  it('aborta la instalacion antes de abrir caches si el SHA no coincide', async () => {
+    const source = readFileSync(resolve('public/sw.js'), 'utf8').replaceAll(
+      '__BUILD_SHA__',
+      'expected-build',
+    );
+    const pending: Promise<unknown>[] = [];
+    let installListener:
+      | ((event: { waitUntil(promise: Promise<unknown>): void }) => void)
+      | undefined;
+    const openCache = vi.fn();
+
+    runInNewContext(source, {
+      URL,
+      fetch: vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              buildIdentity: 'different-build',
+              assets: ['/assets/index-fixture.js'],
+            }),
+        }),
+      ),
+      caches: {
+        open: openCache,
+        keys: vi.fn(),
+        match: vi.fn(),
+      },
+      self: {
+        addEventListener: (
+          type: string,
+          listener: (event: {
+            waitUntil(promise: Promise<unknown>): void;
+          }) => void,
+        ) => {
+          if (type === 'install') installListener = listener;
+        },
+      },
+    });
+
+    expect(installListener).toBeTypeOf('function');
+    installListener?.({
+      waitUntil: (promise) => pending.push(promise),
+    });
+    expect(pending).toHaveLength(1);
+    await expect(pending[0]).rejects.toThrow(
+      'La identidad del manifiesto no coincide con el build.',
+    );
+    expect(openCache).not.toHaveBeenCalled();
   });
 
   it('tolera soporte estándar, prefijado y ausencia de fullscreen', async () => {

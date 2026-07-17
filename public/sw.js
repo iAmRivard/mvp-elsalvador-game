@@ -26,6 +26,9 @@ async function installRelease() {
     throw new Error('No se pudo cargar el manifiesto de precache.');
   }
   const manifest = await manifestResponse.json();
+  if (manifest.buildIdentity !== BUILD_VERSION) {
+    throw new Error('La identidad del manifiesto no coincide con el build.');
+  }
   const buildAssets = Array.isArray(manifest.assets)
     ? manifest.assets.filter(
         (asset) => typeof asset === 'string' && asset.startsWith('/assets/'),

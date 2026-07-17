@@ -3,6 +3,13 @@ import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 
 const serviceWorkerSource = readFileSync(resolve('public/sw.js'), 'utf8');
+const precacheManifest = JSON.parse(
+  readFileSync(resolve('dist/precache-manifest.json'), 'utf8'),
+) as { buildIdentity: string; assets: string[] };
+const builtServiceWorkerSource = serviceWorkerSource.replaceAll(
+  '__BUILD_SHA__',
+  precacheManifest.buildIdentity.replace(/[^a-z0-9._-]/gi, '-'),
+);
 
 test('precachea el shell y prepara la red vial offline desde la primera instalaciÃ³n', async ({
   context,
@@ -31,6 +38,9 @@ test('precachea el shell y prepara la red vial offline desde la primera instalac
     .toBe(true);
 
   const cachedRelease = await page.evaluate(async () => {
+    const manifest = (await fetch('/precache-manifest.json').then((response) =>
+      response.json(),
+    )) as { buildIdentity: string; assets: string[] };
     const staticCacheName = (await caches.keys()).find((key) =>
       key.includes('static-v0.3.0'),
     );
@@ -40,22 +50,26 @@ test('precachea el shell y prepara la red vial offline desde la primera instalac
       (request) => new URL(request.url).pathname,
     );
     return {
-      hasEntryScript: paths.some(
-        (path) => path.startsWith('/assets/') && path.endsWith('.js'),
+      buildIdentity: manifest.buildIdentity,
+      staticCacheName,
+      missingBuildAssets: manifest.assets.filter(
+        (asset) => !paths.includes(asset),
       ),
-      hasStyles: paths.some(
-        (path) => path.startsWith('/assets/') && path.endsWith('.css'),
-      ),
+      hasPrecacheManifest: paths.includes('/precache-manifest.json'),
       hasRoadNetwork: paths.includes('/data/roads/western-corridor.json'),
       hasPlayerModel: paths.includes('/models/expedition-vehicle.glb'),
+      hasSignalModel: paths.includes('/models/suchitoto-signal.glb'),
       hasMapArchive: paths.some((path) => path.endsWith('.pmtiles')),
     };
   });
   expect(cachedRelease).toEqual({
-    hasEntryScript: true,
-    hasStyles: true,
+    buildIdentity: precacheManifest.buildIdentity,
+    staticCacheName: expect.stringContaining(precacheManifest.buildIdentity),
+    missingBuildAssets: [],
+    hasPrecacheManifest: true,
     hasRoadNetwork: true,
     hasPlayerModel: true,
+    hasSignalModel: true,
     hasMapArchive: false,
   });
 
@@ -141,7 +155,7 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
     const url = new URL(route.request().url());
     await route.fulfill({
       contentType: 'application/javascript; charset=utf-8',
-      body: `${serviceWorkerSource}\n// ${url.searchParams.get('candidate') ?? ''}\n`,
+      body: `${builtServiceWorkerSource}\n// ${url.searchParams.get('candidate') ?? ''}\n`,
     });
   });
 
