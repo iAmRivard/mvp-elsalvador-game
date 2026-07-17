@@ -8,6 +8,8 @@ export const routingConfig = {
   stoppedGuidanceHeadingDifferenceDegrees: 45,
   deviationCheckIntervalMilliseconds: 1_000,
   automaticRecalculationCooldownMilliseconds: 5_000,
+  fallbackRoadRetryDelayMilliseconds: 500,
+  fallbackRoadMaximumRetryAttempts: 3,
   maximumCacheEntries: 32,
   workerTimeoutMilliseconds: 4_000,
   averageCruisingSpeedRatio: 0.72,

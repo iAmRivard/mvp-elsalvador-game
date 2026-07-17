@@ -487,6 +487,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let lateRoadPromotionAssistElapsedMilliseconds: number | null = null;
     let lateRoadPromotionAssistLastActiveTimestamp: number | null = null;
     let lateRoadPromotionAssistFirstActiveSamplePending = false;
+    let lateRoadPromotionAssistResumeSamplePending = false;
     let roadNetworkStartupDeadline: number | null = null;
     let lastBlockedImpactTimestamp = Number.NEGATIVE_INFINITY;
     let visualFrameCount = 0;
@@ -1384,6 +1385,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 );
               containerRef.current.dataset.roadPromotionAssistRamp =
                 movedDuringRoadlessStartup ? 'active' : 'not-needed';
+              containerRef.current.dataset.roadPromotionAssistPausedElapsedMs =
+                '';
+              containerRef.current.dataset.roadPromotionAssistResumedElapsedMs =
+                '';
               containerRef.current.dataset.roadPromotionRuntimeDisplacementMeters =
                 promotionRuntimeDisplacementMeters.toFixed(3);
               containerRef.current.dataset.roadPromotionRuntimeHeadingDelta =
@@ -1605,12 +1610,22 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               recoveryActive: state.recoveryReason !== null,
               vehicleEnabled: state.vehicle.condition > 0,
             });
+            const simulationWasEnabled = runtimeSimulationEnabled;
             runtimeSimulationEnabled = gate.simulationEnabled;
             if (
               !runtimeSimulationEnabled &&
               lateRoadPromotionAssistElapsedMilliseconds !== null
             ) {
               lateRoadPromotionAssistLastActiveTimestamp = null;
+              if (simulationWasEnabled) {
+                lateRoadPromotionAssistResumeSamplePending = true;
+                if (containerRef.current) {
+                  containerRef.current.dataset.roadPromotionAssistPausedElapsedMs =
+                    lateRoadPromotionAssistElapsedMilliseconds.toFixed(3);
+                  containerRef.current.dataset.roadPromotionAssistResumedElapsedMs =
+                    '';
+                }
+              }
             }
             if (containerRef.current) {
               containerRef.current.dataset.driveEnabled = String(
@@ -1639,6 +1654,13 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 0,
                 lateRoadPromotionAssistElapsedMilliseconds,
               );
+            if (lateRoadPromotionAssistResumeSamplePending) {
+              lateRoadPromotionAssistResumeSamplePending = false;
+              if (containerRef.current) {
+                containerRef.current.dataset.roadPromotionAssistResumedElapsedMs =
+                  lateRoadPromotionAssistElapsedMilliseconds.toFixed(3);
+              }
+            }
             if (lateRoadPromotionAssistFirstActiveSamplePending) {
               lateRoadPromotionAssistFirstActiveSamplePending = false;
               if (containerRef.current) {

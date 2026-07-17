@@ -37,6 +37,12 @@ import type { RoadCoordinates } from '../types/roads';
 import type { RouteNavigationInstruction } from '../types/navigation';
 import { createTrailingUpdateScheduler } from './trailingUpdateScheduler';
 import { createNavigationGuidanceElement } from './navigationGuidanceMarker';
+import {
+  boundedRetryDelayMilliseconds,
+  initialBoundedRetryState,
+  scheduleBoundedRetry,
+  settleBoundedRetry,
+} from './boundedRetry';
 
 const ROUTE_SOURCE_ID = 'active-mission-route';
 const ROAD_CASING_LAYER_ID = 'active-mission-route-casing';
@@ -492,6 +498,8 @@ export function addMissionRoute(
   let lastKnownSegmentIndex: number | null = null;
   let lastDeviationCheck = 0;
   let lastCalculationAt = 0;
+  let fallbackRoadRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  let fallbackRoadRetryState = initialBoundedRetryState();
   const routeSource = () => map.getSource<GeoJSONSource>(ROUTE_SOURCE_ID);
   const immediateSource = () =>
     map.getSource<GeoJSONSource>(IMMEDIATE_SOURCE_ID);
@@ -758,9 +766,61 @@ export function addMissionRoute(
     });
   };
 
+  const cancelFallbackRoadRetry = () => {
+    if (fallbackRoadRetryTimer !== null) {
+      clearTimeout(fallbackRoadRetryTimer);
+      fallbackRoadRetryTimer = null;
+    }
+    fallbackRoadRetryState = settleBoundedRetry(fallbackRoadRetryState);
+  };
+
+  const resetFallbackRoadRetry = (resolved = false) => {
+    const attempts = fallbackRoadRetryState.attempts;
+    cancelFallbackRoadRetry();
+    fallbackRoadRetryState = initialBoundedRetryState();
+    mapContainer.dataset.routeFallbackRoadRetryAttempts = '0';
+    mapContainer.dataset.routeFallbackRoadResolvedAttempts = resolved
+      ? String(attempts)
+      : '0';
+  };
+
+  const scheduleFallbackRoadRetry = () => {
+    if (
+      disposed ||
+      useGameStore.getState().driving.roadNetworkStatus !== 'ready'
+    ) {
+      return;
+    }
+    const scheduled = scheduleBoundedRetry(
+      fallbackRoadRetryState,
+      routingConfig.fallbackRoadMaximumRetryAttempts,
+    );
+    if (!scheduled) return;
+    fallbackRoadRetryState = scheduled.state;
+    mapContainer.dataset.routeFallbackRoadRetryAttempts = String(
+      scheduled.attempt,
+    );
+    fallbackRoadRetryTimer = setTimeout(() => {
+      fallbackRoadRetryTimer = null;
+      fallbackRoadRetryState = settleBoundedRetry(fallbackRoadRetryState);
+      if (
+        disposed ||
+        routeMode !== 'fallback' ||
+        useGameStore.getState().driving.roadNetworkStatus !== 'ready'
+      ) {
+        return;
+      }
+      void calculateRoute();
+    }, boundedRetryDelayMilliseconds(
+      routingConfig.fallbackRoadRetryDelayMilliseconds,
+      scheduled.attempt,
+    ));
+  };
+
   const calculateRoute = async (): Promise<void> => {
     const target = currentMissionTarget();
     if (!target) {
+      resetFallbackRoadRetry();
       clearRoute();
       return;
     }
@@ -858,6 +918,7 @@ export function addMissionRoute(
     }
 
     if (route) {
+      resetFallbackRoadRetry(true);
       routeCoordinates = route.coordinates;
       routeInstructions = generateNavigationInstructions(route.coordinates);
       routeMode = 'road';
@@ -948,7 +1009,11 @@ export function addMissionRoute(
       latestTarget.state.telemetry.heading,
     );
     mapContainer.dataset.routeRecalculating = String(originMoved);
-    if (originMoved) void calculateRoute();
+    if (useGameStore.getState().driving.roadNetworkStatus === 'ready') {
+      scheduleFallbackRoadRetry();
+    } else {
+      resetFallbackRoadRetry();
+    }
   };
 
   updateTargets(map);
@@ -960,6 +1025,7 @@ export function addMissionRoute(
   const unsubscribe = useGameStore.subscribe((state, previousState) => {
     const nextTargetKey = targetKey();
     if (nextTargetKey !== activeTargetKey) {
+      resetFallbackRoadRetry();
       activeTargetKey = nextTargetKey;
       previousRecalculationRevision = state.missionRoute.recalculationRevision;
       previousClosedEdges = state.temporarilyClosedRoadEdgeIds;
@@ -972,6 +1038,7 @@ export function addMissionRoute(
         previousRecalculationRevision ||
       state.temporarilyClosedRoadEdgeIds !== previousClosedEdges
     ) {
+      resetFallbackRoadRetry();
       previousRecalculationRevision = state.missionRoute.recalculationRevision;
       previousClosedEdges = state.temporarilyClosedRoadEdgeIds;
       void calculateRoute();
@@ -1008,6 +1075,7 @@ export function addMissionRoute(
   return () => {
     disposed = true;
     calculationToken += 1;
+    cancelFallbackRoadRetry();
     navigationUpdates.cancel();
     unsubscribe();
     maneuverMarker.remove();

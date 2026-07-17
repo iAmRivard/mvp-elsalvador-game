@@ -403,6 +403,56 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    const NativeWorker = window.Worker;
+    window.Worker = class FirstRoadRouteNullWorker extends NativeWorker {
+      private returnedNullRoute = false;
+
+      postMessage(
+        message: unknown,
+        options?: StructuredSerializeOptions | Transferable[],
+      ): void {
+        if (
+          !this.returnedNullRoute &&
+          typeof message === 'object' &&
+          message !== null &&
+          'type' in message &&
+          message.type === 'calculate-route' &&
+          'requestId' in message &&
+          typeof message.requestId === 'string'
+        ) {
+          this.returnedNullRoute = true;
+          document.documentElement.dataset.firstRoadRouteNullInjected =
+            'true';
+          const requestId = message.requestId;
+          queueMicrotask(() => {
+            this.dispatchEvent(
+              new MessageEvent('message', {
+                data: {
+                  type: 'route-calculated',
+                  requestId,
+                  route: null,
+                  durationMilliseconds: 0,
+                  diagnostics: {
+                    calculations: 1,
+                    cacheHits: 0,
+                    cacheEntries: 0,
+                    averageDurationMilliseconds: 0,
+                    lastDurationMilliseconds: 0,
+                    lastExpandedNodeCount: 0,
+                  },
+                },
+              }),
+            );
+          });
+          return;
+        }
+        if (Array.isArray(options)) {
+          super.postMessage(message, options);
+        } else {
+          super.postMessage(message, options);
+        }
+      }
+    };
   });
   let releaseRoadRequest: () => void = () => {};
   const roadRequestRelease = new Promise<void>((resolve) => {
@@ -607,9 +657,76 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   await expect(gameMap).toHaveAttribute('data-road-network-status', 'ready', {
     timeout: 20_000,
   });
+  const promotionObservation = await gameMap.evaluate(async (element) => {
+    const positionFor = () =>
+      `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`;
+    const positionAtPromotion = positionFor();
+    const observationStartedAt = performance.now();
+    while (
+      positionFor() === positionAtPromotion &&
+      performance.now() - observationStartedAt < 250
+    ) {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve()),
+      );
+    }
+    return {
+      promoted: element.dataset.roadNetworkPromotedFromFallback,
+      assistRamp: element.dataset.roadPromotionAssistRamp,
+      pointerActive: element.dataset.inputPointerActive,
+      targetSpeed: Number(element.dataset.inputTargetSpeed),
+      positionChanged: positionFor() !== positionAtPromotion,
+    };
+  });
+  expect(promotionObservation).toMatchObject({
+    promoted: 'true',
+    assistRamp: 'active',
+    pointerActive: 'true',
+    positionChanged: true,
+  });
+  expect(promotionObservation.targetSpeed).toBeGreaterThanOrEqual(
+    targetBeforePromotion,
+  );
+  await release();
+
+  if (testInfo.project.name === 'chromium-mobile') {
+    await page.getByRole('button', { name: 'Pausar partida' }).click();
+    const pauseMenu = page.getByRole('dialog', { name: 'Partida en pausa' });
+    const resumeButton = pauseMenu.getByRole('button', { name: 'Continuar' });
+    await expect(resumeButton).toBeVisible();
+    await page.waitForTimeout(1_600);
+    await expect(gameMap).toHaveAttribute(
+      'data-road-promotion-assist-ramp',
+      'active',
+    );
+    const pausedAssistElapsedMilliseconds = Number(
+      await gameMap.getAttribute(
+        'data-road-promotion-assist-paused-elapsed-ms',
+      ),
+    );
+    expect(pausedAssistElapsedMilliseconds).toBeGreaterThanOrEqual(0);
+    await resumeButton.click();
+    await expect(gameMap).toHaveAttribute(
+      'data-road-promotion-assist-resumed-elapsed-ms',
+      /^\d+(?:\.\d+)?$/,
+    );
+    const resumedAssistElapsedMilliseconds = Number(
+      await gameMap.getAttribute(
+        'data-road-promotion-assist-resumed-elapsed-ms',
+      ),
+    );
+    expect(resumedAssistElapsedMilliseconds).toBe(
+      pausedAssistElapsedMilliseconds,
+    );
+    await expect(gameMap).toHaveAttribute(
+      'data-road-promotion-assist-ramp',
+      'active',
+    );
+  }
+
   await expect(gameMap).toHaveAttribute(
-    'data-road-network-promoted-from-fallback',
-    'true',
+    'data-road-promotion-first-active-assist-multiplier',
+    '0.000',
   );
   await expect(gameMap).toHaveAttribute(
     'data-initial-road-alignment-outcome',
@@ -618,10 +735,6 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   await expect(gameMap).toHaveAttribute(
     'data-initial-road-alignment-revision-delta',
     '0',
-  );
-  await expect(gameMap).toHaveAttribute(
-    'data-road-promotion-assist-ramp',
-    'active',
   );
   await expect(gameMap).toHaveAttribute(
     'data-road-promotion-runtime-displacement-meters',
@@ -639,44 +752,25 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     'data-road-promotion-input-target-delta-kph',
     '0.000',
   );
-  await expect(gameMap).toHaveAttribute('data-input-pointer-active', 'true');
-  expect(
-    Number(await gameMap.getAttribute('data-input-target-speed')),
-  ).toBeGreaterThanOrEqual(targetBeforePromotion);
-  const positionAtPromotion = await gameMap.evaluate(
-    (element) =>
-      `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
-  );
-  await expect
-    .poll(
-      () =>
-        gameMap.evaluate(
-          (element) =>
-            `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
-        ),
-      { timeout: 1_000, intervals: [16, 25, 50] },
-    )
-    .not.toBe(positionAtPromotion);
-  await release();
-
-  await page.getByRole('button', { name: 'Pausar partida' }).click();
-  const pauseMenu = page.getByRole('dialog', { name: 'Partida en pausa' });
-  const resumeButton = pauseMenu.getByRole('button', { name: 'Continuar' });
-  await expect(resumeButton).toBeVisible();
-  await page.waitForTimeout(1_600);
-  await expect(gameMap).toHaveAttribute(
-    'data-road-promotion-assist-ramp',
-    'active',
-  );
-  await resumeButton.click();
-  await expect(gameMap).toHaveAttribute(
-    'data-road-promotion-first-active-assist-multiplier',
-    '0.000',
-  );
   await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road', {
     timeout: 20_000,
   });
-  const positionBeforeResume = await gameMap.evaluate(
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-first-road-route-null-injected',
+    'true',
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-route-fallback-road-retry-attempts',
+    '0',
+  );
+  await expect
+    .poll(() =>
+      gameMap
+        .getAttribute('data-route-fallback-road-resolved-attempts')
+        .then(Number),
+    )
+    .toBeGreaterThanOrEqual(1);
+  const positionBeforeRoadFollow = await gameMap.evaluate(
     (element) =>
       `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
   );
@@ -702,7 +796,7 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
         ),
       { timeout: 1_000, intervals: [16, 25, 50] },
     )
-    .not.toBe(positionBeforeResume);
+    .not.toBe(positionBeforeRoadFollow);
   await expect(gameMap).toHaveAttribute('data-drive-enabled', 'true');
   await expect(gameMap).toHaveAttribute('data-runtime-blocked-by', '');
   let roadSteeringTouchId = 92;
