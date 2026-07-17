@@ -531,8 +531,20 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   await drag(
     43,
     joystickCenter.x,
-    joystickCenter.y - joystickCenter.width * 0.44,
+    joystickCenter.y - joystickCenter.width * 0.24,
   );
+  await expect
+    .poll(
+      () =>
+        gameMap.getAttribute('data-input-target-speed').then(Number),
+      { timeout: 1_000, intervals: [16, 25, 50] },
+    )
+    .toBeGreaterThanOrEqual(15);
+  await expect(gameMap).toHaveAttribute(
+    'data-input-cruise-reverse-state',
+    'forward',
+  );
+  await release();
   await expect
     .poll(
       () =>
@@ -550,7 +562,6 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
         .then(Number),
     )
     .toBeGreaterThanOrEqual(5);
-  await release();
   await page.getByRole('button', { name: 'Pausar partida' }).click();
   const resumeButton = page.getByRole('button', { name: 'Reanudar partida' });
   await expect(resumeButton).toBeVisible();
@@ -644,8 +655,16 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   await drag(
     44,
     joystickCenter.x,
-    joystickCenter.y - joystickCenter.width * 0.44,
+    joystickCenter.y - joystickCenter.width * 0.24,
   );
+  await expect
+    .poll(
+      () =>
+        gameMap.getAttribute('data-input-target-speed').then(Number),
+      { timeout: 1_000, intervals: [16, 25, 50] },
+    )
+    .toBeGreaterThanOrEqual(25);
+  await release();
   await expect
     .poll(() =>
       gameMap
@@ -653,17 +672,10 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
         .then(Number),
     )
     .toBeGreaterThanOrEqual(5);
-  await release();
   let steeringTouchId = 45;
-  const routeFollowDeadline = Date.now() + 18_000;
-  while (
-    ((await gameMap.getAttribute('data-navigation-off-route')) === 'true' ||
-      (await gameMap.getAttribute('data-navigation-requires-rejoin')) ===
-        'true' ||
-      (await gameMap.getAttribute('data-road-contact-surface')) ===
-        'offroad') &&
-    Date.now() < routeFollowDeadline
-  ) {
+  const tutorialCard = page.locator('[data-tutorial-card="mobile"]');
+  const routeFollowDeadline = Date.now() + 5_000;
+  while ((await tutorialCard.count()) > 0 && Date.now() < routeFollowDeadline) {
     await steerTowardRoute(page, session, joystickCenter, steeringTouchId);
     steeringTouchId += 1;
   }
@@ -676,9 +688,7 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     'data-road-contact-surface',
     'offroad',
   );
-  await expect(page.locator('[data-tutorial-card="mobile"]')).toHaveCount(0, {
-    timeout: 5_000,
-  });
+  await expect(tutorialCard).toHaveCount(0);
   await expect(page.getByTestId('mobile-driving-hud')).toBeVisible();
   await session.detach();
 });
