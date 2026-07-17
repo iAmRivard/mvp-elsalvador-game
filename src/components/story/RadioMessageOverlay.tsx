@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { narrativeEventById } from '../../data/chapter1';
 import { useGameStore } from '../../store/gameStore';
 
-export const RADIO_FULL_PREVIEW_MILLISECONDS = 4_500;
+export const RADIO_FULL_PREVIEW_MILLISECONDS = 3_000;
 export type RadioDisplayMode = 'expanded' | 'compact';
 
 interface RadioMessageContentProps {

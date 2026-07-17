@@ -6,6 +6,8 @@ interface DiscoveryToastProps {
   compact?: boolean;
 }
 
+export const DISCOVERY_TOAST_MILLISECONDS = 2_750;
+
 export function DiscoveryToast({ compact = false }: DiscoveryToastProps) {
   const locationId = useGameStore((state) => state.lastDiscoveredLocationId);
   const dismissDiscovery = useGameStore((state) => state.dismissDiscovery);
@@ -13,7 +15,10 @@ export function DiscoveryToast({ compact = false }: DiscoveryToastProps) {
 
   useEffect(() => {
     if (!locationId) return;
-    const timeout = window.setTimeout(dismissDiscovery, 5_500);
+    const timeout = window.setTimeout(
+      dismissDiscovery,
+      DISCOVERY_TOAST_MILLISECONDS,
+    );
     return () => window.clearTimeout(timeout);
   }, [dismissDiscovery, locationId]);
 
