@@ -4,6 +4,102 @@ import { expect, test, type Page } from '@playwright/test';
 
 const serviceWorkerSource = readFileSync(resolve('public/sw.js'), 'utf8');
 
+test('precachea el shell y prepara la red vial offline desde la primera instalaciÃ³n', async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const browserFailures: string[] = [];
+  page.on('requestfailed', (request) => {
+    browserFailures.push(
+      `request:${new URL(request.url()).pathname}:${request.failure()?.errorText ?? 'failed'}`,
+    );
+  });
+  page.on('pageerror', (error) => {
+    browserFailures.push(`page:${error.message}`);
+  });
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      browserFailures.push(`console:${message.text()}`);
+    }
+  });
+  await page.goto('/');
+  await expect
+    .poll(() =>
+      page.evaluate(() => Boolean(navigator.serviceWorker.controller)),
+    )
+    .toBe(true);
+
+  const cachedRelease = await page.evaluate(async () => {
+    const staticCacheName = (await caches.keys()).find((key) =>
+      key.includes('static-v0.3.0'),
+    );
+    if (!staticCacheName) return null;
+    const cache = await caches.open(staticCacheName);
+    const paths = (await cache.keys()).map(
+      (request) => new URL(request.url).pathname,
+    );
+    return {
+      hasEntryScript: paths.some(
+        (path) => path.startsWith('/assets/') && path.endsWith('.js'),
+      ),
+      hasStyles: paths.some(
+        (path) => path.startsWith('/assets/') && path.endsWith('.css'),
+      ),
+      hasRoadNetwork: paths.includes('/data/roads/western-corridor.json'),
+      hasPlayerModel: paths.includes('/models/expedition-vehicle.glb'),
+      hasMapArchive: paths.some((path) => path.endsWith('.pmtiles')),
+    };
+  });
+  expect(cachedRelease).toEqual({
+    hasEntryScript: true,
+    hasStyles: true,
+    hasRoadNetwork: true,
+    hasPlayerModel: true,
+    hasMapArchive: false,
+  });
+
+  await context.setOffline(true);
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveTitle(/El Salvador: Rutas Perdidas/);
+    const offlineCacheState = await page.evaluate(async () => {
+      const resources = [
+        ...document.querySelectorAll<HTMLScriptElement>('script[src]'),
+        ...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'),
+      ].map((element) =>
+        element instanceof HTMLScriptElement ? element.src : element.href,
+      );
+      return {
+        controlled: Boolean(navigator.serviceWorker.controller),
+        controllerUrl: navigator.serviceWorker.controller?.scriptURL ?? null,
+        cacheNames: await caches.keys(),
+        resources: await Promise.all(
+          resources.map(async (resource) => ({
+            resource,
+            cached: Boolean(await caches.match(resource)),
+          })),
+        ),
+      };
+    });
+    await expect
+      .poll(async () => {
+        if ((await page.locator('#root > *').count()) > 0) return 'ready';
+        return `${browserFailures.slice(-12).join('\n') || 'root-empty'}\n${JSON.stringify(offlineCacheState)}`;
+      })
+      .toBe('ready');
+    await expect(page.locator('[data-preparation-stage="ready"]')).toBeVisible({
+      timeout: 25_000,
+    });
+
+    const launchButton = page.locator('.start-button--primary');
+    await expect(launchButton).toHaveCount(1);
+    await expect(launchButton).toBeEnabled();
+  } finally {
+    await context.setOffline(false);
+  }
+});
+
 async function installUpdateCandidate(
   page: Page,
   candidate: string,
