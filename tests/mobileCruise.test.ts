@@ -8,6 +8,39 @@ import { updateCruiseTarget } from '../src/game/mobileCruise';
 afterEach(() => vi.useRealTimers());
 
 describe('velocidad objetivo móvil', () => {
+  it('el primer gesto arcade fija 25 km/h de inmediato y soltar conserva crucero', () => {
+    const input = new InputController();
+    input.setMobileCruiseMode('arcade');
+
+    input.setTargetSpeedJoystick(0.35, 0.4);
+    expect(input.getMobileCruiseTarget()).toMatchObject({
+      targetSpeedKilometersPerHour: 25,
+      reversing: false,
+      reverseState: 'forward',
+    });
+
+    input.advanceMobileCruise(0, 1 / 60);
+    expect(input.snapshot().throttle).toBeGreaterThan(0);
+    input.setTargetSpeedJoystick(0, 0);
+    input.advanceMobileCruise(10 / 3.6, 0.5);
+    expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(25);
+  });
+
+  it('frenar en arcade no activa reversa sin detener, soltar y repetir', () => {
+    const input = new InputController();
+    input.setMobileCruiseMode('arcade');
+    input.setTargetSpeedJoystick(1, 0);
+    input.advanceMobileCruise(0, 0.1);
+    input.setTargetSpeedJoystick(-1, 0);
+    input.advanceMobileCruise(12, 1);
+    input.advanceMobileCruise(0, 2);
+
+    expect(input.getMobileCruiseTarget()).toMatchObject({
+      reversing: false,
+      reverseState: 'awaiting-release',
+    });
+  });
+
   it('aumenta arriba, mantiene al centro y reduce abajo', () => {
     const increased = updateCruiseTarget(0, 1, 0.5);
     expect(increased).toBe(35);

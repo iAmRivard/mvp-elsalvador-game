@@ -12,6 +12,7 @@ import {
 import { performanceMetricsEnabled } from '../../config/diagnostics.config';
 import { applyDeadZone, applyResponseCurve } from '../../game/analogInput';
 import {
+  arcadeDriveJoystickOutput,
   driveJoystickOutput,
   legacyDriveJoystickThrottle,
 } from '../../game/driveJoystick';
@@ -28,6 +29,7 @@ interface VirtualJoystickProps {
   positionMode: JoystickPositionMode;
   driveMode?: boolean;
   targetSpeedMode?: boolean;
+  arcadeMode?: boolean;
   speedMetersPerSecond?: number;
   hapticsEnabled?: boolean;
 }
@@ -66,6 +68,7 @@ export function VirtualJoystick({
   positionMode,
   driveMode = false,
   targetSpeedMode = false,
+  arcadeMode = false,
   speedMetersPerSecond = 0,
   hapticsEnabled = false,
 }: VirtualJoystickProps) {
@@ -161,10 +164,15 @@ export function VirtualJoystick({
       knobRef.current.style.transform = `translate3d(${String(visualX)}px, ${String(visualY)}px, 0)`;
     }
     if (driveMode) {
-      const output = driveJoystickOutput(
-        visualX / radiusPixels,
-        visualY / radiusPixels,
-      );
+      const output = arcadeMode
+        ? arcadeDriveJoystickOutput(
+            visualX / radiusPixels,
+            visualY / radiusPixels,
+          )
+        : driveJoystickOutput(
+            visualX / radiusPixels,
+            visualY / radiusPixels,
+          );
       if (targetSpeedMode) {
         driveThrottleRef.current = output.verticalIntent;
         input.setTargetSpeedJoystick(output.verticalIntent, output.turn);
@@ -177,8 +185,8 @@ export function VirtualJoystick({
       const normalized = applyDeadZone(visualX / radiusPixels, deadZone);
       input.setJoystickTurn(applyResponseCurve(normalized, responseExponent));
     }
+    const sequence = input.recordInputStored(event.timeStamp);
     if (performanceMetricsEnabled) {
-      const sequence = input.recordInputStored(event.timeStamp);
       window.requestAnimationFrame(() => {
         input.markInputAnimationFrame(sequence, performance.now());
         const diagnostics = input.getInputLatencyDiagnostics();
@@ -227,7 +235,9 @@ export function VirtualJoystick({
       className={`virtual-joystick virtual-joystick--${positionMode} ${driveMode ? 'virtual-joystick--drive' : ''} ${targetSpeedMode ? 'virtual-joystick--target-speed' : ''} ${floatingCenter ? 'virtual-joystick--active' : ''}`}
       style={style}
       aria-label={
-        targetSpeedMode
+        arcadeMode
+          ? 'Joystick de conducción arcade'
+          : targetSpeedMode
           ? 'Joystick de velocidad objetivo'
           : driveMode
             ? 'Joystick de conducción'

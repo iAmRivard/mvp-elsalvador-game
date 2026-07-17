@@ -284,12 +284,18 @@ describe('keyboard route controls', () => {
     const eventTimestamp = performance.now() - 2;
     const sequence = input.recordInputStored(eventTimestamp);
     input.markInputConsumed(eventTimestamp + 8);
+    input.markInputPositionChanged(eventTimestamp + 10);
+    input.markInputVisualFrame(eventTimestamp + 14);
     input.markInputAnimationFrame(sequence, eventTimestamp + 12);
 
     expect(input.getInputLatencyDiagnostics()).toMatchObject({
       sequence,
       eventToNextAnimationFrameMilliseconds: 12,
       inputConsumptionLatencyMilliseconds: 8,
+      inputToFirstPositionMilliseconds: 10,
+      inputToFirstVisualMilliseconds: 14,
+      consumptionToFirstPositionMilliseconds: 2,
+      consumptionToFirstVisualMilliseconds: 6,
     });
     expect(
       input.getInputLatencyDiagnostics().eventToStoredMilliseconds,
@@ -308,5 +314,25 @@ describe('keyboard route controls', () => {
       6,
     );
     expect(diagnostics.inputConsumptionLatencyMilliseconds).toBeNull();
+  });
+
+  it('conserva el primer gesto hasta completar posición y frame visual', () => {
+    const input = new InputController();
+    const firstEventTimestamp = performance.now() - 2;
+    const firstSequence = input.recordInputStored(firstEventTimestamp);
+    const repeatedSequence = input.recordInputStored(
+      firstEventTimestamp + 1,
+    );
+
+    expect(repeatedSequence).toBe(firstSequence);
+    input.markInputConsumed(firstEventTimestamp + 4);
+    input.markInputPositionChanged(firstEventTimestamp + 5);
+    expect(input.recordInputStored(firstEventTimestamp + 6)).toBe(
+      firstSequence,
+    );
+    input.markInputVisualFrame(firstEventTimestamp + 7);
+    expect(input.recordInputStored(firstEventTimestamp + 8)).toBe(
+      firstSequence + 1,
+    );
   });
 });

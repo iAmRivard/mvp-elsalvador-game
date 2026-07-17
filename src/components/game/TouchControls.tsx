@@ -14,6 +14,7 @@ import { triggerHaptic } from '../../game/haptics';
 import { nearestPendingObjective } from '../../game/missions';
 import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { onboardingIsActive } from '../../types/onboarding';
 import { ClassicTouchControls } from './ClassicTouchControls';
 import { MobileActionButtons } from './MobileActionButtons';
 import { MobilePedals } from './MobilePedals';
@@ -40,6 +41,7 @@ function TouchControlsContent({ input }: TouchControlsProps) {
   const togglePaused = useGameStore((state) => state.togglePaused);
   const setFollowingPlayer = useGameStore((state) => state.setFollowingPlayer);
   const activeMissionId = useGameStore((state) => state.activeMissionId);
+  const onboardingState = useGameStore((state) => state.onboardingState);
   const completedObjectiveIds = useGameStore(
     (state) => state.activeMissionCompletedObjectiveIds,
   );
@@ -62,6 +64,7 @@ function TouchControlsContent({ input }: TouchControlsProps) {
     : null;
   const interactionObjective = nearestObjective?.objective;
   const interactionLabel =
+    !onboardingIsActive(onboardingState) &&
     interactionObjective &&
     objectiveRequiresManualInteraction(interactionObjective) &&
     nearestObjective.distanceMeters <= interactionObjective.radiusMeters
@@ -69,7 +72,9 @@ function TouchControlsContent({ input }: TouchControlsProps) {
       : null;
   const sizeMultiplier = joystickSizeMultipliers[joystickSize] * viewportScale;
   const singleDriveJoystick = controlMode === 'single-drive-joystick';
-  const targetSpeedJoystick = controlMode === 'target-speed-joystick';
+  const arcadeDriving = controlMode === 'arcade-driving';
+  const targetSpeedJoystick =
+    arcadeDriving || controlMode === 'target-speed-joystick';
   const driveJoystick = singleDriveJoystick || targetSpeedJoystick;
   const cruiseTarget = useSyncExternalStore(
     (listener) => input.subscribe(listener),
@@ -94,8 +99,14 @@ function TouchControlsContent({ input }: TouchControlsProps) {
       targetSpeedJoystick &&
       input.getMobileCruiseTarget().targetSpeedKilometersPerHour > 0;
     if (!hasPreservedCruiseTarget) input.clearAllInput();
-    input.setMobileCruiseEnabled(targetSpeedJoystick);
-  }, [controlMode, input, targetSpeedJoystick]);
+    input.setMobileCruiseMode(
+      arcadeDriving
+        ? 'arcade'
+        : targetSpeedJoystick
+          ? 'target-speed'
+          : 'off',
+    );
+  }, [arcadeDriving, controlMode, input, targetSpeedJoystick]);
 
   useEffect(
     () => () => {
@@ -156,6 +167,7 @@ function TouchControlsContent({ input }: TouchControlsProps) {
             positionMode={joystickPositionMode}
             driveMode={driveJoystick}
             targetSpeedMode={targetSpeedJoystick}
+            arcadeMode={arcadeDriving}
             speedMetersPerSecond={telemetry.speedMetersPerSecond}
             hapticsEnabled={hapticsEnabled}
           />
@@ -168,6 +180,10 @@ function TouchControlsContent({ input }: TouchControlsProps) {
               <span>
                 {cruiseTarget.reversing
                   ? 'REVERSA'
+                  : cruiseTarget.reverseState === 'awaiting-release'
+                    ? 'SUELTA PARA REVERSA'
+                    : cruiseTarget.reverseState === 'reverse-armed'
+                      ? 'BAJA OTRA VEZ'
                   : cruiseTarget.braking
                     ? 'FRENANDO'
                     : cruiseGearLabels[cruiseTarget.selectedGear]}

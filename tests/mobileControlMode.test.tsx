@@ -9,6 +9,7 @@ import {
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TouchControls } from '../src/components/game/TouchControls';
+import { StuckVehicleAssist } from '../src/components/game/StuckVehicleAssist';
 import { RecommendedControlsPrompt } from '../src/components/menu/RecommendedControlsPrompt';
 import { InputController } from '../src/game/inputController';
 import { useGameStore } from '../src/store/gameStore';
@@ -48,16 +49,66 @@ describe('modos móviles de conducción', () => {
   it('ofrece la migración una vez y conserva la elección', () => {
     useSettingsStore.setState({
       controlMode: 'classic-buttons',
-      targetSpeedJoystickPromptDismissed: false,
+      arcadeDrivingPromptDismissed: false,
     });
     render(<RecommendedControlsPrompt />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Probar' }));
     expect(useSettingsStore.getState()).toMatchObject({
-      controlMode: 'target-speed-joystick',
-      targetSpeedJoystickPromptDismissed: true,
+      controlMode: 'arcade-driving',
+      arcadeDrivingPromptDismissed: true,
     });
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('mantiene la narrativa por encima del aviso no modal de migración', () => {
+    useSettingsStore.setState({
+      controlMode: 'classic-buttons',
+      arcadeDrivingPromptDismissed: false,
+    });
+    useGameStore.setState({
+      activeNarrativeEventId: 'radio-transmision-inicial',
+    });
+    render(<RecommendedControlsPrompt />);
+
+    expect(screen.queryByText('Conducción Arcade')).toBeNull();
+    act(() => useGameStore.setState({ activeNarrativeEventId: null }));
+    expect(
+      screen.getByRole('status', { name: 'Nuevo control móvil' }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('no ofrece reintentar aceleración en un modo manual', async () => {
+    vi.useFakeTimers();
+    useSettingsStore.setState({ controlMode: 'classic-buttons' });
+    const input = new InputController();
+    input.setDriveJoystick(1, 0);
+    render(<StuckVehicleAssist input={input} enabled />);
+
+    await act(() => vi.advanceTimersByTimeAsync(2_000));
+    expect(screen.getByText('Tu vehículo no está avanzando')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Reintentar aceleración' }),
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Cambiar a conducción arcade' }),
+    ).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it('muestra Arcade como modo recomendado y engancha 25 km/h', () => {
+    useSettingsStore.setState({ controlMode: 'arcade-driving' });
+    const input = new InputController();
+    render(<TouchControls input={input} />);
+
+    expect(
+      screen.getByLabelText('Joystick de conducción arcade'),
+    ).toBeTruthy();
+    act(() => input.setTargetSpeedJoystick(0.5, 0));
+    expect(screen.getByTestId('mobile-cruise-target').textContent).toContain(
+      'OBJETIVO 25 km/h',
+    );
   });
 
   it('muestra el objetivo sin pedales en el modo recomendado', () => {

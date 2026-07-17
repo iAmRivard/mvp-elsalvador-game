@@ -11,7 +11,7 @@ import type { RoadAssistMode } from '../config/roadHandling.config';
 import type { SteeringSensitivity } from '../config/travel.config';
 
 export const SETTINGS_STORAGE_KEY = 'el-salvador-rutas-perdidas:settings';
-export const SETTINGS_VERSION = 8;
+export const SETTINGS_VERSION = 9;
 
 export interface VisualSettings extends MobileControlsSettings {
   graphicsQuality: GraphicsQuality;
@@ -29,6 +29,7 @@ export interface VisualSettings extends MobileControlsSettings {
   recommendedControlsPromptDismissed: boolean;
   singleDriveJoystickPromptDismissed: boolean;
   targetSpeedJoystickPromptDismissed: boolean;
+  arcadeDrivingPromptDismissed: boolean;
 }
 
 interface SettingsStore extends VisualSettings {
@@ -53,6 +54,7 @@ interface SettingsStore extends VisualSettings {
   setRecommendedControlsPromptDismissed: (dismissed: boolean) => void;
   setSingleDriveJoystickPromptDismissed: (dismissed: boolean) => void;
   setTargetSpeedJoystickPromptDismissed: (dismissed: boolean) => void;
+  setArcadeDrivingPromptDismissed: (dismissed: boolean) => void;
 }
 
 interface SettingsEnvelope {
@@ -76,6 +78,7 @@ const defaultSettings: VisualSettings = {
   recommendedControlsPromptDismissed: true,
   singleDriveJoystickPromptDismissed: true,
   targetSpeedJoystickPromptDismissed: true,
+  arcadeDrivingPromptDismissed: true,
   ...defaultMobileControlsSettings,
 };
 
@@ -103,6 +106,7 @@ function isRoadAssistMode(value: unknown): value is RoadAssistMode {
 
 function isMobileControlMode(value: unknown): value is MobileControlMode {
   return (
+    value === 'arcade-driving' ||
     value === 'single-drive-joystick' ||
     value === 'target-speed-joystick' ||
     value === 'joystick-pedals' ||
@@ -144,6 +148,7 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
       parsed.version !== 5 &&
       parsed.version !== 6 &&
       parsed.version !== 7 &&
+      parsed.version !== 8 &&
       parsed.version !== SETTINGS_VERSION)
   ) {
     return null;
@@ -183,9 +188,11 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
       ? value.controlMode
       : parsed.version === SETTINGS_VERSION
         ? defaultMobileControlsSettings.controlMode
-        : parsed.version === 7
-          ? 'single-drive-joystick'
-          : 'joystick-pedals',
+        : parsed.version === 8
+          ? 'target-speed-joystick'
+          : parsed.version === 7
+            ? 'single-drive-joystick'
+            : 'joystick-pedals',
     joystickPositionMode: isJoystickPositionMode(value.joystickPositionMode)
       ? value.joystickPositionMode
       : defaultMobileControlsSettings.joystickPositionMode,
@@ -194,7 +201,9 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
       : defaultMobileControlsSettings.joystickSize,
     joystickDeadZone: joystickDeadZone(
       value.joystickDeadZone,
-      parsed.version === SETTINGS_VERSION || parsed.version === 7
+      parsed.version === SETTINGS_VERSION ||
+      parsed.version === 8 ||
+      parsed.version === 7
         ? undefined
         : 0.14,
     ),
@@ -206,11 +215,17 @@ export function parseVisualSettings(raw: string): VisualSettings | null {
         isMobileControlMode(value.controlMode) &&
         value.controlMode !== 'joystick-pedals'),
     singleDriveJoystickPromptDismissed:
-      (parsed.version === SETTINGS_VERSION || parsed.version === 7) &&
+      (parsed.version === SETTINGS_VERSION ||
+        parsed.version === 8 ||
+        parsed.version === 7) &&
       value.singleDriveJoystickPromptDismissed === true,
     targetSpeedJoystickPromptDismissed:
-      parsed.version === SETTINGS_VERSION &&
+      (parsed.version === SETTINGS_VERSION || parsed.version === 8) &&
       value.targetSpeedJoystickPromptDismissed === true,
+    arcadeDrivingPromptDismissed:
+      parsed.version === SETTINGS_VERSION
+        ? value.arcadeDrivingPromptDismissed !== false
+        : false,
   };
 }
 
@@ -263,6 +278,7 @@ function visualSettings(state: VisualSettings): VisualSettings {
       state.singleDriveJoystickPromptDismissed,
     targetSpeedJoystickPromptDismissed:
       state.targetSpeedJoystickPromptDismissed,
+    arcadeDrivingPromptDismissed: state.arcadeDrivingPromptDismissed,
     controlMode: state.controlMode,
     joystickPositionMode: state.joystickPositionMode,
     joystickSize: state.joystickSize,
@@ -368,6 +384,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
         recommendedControlsPromptDismissed: true,
         singleDriveJoystickPromptDismissed: true,
         targetSpeedJoystickPromptDismissed: true,
+        arcadeDrivingPromptDismissed: true,
       };
       saveVisualSettings(next);
       return next;
@@ -430,6 +447,15 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       const next = {
         ...visualSettings(state),
         targetSpeedJoystickPromptDismissed,
+      };
+      saveVisualSettings(next);
+      return next;
+    }),
+  setArcadeDrivingPromptDismissed: (arcadeDrivingPromptDismissed) =>
+    set((state) => {
+      const next = {
+        ...visualSettings(state),
+        arcadeDrivingPromptDismissed,
       };
       saveVisualSettings(next);
       return next;
