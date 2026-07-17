@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { mapSourceConfig, mapViewConfig } from '../src/config/map.config';
 
 describe('configuración cartográfica', () => {
+  it('declara la fuente principal del estilo local', () => {
+    expect(mapSourceConfig.sourceId).toBe('el-salvador');
+  });
+
   it('usa solamente recursos locales en tiempo de ejecución', () => {
     expect(mapSourceConfig.archiveUrl).toBe('/maps/el-salvador.pmtiles');
     expect(mapSourceConfig.styleUrl).toBe(

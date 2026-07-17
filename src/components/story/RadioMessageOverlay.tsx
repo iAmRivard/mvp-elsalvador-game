@@ -1,51 +1,46 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { narrativeEventById } from '../../data/chapter1';
 import { useGameStore } from '../../store/gameStore';
 
 export const RADIO_FULL_PREVIEW_MILLISECONDS = 4_500;
+export type RadioDisplayMode = 'expanded' | 'compact';
 
-function mobileRadioViewport(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    (window.matchMedia('(max-width: 900px)').matches ||
-      window.matchMedia('(pointer: coarse)').matches)
-  );
+interface RadioMessageContentProps {
+  displayMode: RadioDisplayMode;
+  mobileViewport: boolean;
+  onCompact: () => void;
+  onExpandRequest: () => void;
 }
 
-function RadioMessageContent() {
+function RadioMessageContent({
+  displayMode,
+  mobileViewport,
+  onCompact,
+  onExpandRequest,
+}: RadioMessageContentProps) {
   const compactMessageRef = useRef<HTMLButtonElement>(null);
   const fullMessageRef = useRef<HTMLElement>(null);
   const eventId = useGameStore((state) => state.activeRadioEventId);
   const dismiss = useGameStore((state) => state.dismissRadioEvent);
   const requestStoryLog = useGameStore((state) => state.requestStoryLog);
   const event = eventId ? narrativeEventById.get(eventId) : null;
-  const [mobileViewport, setMobileViewport] = useState(mobileRadioViewport);
-  const [expanded, setExpanded] = useState(true);
   const renderCount = useRef(0);
 
   useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return;
-    const compactQuery = window.matchMedia('(max-width: 900px)');
-    const pointerQuery = window.matchMedia('(pointer: coarse)');
-    const update = () =>
-      setMobileViewport(compactQuery.matches || pointerQuery.matches);
-    compactQuery.addEventListener('change', update);
-    pointerQuery.addEventListener('change', update);
-    return () => {
-      compactQuery.removeEventListener('change', update);
-      pointerQuery.removeEventListener('change', update);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!event || !mobileViewport || !expanded) return;
+    if (
+      !event ||
+      event.presentation !== 'radio' ||
+      !mobileViewport ||
+      displayMode !== 'expanded'
+    ) {
+      return;
+    }
     const timer = window.setTimeout(
-      () => setExpanded(false),
+      onCompact,
       RADIO_FULL_PREVIEW_MILLISECONDS,
     );
     return () => window.clearTimeout(timer);
-  }, [event, expanded, mobileViewport]);
+  }, [displayMode, event, mobileViewport, onCompact]);
 
   useEffect(() => {
     renderCount.current += 1;
@@ -57,7 +52,7 @@ function RadioMessageContent() {
 
   if (!event || event.presentation !== 'radio') return null;
 
-  if (mobileViewport && !expanded) {
+  if (mobileViewport && displayMode === 'compact') {
     return (
       <div className="radio-overlay radio-overlay--compact" aria-live="polite">
         <button
@@ -65,7 +60,7 @@ function RadioMessageContent() {
           type="button"
           className="radio-message radio-message--compact"
           aria-label="Expandir transmisión de radio"
-          onClick={() => setExpanded(true)}
+          onClick={onExpandRequest}
         >
           <strong>📻 {event.channelLabel}</strong>
           <span>{event.title}</span>
@@ -110,7 +105,7 @@ function RadioMessageContent() {
             Bitácora
           </button>
           {mobileViewport && (
-            <button type="button" onClick={() => setExpanded(false)}>
+            <button type="button" onClick={onCompact}>
               Contraer
             </button>
           )}
@@ -123,10 +118,28 @@ function RadioMessageContent() {
   );
 }
 
-export function RadioMessageOverlay() {
+interface RadioMessageOverlayProps {
+  displayMode: RadioDisplayMode;
+  mobileViewport: boolean;
+  onCompact: () => void;
+  onExpandRequest: () => void;
+}
+
+export function RadioMessageOverlay({
+  displayMode,
+  mobileViewport,
+  onCompact,
+  onExpandRequest,
+}: RadioMessageOverlayProps) {
   const isJournalOpen = useGameStore((state) => state.isJournalOpen);
   const activeRadioEventId = useGameStore((state) => state.activeRadioEventId);
   return isJournalOpen || !activeRadioEventId ? null : (
-    <RadioMessageContent key={activeRadioEventId} />
+    <RadioMessageContent
+      key={activeRadioEventId}
+      displayMode={displayMode}
+      mobileViewport={mobileViewport}
+      onCompact={onCompact}
+      onExpandRequest={onExpandRequest}
+    />
   );
 }

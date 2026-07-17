@@ -177,23 +177,8 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   );
   center = await centerOf(joystick);
 
-  const objectiveAdvice = page.locator('[data-contextual-advice="objective"]');
   const interaction = page.getByRole('button', { name: 'Escuchar señal' });
-  let objectiveAdviceObserved = false;
-  const objectiveAdviceChecks = Promise.all([
-    expect(objectiveAdvice).toBeVisible({ timeout: 50_000 }),
-    expect(objectiveAdvice).toContainText('Objetivo a la vista', {
-      timeout: 50_000,
-    }),
-    expect(objectiveAdvice).toHaveCSS('pointer-events', 'none', {
-      timeout: 50_000,
-    }),
-    expect(
-      objectiveAdvice.getByRole('button', { name: 'Ocultar consejo' }),
-    ).toHaveCSS('pointer-events', 'auto', { timeout: 50_000 }),
-  ]).then(() => {
-    objectiveAdviceObserved = true;
-  });
+  let steeringTouchId = 10;
 
   await touchStart(session, 4, center.x, center.y);
   await touchMove(session, 4, center.x, center.y - center.width * 0.44);
@@ -223,7 +208,6 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   await touchEnd(session);
 
   const gameMap = page.getByTestId('game-map');
-  let steeringTouchId = 10;
   const rejoinDeadline = Date.now() + 18_000;
   while (
     (await gameMap.getAttribute('data-navigation-requires-rejoin')) ===
@@ -251,6 +235,7 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
     'data-current-mission-objective-id',
     'sintonizar-transmision',
   );
+  center = await centerOf(joystick);
 
   steeringTouchId += 1;
   await touchStart(session, steeringTouchId, center.x, center.y);
@@ -264,6 +249,23 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
     .poll(() => gameMap.getAttribute('data-input-target-speed').then(Number))
     .toBeGreaterThan(50);
   await touchEnd(session);
+
+  const objectiveAdvice = page.locator('[data-contextual-advice="objective"]');
+  let objectiveAdviceObserved = false;
+  const objectiveAdviceChecks = Promise.all([
+    expect(objectiveAdvice).toBeVisible({ timeout: 50_000 }),
+    expect(objectiveAdvice).toContainText('Objetivo a la vista', {
+      timeout: 50_000,
+    }),
+    expect(objectiveAdvice).toHaveCSS('pointer-events', 'none', {
+      timeout: 50_000,
+    }),
+    expect(
+      objectiveAdvice.getByRole('button', { name: 'Ocultar consejo' }),
+    ).toHaveCSS('pointer-events', 'auto', { timeout: 50_000 }),
+  ]).then(() => {
+    objectiveAdviceObserved = true;
+  });
 
   await page.waitForTimeout(400);
   const retreatDeadline = Date.now() + 20_000;

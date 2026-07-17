@@ -1,4 +1,8 @@
-import maplibregl, { type ErrorEvent, type JumpToOptions } from 'maplibre-gl';
+import maplibregl, {
+  type EaseToOptions,
+  type ErrorEvent,
+  type JumpToOptions,
+} from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TouchControls } from '../game/TouchControls';
 import { FuelStationLegend } from '../hud/FuelStationLegend';
@@ -20,11 +24,11 @@ import { missionById } from '../../data/missions';
 import { restrictedAreaTypeAt } from '../../data/restrictedAreas';
 import { detectDeviceProfile } from '../../game/deviceProfile';
 import {
+  buildFollowCameraUpdate,
   cameraProfileSpeedChangedSignificantly,
   drivingCameraProfile,
   followCameraOffset,
   followCameraTarget,
-  followCameraUpdateIsSignificant,
   mobileCameraModeForSpeed,
   mobileCameraTransitionCandidate,
   settledMobileCameraModeForSpeed,
@@ -58,13 +62,20 @@ import { addFuelStationMarkers } from '../../map/fuelStationMarkers';
 import { addLocationMarkers } from '../../map/locationMarkers';
 import { addMissionRoute } from '../../map/missionRoute';
 import {
-  isFatalMapError,
+  classifyMapRuntimeError,
   mapErrorDetails,
+  mapErrorResourceUrl,
   mapLoadingLabels,
+  mapRuntimeErrorStopsGameplay,
+  type MapRuntimeErrorClassification,
   type MapLoadingStage,
 } from '../../map/mapStartup';
 import { createPlayerMarkerElement } from '../../map/playerMarker';
-import { registerPmtilesProtocol } from '../../map/pmtilesProtocol';
+import { PlayerVisualUpdateCoordinator } from '../../map/playerVisualUpdates';
+import {
+  registerPmtilesProtocol,
+  subscribePmtilesProtocolFailures,
+} from '../../map/pmtilesProtocol';
 import { addRoadDebugLayer } from '../../map/roadDebugLayer';
 import { addPlayableRoadSurfaceLayer } from '../../map/roadSurfaceLayer';
 import { createStyleResourceTransform } from '../../map/styleResources';
@@ -256,6 +267,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
 
     let playerMarker: maplibregl.Marker | null = null;
     let threeLayer: ThreeGameLayerController | null = null;
+    let playerVisualUpdates: PlayerVisualUpdateCoordinator | null = null;
     let gameLoop: PlayerGameLoop | null = null;
     let removeLocationMarkers: (() => void) | null = null;
     let removeFuelStationMarkers: (() => void) | null = null;
@@ -272,6 +284,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let lastFollowedHeading = Number.NaN;
     let lastFollowedSpeedKilometersPerHour = Number.NaN;
     let lastAppliedCameraOptions: FollowCameraOptions | null = null;
+    let lastAppliedCameraProfileName: string | null = null;
     let wasFollowing = false;
     let recenterUntil = 0;
     let lastCameraBearing = Number.NaN;
@@ -288,6 +301,11 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     const cameraUpdateDurations: number[] = [];
     let cameraMetricsStartedAt = performance.now();
     let cameraInterruptedTransitions = 0;
+    let cameraOffsetAppliedUpdates = 0;
+    let cameraProfileTransitions = 0;
+    let cameraFallbackMarkerUpdates = 0;
+    let cameraThreePlayerUpdates = 0;
+    let threeDrivingEffectsUpdates = 0;
     let effectActive = true;
     let roadTracker: RoadTracker | null = null;
     let roadContact: RoadContact | null = null;
@@ -301,6 +319,37 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let previousHapticSurface = useGameStore.getState().driving.surface;
     let interactionWasActive = false;
     let startupReady = false;
+    let fatalMapErrorHandled = false;
+
+    const recordMapErrorClassification = (
+      classification: MapRuntimeErrorClassification,
+    ) => {
+      const container = containerRef.current;
+      if (!container) return;
+      if (fatalMapErrorHandled && classification.severity !== 'fatal') {
+        container.dataset.mapLastNonfatalError = classification.details;
+        return;
+      }
+      container.dataset.mapLastErrorSeverity = classification.severity;
+      container.dataset.mapLastErrorReason = classification.reason;
+      container.dataset.mapLastErrorResource = classification.resourceKind;
+      container.dataset.mapLastErrorDetails = classification.details;
+      if (classification.severity !== 'fatal') {
+        container.dataset.mapLastNonfatalError = classification.details;
+      }
+    };
+    const stopForFatalMapError = (
+      classification: MapRuntimeErrorClassification,
+    ) => {
+      if (fatalMapErrorHandled) return;
+      fatalMapErrorHandled = true;
+      startupReady = false;
+      useGameStore.getState().setInsideValidObjectiveZone(false);
+      inputController.clearAllInput();
+      inputController.resetMobileBoostCompletely();
+      setErrorMessage(classification.details);
+      setStatus('error');
+    };
 
     const updateObjectiveZonePresentation = (
       state = useGameStore.getState(),
@@ -365,10 +414,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     };
 
     const finishStartup = () => {
-      if (!effectActive) return;
+      if (!effectActive || fatalMapErrorHandled) return;
       setLoadingStage('routes');
       window.requestAnimationFrame(() => {
-        if (!effectActive) return;
+        if (!effectActive || fatalMapErrorHandled) return;
         startupReady = true;
         setLoadingStage('ready');
         setStatus('ready');
@@ -479,12 +528,15 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               : 'stopped',
       };
     };
-    const exposeCameraTarget = (camera: ReturnType<typeof cameraForPlayer>) => {
+    const exposeCameraTarget = (
+      camera: ReturnType<typeof cameraForPlayer>,
+      appliedOptions: FollowCameraOptions,
+    ) => {
       const container = containerRef.current;
       if (!container) return;
-      container.dataset.followZoom = camera.options.zoom.toFixed(2);
-      container.dataset.followPitch = camera.options.pitch.toFixed(1);
-      container.dataset.followOffsetY = String(camera.options.offset[1]);
+      container.dataset.followZoom = appliedOptions.zoom.toFixed(2);
+      container.dataset.followPitch = appliedOptions.pitch.toFixed(1);
+      container.dataset.followOffsetY = String(appliedOptions.offset[1]);
       container.dataset.currentCameraProfile = camera.profileName;
     };
     const exposeCameraMetrics = (timestampMilliseconds: number) => {
@@ -506,6 +558,12 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       );
       container.dataset.cameraInterruptedTransitions = String(
         cameraInterruptedTransitions,
+      );
+      container.dataset.cameraOffsetAppliedUpdates = String(
+        cameraOffsetAppliedUpdates,
+      );
+      container.dataset.cameraProfileTransitions = String(
+        cameraProfileTransitions,
       );
       container.dataset.cameraRequestedUpdatesPerSecond = (
         (cameraWindowRequestedUpdates * 1_000) /
@@ -529,6 +587,98 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       cameraWindowRequestedUpdates = 0;
       cameraWindowAppliedUpdates = 0;
       cameraMetricsStartedAt = timestampMilliseconds;
+    };
+    const followCameraTransform = map.transform.clone();
+    const applyFollowCamera = (
+      camera: ReturnType<typeof cameraForPlayer>,
+      {
+        durationMilliseconds = 0,
+        force = false,
+      }: {
+        durationMilliseconds?: number;
+        force?: boolean;
+      } = {},
+    ) => {
+      const update = buildFollowCameraUpdate(
+        force ? null : lastAppliedCameraOptions,
+        camera.options,
+        followCameraTolerances,
+      );
+      if (!update.mapOptions || !update.appliedOptions) return update;
+
+      if (map.isEasing()) cameraInterruptedTransitions += 1;
+      if (durationMilliseconds > 0) {
+        const mapOptions: EaseToOptions = {
+          ...update.mapOptions,
+          duration: durationMilliseconds,
+          animate: true,
+          essential: false,
+          easing: (progress) => 1 - (1 - progress) ** 3,
+        };
+        map.easeTo(mapOptions);
+      } else {
+        followCameraTransform.apply(map.transform, false);
+        followCameraTransform.setZoom(update.appliedOptions.zoom);
+        followCameraTransform.setBearing(update.appliedOptions.bearing);
+        followCameraTransform.setPitch(update.appliedOptions.pitch);
+        followCameraTransform.setLocationAtPoint(
+          maplibregl.LngLat.convert(update.appliedOptions.center),
+          followCameraTransform.centerPoint.add(
+            new maplibregl.Point(
+              update.mapOptions.offset[0],
+              update.mapOptions.offset[1],
+            ),
+          ),
+        );
+        const jumpOptions: JumpToOptions = {
+          center: followCameraTransform.center,
+          bearing: update.appliedOptions.bearing,
+        };
+        if (update.changes.zoom) jumpOptions.zoom = update.appliedOptions.zoom;
+        if (update.changes.pitch) {
+          jumpOptions.pitch = update.appliedOptions.pitch;
+        }
+        map.jumpTo(jumpOptions);
+      }
+      const exposeAppliedProjection = () => {
+        const container = containerRef.current;
+        if (!container) return;
+        const canvas = map.getCanvas();
+        const projected = map.project(update.appliedOptions!.center);
+        container.dataset.cameraAppliedScreenOffsetX = (
+          projected.x -
+          canvas.clientWidth / 2
+        ).toFixed(1);
+        container.dataset.cameraAppliedScreenOffsetY = (
+          projected.y -
+          canvas.clientHeight / 2
+        ).toFixed(1);
+      };
+      if (durationMilliseconds > 0) {
+        void map.once('moveend', exposeAppliedProjection);
+      } else {
+        exposeAppliedProjection();
+      }
+
+      if (
+        lastAppliedCameraProfileName !== null &&
+        lastAppliedCameraProfileName !== camera.profileName
+      ) {
+        cameraProfileTransitions += 1;
+      }
+      lastAppliedCameraProfileName = camera.profileName;
+      lastAppliedCameraOptions = update.appliedOptions;
+      lastCameraBearing = update.appliedOptions.bearing;
+      cameraOffsetAppliedUpdates += 1;
+      exposeCameraTarget(camera, update.appliedOptions);
+      if (containerRef.current) {
+        containerRef.current.dataset.cameraLastOperation =
+          durationMilliseconds > 0 ? 'easeTo' : 'jumpTo-offset-center';
+        containerRef.current.dataset.cameraLastAppliedOffsetY = String(
+          update.mapOptions.offset[1],
+        );
+      }
+      return update;
     };
     const unbindKeyboard = inputController.bindKeyboard(
       window,
@@ -637,10 +787,19 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             finishStartup();
           },
         )
-        .catch(() => {
+        .catch((error: unknown) => {
           if (!effectActive) return;
           roadNetworkEnabled = false;
           useGameStore.getState().setRoadNetworkStatus('unavailable');
+          recordMapErrorClassification(
+            classifyMapRuntimeError(error, {
+              startupComplete: startupReady,
+              resourceKind: 'road-network',
+              primaryStyleUrl: mapSourceConfig.styleUrl,
+              primaryArchiveUrl: mapSourceConfig.archiveUrl,
+              primarySourceId: mapSourceConfig.sourceId,
+            }),
+          );
           if (containerRef.current) {
             containerRef.current.dataset.roadNetworkStatus = 'unavailable';
           }
@@ -655,6 +814,31 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         .setLngLat([initialPlayer.longitude, initialPlayer.latitude])
         .setRotation(initialPlayer.heading)
         .addTo(map);
+      playerVisualUpdates = new PlayerVisualUpdateCoordinator({
+        updateFallback: (player) => {
+          if (!playerMarker) return;
+          playerMarker
+            .setLngLat([player.longitude, player.latitude])
+            .setRotation(player.heading);
+          cameraFallbackMarkerUpdates += 1;
+        },
+        updateThree: (player) => {
+          if (!threeLayer) return;
+          threeLayer.updatePlayer(player);
+          cameraThreePlayerUpdates += 1;
+        },
+        setDrivingEffects: (offroad) => {
+          if (!threeLayer) return false;
+          threeLayer.setDrivingEffects(offroad);
+          threeDrivingEffectsUpdates += 1;
+          return true;
+        },
+      });
+      if (containerRef.current) {
+        containerRef.current.dataset.cameraFallbackMarkerUpdates = '0';
+        containerRef.current.dataset.cameraThreePlayerUpdates = '0';
+        containerRef.current.dataset.threeDrivingEffectsUpdates = '0';
+      }
       removeLocationMarkers = addLocationMarkers(map);
       removeFuelStationMarkers = addFuelStationMarkers(map);
       removeMissionRoute = addMissionRoute(
@@ -678,7 +862,17 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           if (effectActive) removeRoadDebugLayer = removeLayer;
           else removeLayer();
         })
-        .catch(() => undefined);
+        .catch((error: unknown) => {
+          recordMapErrorClassification(
+            classifyMapRuntimeError(error, {
+              startupComplete: startupReady,
+              resourceKind: 'decorative',
+              primaryStyleUrl: mapSourceConfig.styleUrl,
+              primaryArchiveUrl: mapSourceConfig.archiveUrl,
+              primarySourceId: mapSourceConfig.sourceId,
+            }),
+          );
+        });
 
       if (threeEnabled) {
         void import('../../map/threeLayer')
@@ -691,6 +885,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 reducedMotion: deviceProfile.reducedMotion,
                 onPlayerReady: () => {
                   if (!effectActive) return;
+                  playerVisualUpdates?.setFallbackHidden(true);
                   playerMarker
                     ?.getElement()
                     .classList.add('player-marker--fallback-hidden');
@@ -701,6 +896,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 },
                 onPlayerError: () => {
                   if (effectActive) {
+                    playerVisualUpdates?.setFallbackHidden(false);
+                    playerMarker
+                      ?.getElement()
+                      .classList.remove('player-marker--fallback-hidden');
                     setThreeResult({
                       profileKey: threeProfileKey,
                       status: 'fallback',
@@ -708,7 +907,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                   }
                 },
               });
-              threeLayer.updatePlayer(gameLoop?.getPlayer() ?? initialPlayer);
+              playerVisualUpdates?.update(
+                gameLoop?.getPlayer() ?? initialPlayer,
+                gameLoop?.getSurface() === 'offroad',
+              );
               syncInteractiveSignal(threeLayer);
             } catch {
               setThreeResult({
@@ -732,10 +934,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         initialCameraTimestamp,
         true,
       );
-      map.jumpTo(initialCamera.options);
-      exposeCameraTarget(initialCamera);
-      lastAppliedCameraOptions = initialCamera.options;
-      lastCameraBearing = initialPlayer.heading;
+      applyFollowCamera(initialCamera, { force: true });
       lastCameraUpdate = initialCameraTimestamp;
       lastFollowedLongitude = initialPlayer.longitude;
       lastFollowedLatitude = initialPlayer.latitude;
@@ -789,6 +988,15 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               (visualFrameCount * 1_000) /
               frameSampleDuration
             ).toFixed(1);
+            containerRef.current.dataset.cameraFallbackMarkerUpdates = String(
+              cameraFallbackMarkerUpdates,
+            );
+            containerRef.current.dataset.cameraThreePlayerUpdates = String(
+              cameraThreePlayerUpdates,
+            );
+            containerRef.current.dataset.threeDrivingEffectsUpdates = String(
+              threeDrivingEffectsUpdates,
+            );
             if (diagnosticsEnabled) {
               const memory = (
                 performance as Performance & {
@@ -820,13 +1028,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             visualFrameCount = 0;
             lastFrameSampleTimestamp = timestamp;
           }
-          playerMarker
-            ?.setLngLat([player.longitude, player.latitude])
-            .setRotation(player.heading);
-          threeLayer?.updatePlayer(player);
-          threeLayer?.setDrivingEffects({
-            offroad: gameLoop?.getEnvironment().surface === 'offroad',
-          });
+          playerVisualUpdates?.update(
+            player,
+            gameLoop?.getSurface() === 'offroad',
+          );
 
           const isFollowing = useGameStore.getState().isFollowingPlayer;
           if (!isFollowing) {
@@ -878,7 +1083,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               ? 0
               : isRecentering
                 ? followCameraConfig.recenterDurationMilliseconds
-                : camera.profile.transitionDurationMilliseconds;
+                : 0;
             camera.options.bearing = smoothFollowBearing(
               lastCameraBearing,
               player.heading,
@@ -886,59 +1091,23 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 ? 360
                 : followCameraConfig.maximumBearingChangeDegrees,
             );
-            if (
-              !isRecentering &&
-              !followCameraUpdateIsSignificant(
-                lastAppliedCameraOptions,
-                camera.options,
-                followCameraTolerances,
-              )
-            ) {
+            const cameraUpdate = applyFollowCamera(camera, {
+              durationMilliseconds: duration,
+              force: isRecentering,
+            });
+            if (!cameraUpdate.mapOptions) {
               cameraSkippedByTolerance += 1;
               lastCameraUpdate = timestamp;
               exposeCameraMetrics(timestamp);
               wasFollowing = true;
               return;
             }
-            if (!isRecentering || duration === 0) {
-              if (map.isEasing()) cameraInterruptedTransitions += 1;
-              const jumpOptions: JumpToOptions = {
-                center: camera.options.center,
-                bearing: camera.options.bearing,
-              };
-              if (
-                !lastAppliedCameraOptions ||
-                Math.abs(camera.options.zoom - lastAppliedCameraOptions.zoom) >=
-                  followCameraTolerances.minimumZoomDelta
-              ) {
-                jumpOptions.zoom = camera.options.zoom;
-              }
-              if (
-                !lastAppliedCameraOptions ||
-                Math.abs(
-                  camera.options.pitch - lastAppliedCameraOptions.pitch,
-                ) >= followCameraTolerances.minimumPitchDeltaDegrees
-              ) {
-                jumpOptions.pitch = camera.options.pitch;
-              }
-              map.jumpTo(jumpOptions);
-            } else {
-              map.easeTo({
-                ...camera.options,
-                duration,
-                easing: (progress) => 1 - (1 - progress) ** 3,
-                essential: false,
-              });
-            }
-            exposeCameraTarget(camera);
             recenterUntil = isRecentering ? timestamp + duration : 0;
             lastCameraUpdate = timestamp;
-            lastAppliedCameraOptions = camera.options;
             lastFollowedLongitude = player.longitude;
             lastFollowedLatitude = player.latitude;
             lastFollowedHeading = player.heading;
             lastFollowedSpeedKilometersPerHour = speedKilometersPerHour;
-            lastCameraBearing = camera.options.bearing;
             const cameraUpdateDuration = performance.now() - cameraStartedAt;
             cameraAppliedUpdates += 1;
             cameraWindowAppliedUpdates += 1;
@@ -1253,20 +1422,18 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             roadContextFor(restoredPlayer),
           ) ?? null;
         gameLoop?.replacePlayer(restoredPlayer);
-        playerMarker
-          ?.setLngLat([restoredPlayer.longitude, restoredPlayer.latitude])
-          .setRotation(restoredPlayer.heading);
+        playerVisualUpdates?.update(
+          restoredPlayer,
+          gameLoop?.getSurface() === 'offroad',
+        );
         const restoredCameraTimestamp = performance.now();
         const restoredCamera = cameraForPlayer(
           restoredPlayer,
           restoredCameraTimestamp,
           true,
         );
-        map.jumpTo(restoredCamera.options);
-        exposeCameraTarget(restoredCamera);
-        lastAppliedCameraOptions = restoredCamera.options;
+        applyFollowCamera(restoredCamera, { force: true });
         lastCameraUpdate = restoredCameraTimestamp;
-        lastCameraBearing = restoredPlayer.heading;
         lastFollowedLongitude = restoredPlayer.longitude;
         lastFollowedLatitude = restoredPlayer.latitude;
         lastFollowedHeading = restoredPlayer.heading;
@@ -1285,44 +1452,72 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       const player = gameLoop?.getPlayer();
       if (!player || !useGameStore.getState().isFollowingPlayer) return;
       const camera = cameraForPlayer(player, performance.now());
-      if (
-        !followCameraUpdateIsSignificant(
-          lastAppliedCameraOptions,
-          camera.options,
-          followCameraTolerances,
-        )
-      ) {
-        return;
-      }
-      map.jumpTo(camera.options);
-      exposeCameraTarget(camera);
-      lastAppliedCameraOptions = camera.options;
+      const cameraUpdate = applyFollowCamera(camera);
+      if (!cameraUpdate.mapOptions) return;
       lastCameraUpdate = performance.now();
-      lastCameraBearing = camera.options.bearing;
     };
     const handleError = (event: ErrorEvent) => {
-      const details = mapErrorDetails(event.error);
-      if (!isFatalMapError(event.error, startupReady)) {
-        if (containerRef.current) {
-          containerRef.current.dataset.mapLastNonfatalError = details;
-        }
+      const runtimeEvent = event as ErrorEvent & {
+        sourceId?: string;
+        source?: { url?: unknown };
+      };
+      const sourceUrl =
+        typeof runtimeEvent.source?.url === 'string'
+          ? runtimeEvent.source.url
+          : null;
+      const classification = classifyMapRuntimeError(event.error, {
+        startupComplete: startupReady,
+        resourceUrl: mapErrorResourceUrl(event.error) ?? sourceUrl,
+        sourceId: runtimeEvent.sourceId,
+        primaryStyleUrl: mapSourceConfig.styleUrl,
+        primaryArchiveUrl: mapSourceConfig.archiveUrl,
+        primarySourceId: mapSourceConfig.sourceId,
+      });
+      recordMapErrorClassification(classification);
+      if (!mapRuntimeErrorStopsGameplay(classification)) {
         return;
       }
-      startupReady = false;
-      useGameStore.getState().setInsideValidObjectiveZone(false);
-      inputController.clearAllInput();
-      inputController.resetMobileBoostCompletely();
-      setErrorMessage(details);
-      setStatus('error');
+      stopForFatalMapError(classification);
     };
+    const handleWebglContextLost = () => {
+      const classification = classifyMapRuntimeError(
+        new Error('WebGL context lost'),
+        {
+          startupComplete: startupReady,
+          resourceKind: 'webgl',
+          primaryStyleUrl: mapSourceConfig.styleUrl,
+          primaryArchiveUrl: mapSourceConfig.archiveUrl,
+          primarySourceId: mapSourceConfig.sourceId,
+        },
+      );
+      recordMapErrorClassification(classification);
+      stopForFatalMapError(classification);
+    };
+    const unsubscribePmtilesFailures = subscribePmtilesProtocolFailures(
+      ({ error, requestUrl }) => {
+        const classification = classifyMapRuntimeError(error, {
+          startupComplete: startupReady,
+          resourceKind: 'primary-source',
+          resourceUrl: requestUrl,
+          sourceId: mapSourceConfig.sourceId,
+          persistent: true,
+          primaryStyleUrl: mapSourceConfig.styleUrl,
+          primaryArchiveUrl: mapSourceConfig.archiveUrl,
+          primarySourceId: mapSourceConfig.sourceId,
+        });
+        recordMapErrorClassification(classification);
+        stopForFatalMapError(classification);
+      },
+    );
 
     map.on('load', handleLoad);
     map.on('dragstart', handleManualCameraStart);
     map.on('zoomstart', handleManualCameraStart);
     map.on('rotatestart', handleManualCameraStart);
     map.on('pitchstart', handleManualCameraStart);
+    map.on('resize', handleResize);
     map.on('error', handleError);
-    window.addEventListener('resize', handleResize);
+    map.on('webglcontextlost', handleWebglContextLost);
     map.setStyle(mapSourceConfig.styleUrl, {
       transformStyle: createStyleResourceTransform(window.location.href),
     });
@@ -1335,7 +1530,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       map.off('zoomstart', handleManualCameraStart);
       map.off('rotatestart', handleManualCameraStart);
       map.off('pitchstart', handleManualCameraStart);
+      map.off('resize', handleResize);
       map.off('error', handleError);
+      map.off('webglcontextlost', handleWebglContextLost);
+      unsubscribePmtilesFailures();
       gameLoop?.stop();
       unsubscribeRuntime?.();
       unsubscribeSettings?.();
@@ -1354,7 +1552,6 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       window.removeEventListener('orientationchange', clearInterruptedInput);
       window.removeEventListener(CLEAR_GAME_INPUT_EVENT, clearInterruptedInput);
       window.removeEventListener(RESET_GAME_INPUT_EVENT, resetInput);
-      window.removeEventListener('resize', handleResize);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       inputController.clearAllInput();
       map.remove();

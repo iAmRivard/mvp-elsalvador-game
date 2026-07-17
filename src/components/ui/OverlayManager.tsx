@@ -10,7 +10,11 @@ import { DiscoveryToast } from '../hud/DiscoveryToast';
 import { VehicleRecoveryDialog } from '../menu/VehicleRecoveryDialog';
 import { MissionChoiceDialog } from '../story/MissionChoiceDialog';
 import { NarrativeDialog } from '../story/NarrativeDialog';
-import { RadioMessageOverlay } from '../story/RadioMessageOverlay';
+import {
+  RadioMessageOverlay,
+  type RadioDisplayMode,
+} from '../story/RadioMessageOverlay';
+import { useMobileRadioViewport } from '../story/useMobileRadioViewport';
 import { TutorialOverlay } from '../menu/TutorialOverlay';
 import {
   ContextualAdviceOverlay,
@@ -25,6 +29,11 @@ interface OverlayManagerProps {
   showContextualAdvice?: boolean;
   onTutorialComplete?: () => void;
   onTutorialSkip?: () => void;
+}
+
+interface RadioPresentationState {
+  eventId: string | null;
+  mode: RadioDisplayMode;
 }
 
 export function OverlayManager({
@@ -50,6 +59,37 @@ export function OverlayManager({
   const presentationMode = useGameStore((state) => state.presentationMode);
   const initialStoryLogEntryCount = useRef(storyLogEntryCount);
   const [journalAdvicePending, setJournalAdvicePending] = useState(false);
+  const mobileRadioViewport = useMobileRadioViewport();
+  const [previousRadioId, setPreviousRadioId] = useState(radioId);
+  const [radioPresentation, setRadioPresentation] =
+    useState<RadioPresentationState>(() => ({
+      eventId: radioId,
+      mode: 'expanded',
+    }));
+  if (previousRadioId !== radioId) {
+    setPreviousRadioId(radioId);
+    setRadioPresentation({ eventId: radioId, mode: 'expanded' });
+  }
+  const storedRadioMode =
+    radioPresentation.eventId === radioId
+      ? radioPresentation.mode
+      : 'expanded';
+  const radioDisplayMode: RadioDisplayMode = mobileRadioViewport
+    ? storedRadioMode
+    : 'expanded';
+
+  const setCurrentRadioMode = useCallback(
+    (mode: RadioDisplayMode) => {
+      if (!radioId) return;
+      setRadioPresentation((current) =>
+        current.eventId === radioId && current.mode === mode
+          ? current
+          : { eventId: radioId, mode },
+      );
+    },
+    [radioId],
+  );
+
   useEffect(() => {
     if (radioId || storyLogEntryCount > initialStoryLogEntryCount.current) {
       setJournalAdvicePending(true);
@@ -62,6 +102,20 @@ export function OverlayManager({
   );
   const discoveryCanUseLargeOverlay =
     presentationMode === 'stopped' || presentationMode === 'interaction';
+  const radioExpansionBlocked = Boolean(
+    narrativeId ||
+      recoveryReason ||
+      missionChoiceId ||
+      (showTutorial && input),
+  );
+  const compactRadio = useCallback(
+    () => setCurrentRadioMode('compact'),
+    [setCurrentRadioMode],
+  );
+  const requestRadioExpansion = useCallback(() => {
+    if (radioExpansionBlocked) return;
+    setCurrentRadioMode('expanded');
+  }, [radioExpansionBlocked, setCurrentRadioMode]);
   const candidates: OverlayCandidate[] = [];
   if (allowStory && narrativeId) {
     candidates.push({
@@ -103,8 +157,9 @@ export function OverlayManager({
     candidates.push({
       id: `radio:${radioId}`,
       kind: 'radio',
-      priority: 'radio',
-      large: true,
+      priority:
+        radioDisplayMode === 'expanded' ? 'radio' : 'compact-radio',
+      large: radioDisplayMode === 'expanded',
       sequence: 4,
     });
   }
@@ -148,6 +203,9 @@ export function OverlayManager({
   const contextualAdviceCompact = queue.compact.some(
     (candidate) => candidate.kind === 'contextual-advice',
   );
+  const radioCompact = queue.compact.some(
+    (candidate) => candidate.kind === 'radio',
+  );
   const renderLargeOverlay = (kind: OverlayKind | null) => {
     switch (kind) {
       case 'recovery':
@@ -165,7 +223,14 @@ export function OverlayManager({
           />
         ) : null;
       case 'radio':
-        return <RadioMessageOverlay />;
+        return (
+          <RadioMessageOverlay
+            displayMode="expanded"
+            mobileViewport={mobileRadioViewport}
+            onCompact={compactRadio}
+            onExpandRequest={requestRadioExpansion}
+          />
+        );
       case 'discovery':
         return <DiscoveryToast />;
       default:
@@ -178,6 +243,17 @@ export function OverlayManager({
       className="overlay-manager"
       data-active-overlay={activeKind ?? 'none'}
       data-queued-overlays={queue.queuedLarge.length}
+      data-radio-display-mode={
+        allowStory && radioId ? radioDisplayMode : 'none'
+      }
+      data-radio-large-blocker={
+        allowStory && radioId && radioDisplayMode === 'expanded'
+          ? 'true'
+          : 'false'
+      }
+      data-radio-expansion-blocked={
+        radioExpansionBlocked ? 'true' : 'false'
+      }
     >
       {renderLargeOverlay(activeKind)}
       {contextualAdviceCompact && adviceController.advice && (
@@ -185,6 +261,14 @@ export function OverlayManager({
           advice={adviceController.advice}
           onDismiss={adviceController.dismiss}
           onOpenJournal={adviceController.openJournal}
+        />
+      )}
+      {radioCompact && (
+        <RadioMessageOverlay
+          displayMode="compact"
+          mobileViewport={mobileRadioViewport}
+          onCompact={compactRadio}
+          onExpandRequest={requestRadioExpansion}
         />
       )}
       {discoveryCompact && <DiscoveryToast compact />}

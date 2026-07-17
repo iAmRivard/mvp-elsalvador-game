@@ -5,6 +5,7 @@ import {
   mobileCameraHysteresis,
 } from '../src/config/followCamera.config';
 import {
+  buildFollowCameraUpdate,
   cameraProfileSpeedChangedSignificantly,
   drivingCameraProfile,
   followCameraOffset,
@@ -15,6 +16,14 @@ import {
   smoothFollowBearing,
   type FollowCameraOptions,
 } from '../src/game/followCamera';
+
+const baseCamera: FollowCameraOptions = {
+  center: [-89.19, 13.69],
+  bearing: 359.9,
+  zoom: 15.4,
+  pitch: 59,
+  offset: [0, 203],
+};
 
 describe('cámara de seguimiento', () => {
   it('selecciona perfiles cercanos por estado y dispositivo', () => {
@@ -108,6 +117,133 @@ describe('cámara de seguimiento', () => {
         followCameraTolerances,
       ),
     ).toBe(true);
+  });
+
+  it('omite por tolerancia un cambio pequeño de offset', () => {
+    const result = buildFollowCameraUpdate(
+      baseCamera,
+      {
+        ...baseCamera,
+        offset: [0, 203.5],
+      },
+      followCameraTolerances,
+    );
+
+    expect(result.mapOptions).toBeNull();
+    expect(result.omissionReason).toBe('within-tolerance');
+    expect(result.appliedOptions?.offset).toEqual([0, 203]);
+  });
+
+  it('incluye y registra un offset significativo', () => {
+    const result = buildFollowCameraUpdate(
+      baseCamera,
+      {
+        ...baseCamera,
+        offset: [0, 214],
+      },
+      followCameraTolerances,
+    );
+
+    expect(result.mapOptions?.offset).toEqual([0, 214]);
+    expect(result.appliedOptions?.offset).toEqual([0, 214]);
+    expect(result.changes.offset).toBe(true);
+  });
+
+  it('omite zoom y pitch sin cambios al aplicar centro y bearing', () => {
+    const result = buildFollowCameraUpdate(
+      baseCamera,
+      {
+        ...baseCamera,
+        center: [-89.191, 13.691],
+        bearing: 1,
+      },
+      followCameraTolerances,
+    );
+
+    expect(result.mapOptions).toMatchObject({
+      center: [-89.191, 13.691],
+      bearing: 1,
+      offset: [0, 203],
+    });
+    expect(result.mapOptions).not.toHaveProperty('zoom');
+    expect(result.mapOptions).not.toHaveProperty('pitch');
+    expect(result.appliedOptions).toMatchObject({
+      center: [-89.191, 13.691],
+      bearing: 1,
+      zoom: 15.4,
+      pitch: 59,
+    });
+  });
+
+  it('conserva el offset anterior cuando no envía el valor solicitado', () => {
+    const result = buildFollowCameraUpdate(
+      baseCamera,
+      {
+        ...baseCamera,
+        center: [-89.191, 13.691],
+        offset: [0, 203.5],
+      },
+      followCameraTolerances,
+    );
+
+    expect(result.mapOptions?.offset).toEqual([0, 203]);
+    expect(result.appliedOptions?.offset).toEqual([0, 203]);
+    expect(result.appliedOptions?.offset).not.toEqual([0, 203.5]);
+    expect(result.changes.offset).toBe(false);
+  });
+
+  it('aplica zoom, pitch y offset al cambiar de perfil', () => {
+    const result = buildFollowCameraUpdate(
+      baseCamera,
+      {
+        ...baseCamera,
+        zoom: 15.2,
+        pitch: 61,
+        offset: [0, 220],
+      },
+      followCameraTolerances,
+    );
+
+    expect(result.mapOptions).toMatchObject({
+      zoom: 15.2,
+      pitch: 61,
+      offset: [0, 220],
+    });
+    expect(result.appliedOptions).toMatchObject({
+      zoom: 15.2,
+      pitch: 61,
+      offset: [0, 220],
+    });
+  });
+
+  it('aplica el nuevo offset cuando cambia el viewport', () => {
+    const resizedOffset = followCameraOffset(390, 700, 0.24);
+    const result = buildFollowCameraUpdate(
+      baseCamera,
+      { ...baseCamera, offset: resizedOffset },
+      followCameraTolerances,
+    );
+
+    expect(result.mapOptions?.offset).toEqual(resizedOffset);
+    expect(result.appliedOptions?.offset).toEqual(resizedOffset);
+  });
+
+  it('mantiene correcto el cruce de bearing por 359°/0°', () => {
+    const withinTolerance = buildFollowCameraUpdate(
+      baseCamera,
+      { ...baseCamera, bearing: 0.1 },
+      followCameraTolerances,
+    );
+    const significant = buildFollowCameraUpdate(
+      baseCamera,
+      { ...baseCamera, bearing: 1 },
+      followCameraTolerances,
+    );
+
+    expect(withinTolerance.mapOptions).toBeNull();
+    expect(withinTolerance.appliedOptions?.bearing).toBe(359.9);
+    expect(significant.mapOptions?.bearing).toBe(1);
+    expect(significant.appliedOptions?.bearing).toBe(1);
   });
 
   it('mantiene driving ante picos cortos y entra a fast con velocidad sostenida', () => {

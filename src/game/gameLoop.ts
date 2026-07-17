@@ -42,6 +42,7 @@ export interface PlayerGameLoop {
   stop: () => void;
   getPlayer: () => PlayerRuntime;
   getEnvironment: () => PlayerStepEnvironment;
+  getSurface: () => PlayerStepEnvironment['surface'];
   restoreFuel: (amount: number) => void;
   replacePlayer: (player: PlayerRuntime) => void;
 }
@@ -118,6 +119,7 @@ export function startPlayerGameLoop(
     },
     getPlayer: () => ({ ...player }),
     getEnvironment: () => ({ ...environment }),
+    getSurface: () => environment.surface,
     restoreFuel: (amount) => {
       player = {
         ...player,

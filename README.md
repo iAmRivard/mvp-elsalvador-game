@@ -1,7 +1,8 @@
 # El Salvador: Rutas Perdidas
 
 Videojuego web de conducción y exploración sobre una cartografía estilizada de El Salvador. La
-v0.2.5.2 incluye mapa MapLibre 2.5D autónomo, onboarding integrado, presentación dinámica de conducción, navegación sincronizada, velocidad objetivo móvil,
+v0.2.5.3 incluye mapa MapLibre 2.5D autónomo, onboarding integrado, offset real de cámara,
+overlays compactos coordinados, navegación sincronizada, velocidad objetivo móvil,
 red vial local con caminos de tierra, rutas A* en Web Worker, historia guiada, estaciones de
 combustible, música local, vehículo y referencias 3D, progreso, Docker y despliegue en Dokploy.
 
@@ -67,8 +68,9 @@ Los dos modelos son locales, pesan menos de 40 KiB cada uno y pueden reconstruir
 ## Inicio, pausa y configuración
 
 La pantalla inicial permite continuar el progreso local o comenzar una partida nueva con
-confirmación. La primera expedición inicia **La transmisión** y muestra nueve instrucciones
-contextuales que avanzan al realizar cada acción; luego puede repetirse desde la
+confirmación. La primera expedición inicia **La transmisión** y muestra cinco pasos obligatorios
+que avanzan al realizar cada acción; objetivo, interacción, Turbo y bitácora continúan como
+consejos compactos. El tutorial puede repetirse desde la
 configuración. Al pausar con `Escape` o `Ⅱ` se puede continuar, guardar, ajustar la presentación o
 volver al inicio.
 
@@ -95,9 +97,10 @@ alrededor de Coatepeque. La siguiente misión principal siempre aparece primero 
 iniciarla o navegar a su comienzo; las opcionales no reemplazan la historia y cada bloqueo explica
 su causa. Cada misión valida inicio y prerrequisitos, muestra progreso y calcula una ruta A* local.
 
-Los mensajes normales de radio permanecen bajo el mini navegador sin pausar ni bloquear controles.
-Una cola priorizada muestra un solo overlay grande; un descubrimiento se vuelve toast compacto si
-coincide con radio. La introducción y final de capítulo, las decisiones, la recuperación y el
+Los mensajes normales de radio muestran una vista completa y se contraen a una franja que no
+pausa, no bloquea consejos y puede expandirse otra vez. Una cola priorizada muestra un solo
+overlay grande; interacción y consejos conservan prioridad sobre radio compacta. La introducción y
+final de capítulo, las decisiones, la recuperación y el
 tutorial obligatorio sí pausan y lo indican. Historia, misiones, transmisiones y descubrimientos
 pueden releerse. En
 **Camino bloqueado**, las rutas norte y sur cambian A*, consumo y desgaste; tras confirmar aparece
@@ -189,13 +192,13 @@ VITE_ENABLE_DIAGNOSTICS=true npm run dev
 ```
 
 La validación automática y el protocolo físico pendiente están en
-`docs/gameplay/playtest-v0.2.5.1.md`.
+`docs/gameplay/playtest-v0.2.5.3.md`.
 
 ## Docker
 
 ```sh
-docker build -t el-salvador-rutas-perdidas:v0.2.5.2 .
-docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.5.2
+docker build -t el-salvador-rutas-perdidas:v0.2.5.3 .
+docker run --rm -p 8080:80 el-salvador-rutas-perdidas:v0.2.5.3
 curl http://localhost:8080/healthz
 ```
 
@@ -208,15 +211,23 @@ El navegador lee exclusivamente `/maps/el-salvador.pmtiles` y los recursos de `/
 Consulta `data/SOURCES.md`, `data/LICENSES.md` y `scripts/maps/README.md` para procedencia,
 licencias y reconstrucción.
 
-## Estado de la v0.2.5.2
+## Estado de la v0.2.5.3
 
-- El tutorial obligatorio termina al seguir la ruta; objetivo, interacción, Turbo y bitácora quedan
-  como consejos contextuales no pausantes.
-- La cámara móvil actualiza cerca de 30 Hz en calidad media/alta, conserva histéresis y restaura el
-  perfil detenido incluso después de velocidad rápida.
-- Radio móvil contraíble, estaciones de combustible con prioridad contextual y jerarquía única de
-  overlays reducen saturación sin cambiar física ni progreso.
-- Service worker versionado, PMTiles/Range sin cachear y pruebas E2E con interacciones reales.
+- Radio compacta y consejos comparten la pantalla sin doble dueño del slot grande; interacción
+  conserva prioridad y repetir un evento reinicia la vista.
+- La cámara móvil aplica offsets reales en stopped/driving/fast, resize, restauración y recenter,
+  con p95 automatizado por debajo de 3 ms.
+- Fallback DOM y efectos Three.js evitan trabajo repetido sin degradar la actualización por frame
+  del vehículo 3D.
+- PMTiles principal, WebGL, red vial y recursos opcionales tienen recuperación explícita; service
+  worker v0.2.5.3 mantiene PMTiles/Range fuera del cache.
+- Benchmark Chromium, validación Docker y E2E usan interacciones reales; la prueba física y la
+  fluidez subjetiva siguen pendientes.
+
+### Base v0.2.5.2
+
+- Tutorial obligatorio de cinco pasos y consejos contextuales no pausantes.
+- Cámara móvil cercana a 30 Hz con histéresis, radio contraíble y combustible contextual.
 
 ### Base v0.2.5.1
 

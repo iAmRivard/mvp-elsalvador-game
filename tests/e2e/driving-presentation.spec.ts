@@ -1,4 +1,10 @@
-import { expect, type BrowserContext, type Page, test } from '@playwright/test';
+import {
+  expect,
+  type BrowserContext,
+  type Locator,
+  type Page,
+  test,
+} from '@playwright/test';
 
 interface ViewportCase {
   name: string;
@@ -35,7 +41,12 @@ async function enterExpedition(page: Page) {
   if (await closeRadio.isVisible()) await closeRadio.click();
 }
 
-async function selectFastMobileTarget(context: BrowserContext, page: Page) {
+async function selectMobileTarget(
+  context: BrowserContext,
+  page: Page,
+  targetSpeedKilometersPerHour: number,
+  touchId: number,
+) {
   const joystick = page.getByLabel('Joystick de velocidad objetivo');
   await expect(joystick).toBeVisible();
   const box = await joystick.boundingBox();
@@ -46,13 +57,13 @@ async function selectFastMobileTarget(context: BrowserContext, page: Page) {
   try {
     await session.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
-      touchPoints: [{ id: 1, x: centerX, y: centerY, force: 1 }],
+      touchPoints: [{ id: touchId, x: centerX, y: centerY, force: 1 }],
     });
     await session.send('Input.dispatchTouchEvent', {
       type: 'touchMove',
       touchPoints: [
         {
-          id: 1,
+          id: touchId,
           x: centerX,
           y: centerY - box!.width * 0.44,
           force: 1,
@@ -64,14 +75,14 @@ async function selectFastMobileTarget(context: BrowserContext, page: Page) {
     });
     await expect
       .poll(
-        async () =>
-          Number.parseFloat(
-            (await page.getByTestId('mobile-driving-speed').textContent()) ??
-              '0',
-          ),
-        { timeout: 20_000 },
+        () =>
+          page
+            .getByTestId('game-map')
+            .getAttribute('data-input-target-speed')
+            .then(Number),
+        { timeout: 10_000 },
       )
-      .toBeGreaterThanOrEqual(58);
+      .toBeGreaterThanOrEqual(targetSpeedKilometersPerHour);
   } finally {
     await session.send('Input.dispatchTouchEvent', {
       type: 'touchEnd',
@@ -79,6 +90,45 @@ async function selectFastMobileTarget(context: BrowserContext, page: Page) {
     });
     await session.detach();
   }
+}
+
+async function selectFastMobileTarget(context: BrowserContext, page: Page) {
+  await selectMobileTarget(context, page, 88, 1);
+  await expect
+    .poll(
+      async () =>
+        Number.parseFloat(
+          (await page.getByTestId('mobile-driving-speed').textContent()) ?? '0',
+        ),
+      { timeout: 20_000 },
+    )
+    .toBeGreaterThanOrEqual(58);
+}
+
+async function expectAppliedCameraOffset(
+  gameMap: Locator,
+  expectedOffsetY: number,
+) {
+  await expect(gameMap).toHaveAttribute(
+    'data-follow-offset-y',
+    String(expectedOffsetY),
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-camera-last-applied-offset-y',
+    String(expectedOffsetY),
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-camera-last-operation',
+    /^(easeTo|jumpTo-offset-center)$/,
+  );
+  await expect
+    .poll(async () => {
+      const actual = Number(
+        await gameMap.getAttribute('data-camera-applied-screen-offset-y'),
+      );
+      return Math.abs(actual - expectedOffsetY);
+    })
+    .toBeLessThanOrEqual(1);
 }
 
 async function stopMobileTarget(context: BrowserContext, page: Page) {
@@ -215,28 +265,44 @@ for (const viewport of viewports) {
     expect(visibleLayers).toBeGreaterThan(0);
     expect(visibleLayers).toBeLessThan(totalLayers);
 
-    await testInfo.attach(`v0.2.5.2-${viewport.name}`, {
+    await testInfo.attach(`v0.2.5.3-${viewport.name}`, {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
   });
 }
 
-test('restaura la cámara móvil detenida después del perfil rápido', async ({
+test('aplica offsets reales en stopped, driving, fast y stopped', async ({
   context,
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-mobile');
+  await page.setViewportSize({ width: 392, height: 850 });
   await page.addInitScript(() => window.localStorage.clear());
   await enterExpedition(page);
 
   const gameMap = page.getByTestId('game-map');
+  await expect(gameMap).toHaveAttribute(
+    'data-current-camera-profile',
+    'mobileStopped',
+  );
+  await expectAppliedCameraOffset(gameMap, 162);
+
+  await selectMobileTarget(context, page, 30, 3);
+  await expect(gameMap).toHaveAttribute(
+    'data-current-camera-profile',
+    'mobileDriving',
+    { timeout: 8_000 },
+  );
+  await expectAppliedCameraOffset(gameMap, 204);
+
   await selectFastMobileTarget(context, page);
   await expect(gameMap).toHaveAttribute(
     'data-current-camera-profile',
     'mobileFast',
     { timeout: 12_000 },
   );
+  await expectAppliedCameraOffset(gameMap, 220);
 
   await stopMobileTarget(context, page);
   await expect(gameMap).toHaveAttribute(
@@ -244,6 +310,66 @@ test('restaura la cámara móvil detenida después del perfil rápido', async ({
     'mobileStopped',
     { timeout: 4_000 },
   );
+  await expectAppliedCameraOffset(gameMap, 162);
+  await expect
+    .poll(() =>
+      gameMap.getAttribute('data-camera-profile-transitions').then(Number),
+    )
+    .toBeGreaterThanOrEqual(3);
+});
+
+test('recalcula y aplica el offset al cambiar el viewport', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-mobile');
+  await page.setViewportSize({ width: 392, height: 850 });
+  await page.addInitScript(() => window.localStorage.clear());
+  await enterExpedition(page);
+
+  const gameMap = page.getByTestId('game-map');
+  await expectAppliedCameraOffset(gameMap, 162);
+  await page.setViewportSize({ width: 392, height: 700 });
+  await expectAppliedCameraOffset(gameMap, 133);
+});
+
+test('no actualiza continuamente el marcador fallback oculto', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-mobile');
+  await page.addInitScript(() => window.localStorage.clear());
+  await enterExpedition(page);
+
+  const mapFrame = page.locator('.map-frame');
+  await expect(mapFrame).toHaveAttribute('data-player-renderer', 'ready', {
+    timeout: 20_000,
+  });
+  await expect(page.locator('.player-marker')).toHaveClass(
+    /player-marker--fallback-hidden/,
+  );
+  const gameMap = page.getByTestId('game-map');
+  await page.waitForTimeout(1_100);
+  const initialFallbackUpdates = Number(
+    await gameMap.getAttribute('data-camera-fallback-marker-updates'),
+  );
+  const initialThreeUpdates = Number(
+    await gameMap.getAttribute('data-camera-three-player-updates'),
+  );
+  const initialEffectsUpdates = Number(
+    await gameMap.getAttribute('data-three-driving-effects-updates'),
+  );
+
+  await page.waitForTimeout(1_100);
+  expect(
+    Number(
+      await gameMap.getAttribute('data-camera-fallback-marker-updates'),
+    ),
+  ).toBe(initialFallbackUpdates);
+  expect(
+    Number(await gameMap.getAttribute('data-camera-three-player-updates')),
+  ).toBeGreaterThan(initialThreeUpdates);
+  expect(
+    Number(await gameMap.getAttribute('data-three-driving-effects-updates')),
+  ).toBe(initialEffectsUpdates);
 });
 
 test('mantiene HUD compacto y cámara de escritorio al conducir', async ({

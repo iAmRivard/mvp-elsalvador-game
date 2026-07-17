@@ -7,11 +7,13 @@ import {
   render,
   screen,
 } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NarrativeDialog } from '../src/components/story/NarrativeDialog';
 import {
   RADIO_FULL_PREVIEW_MILLISECONDS,
   RadioMessageOverlay,
+  type RadioDisplayMode,
 } from '../src/components/story/RadioMessageOverlay';
 import { useGameStore } from '../src/store/gameStore';
 
@@ -31,6 +33,23 @@ function setMobileViewport(matches: boolean): void {
   });
 }
 
+function ControlledRadioMessageOverlay({
+  initialMode = 'expanded',
+}: {
+  initialMode?: RadioDisplayMode;
+}) {
+  const [displayMode, setDisplayMode] =
+    useState<RadioDisplayMode>(initialMode);
+  return (
+    <RadioMessageOverlay
+      displayMode={displayMode}
+      mobileViewport={window.matchMedia('(max-width: 900px)').matches}
+      onCompact={() => setDisplayMode('compact')}
+      onExpandRequest={() => setDisplayMode('expanded')}
+    />
+  );
+}
+
 afterEach(() => {
   vi.useRealTimers();
   cleanup();
@@ -47,7 +66,7 @@ describe('presentación narrativa', () => {
       activeRadioEventId: 'radio-ruta-occidental',
       isPaused: false,
     });
-    const { container } = render(<RadioMessageOverlay />);
+    const { container } = render(<ControlledRadioMessageOverlay />);
 
     expect(screen.getByText('La señal continúa al oeste')).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -60,7 +79,7 @@ describe('presentación narrativa', () => {
     useGameStore.setState({
       activeRadioEventId: 'radio-ruta-occidental',
     });
-    render(<RadioMessageOverlay />);
+    render(<ControlledRadioMessageOverlay />);
     fireEvent.click(screen.getByRole('button', { name: 'Bitácora' }));
 
     expect(useGameStore.getState().storyLogRequest).toMatchObject({
@@ -77,7 +96,7 @@ describe('presentación narrativa', () => {
     useGameStore.setState({
       activeRadioEventId: 'radio-ruta-occidental',
     });
-    const { container } = render(<RadioMessageOverlay />);
+    const { container } = render(<ControlledRadioMessageOverlay />);
 
     expect(screen.getByRole('button', { name: 'Bitácora' })).toBeTruthy();
     act(() => {
@@ -106,7 +125,7 @@ describe('presentación narrativa', () => {
     useGameStore.setState({
       activeRadioEventId: 'radio-ruta-occidental',
     });
-    render(<RadioMessageOverlay />);
+    render(<ControlledRadioMessageOverlay />);
 
     act(() => {
       vi.advanceTimersByTime(RADIO_FULL_PREVIEW_MILLISECONDS * 4);
@@ -123,7 +142,7 @@ describe('presentación narrativa', () => {
     useGameStore.setState({
       activeRadioEventId: 'radio-ruta-occidental',
     });
-    const { container } = render(<RadioMessageOverlay />);
+    const { container } = render(<ControlledRadioMessageOverlay />);
 
     act(() => {
       vi.advanceTimersByTime(RADIO_FULL_PREVIEW_MILLISECONDS * 2);

@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'rutas-perdidas-';
-const CACHE_VERSION = 'v0.2.5.2';
+const CACHE_VERSION = 'v0.2.5.3';
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `${CACHE_PREFIX}static-${CACHE_VERSION}`;
 const APP_SHELL = [

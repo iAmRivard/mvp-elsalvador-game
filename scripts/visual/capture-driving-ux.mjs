@@ -5,7 +5,7 @@ import { chromium, devices } from '@playwright/test';
 
 const baseUrl = process.argv[2] ?? 'http://127.0.0.1:5173';
 const outputDirectory = resolve(
-  process.argv[3] ?? 'test-results/driving-ux-v0.2.5.2',
+  process.argv[3] ?? 'test-results/driving-ux-v0.2.5.3',
 );
 const observationMilliseconds = 30_000;
 const warmupMilliseconds = 10_000;
@@ -141,7 +141,7 @@ try {
   });
   await page.getByTestId('game-map').waitFor({ state: 'visible' });
   await page.screenshot({
-    path: resolve(outputDirectory, 'v0.2.5.2-mobile-after.png'),
+    path: resolve(outputDirectory, 'v0.2.5.3-mobile-after.png'),
   });
 
   await page.waitForTimeout(warmupMilliseconds);
@@ -244,6 +244,26 @@ try {
         map instanceof HTMLElement
           ? Number(map.dataset.cameraSkippedByTolerance ?? 0)
           : 0,
+      cameraOffsetAppliedUpdates:
+        map instanceof HTMLElement
+          ? Number(map.dataset.cameraOffsetAppliedUpdates ?? 0)
+          : 0,
+      cameraProfileTransitions:
+        map instanceof HTMLElement
+          ? Number(map.dataset.cameraProfileTransitions ?? 0)
+          : 0,
+      cameraFallbackMarkerUpdates:
+        map instanceof HTMLElement
+          ? Number(map.dataset.cameraFallbackMarkerUpdates ?? 0)
+          : 0,
+      cameraThreePlayerUpdates:
+        map instanceof HTMLElement
+          ? Number(map.dataset.cameraThreePlayerUpdates ?? 0)
+          : 0,
+      threeDrivingEffectsUpdates:
+        map instanceof HTMLElement
+          ? Number(map.dataset.threeDrivingEffectsUpdates ?? 0)
+          : 0,
     };
   });
 
@@ -303,6 +323,26 @@ try {
           map instanceof HTMLElement
             ? Number(map.dataset.cameraSkippedByTolerance ?? 0)
             : 0,
+        cameraOffsetAppliedUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraOffsetAppliedUpdates ?? 0)
+            : 0,
+        cameraProfileTransitions:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraProfileTransitions ?? 0)
+            : 0,
+        cameraFallbackMarkerUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraFallbackMarkerUpdates ?? 0)
+            : 0,
+        cameraThreePlayerUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraThreePlayerUpdates ?? 0)
+            : 0,
+        threeDrivingEffectsUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.threeDrivingEffectsUpdates ?? 0)
+            : 0,
       },
       declutterChanges: window.__v0251DeclutterChanges ?? 0,
       samples: {
@@ -345,6 +385,21 @@ try {
     skippedByTolerance:
       metrics.counters.cameraSkippedByTolerance -
       initial.cameraSkippedByTolerance,
+    offsetApplied:
+      metrics.counters.cameraOffsetAppliedUpdates -
+      initial.cameraOffsetAppliedUpdates,
+    profileTransitions:
+      metrics.counters.cameraProfileTransitions -
+      initial.cameraProfileTransitions,
+    fallbackMarkerUpdates:
+      metrics.counters.cameraFallbackMarkerUpdates -
+      initial.cameraFallbackMarkerUpdates,
+    threePlayerUpdates:
+      metrics.counters.cameraThreePlayerUpdates -
+      initial.cameraThreePlayerUpdates,
+    threeDrivingEffectsUpdates:
+      metrics.counters.threeDrivingEffectsUpdates -
+      initial.threeDrivingEffectsUpdates,
   };
   metrics.cameraCounterDeltas.requestedPerSecond =
     metrics.cameraCounterDeltas.requested /
@@ -425,7 +480,7 @@ try {
       'event to stored, next game-loop consumption and next animation frame; presentation latency unavailable',
   };
   await writeFile(
-    resolve(outputDirectory, 'v0.2.5.2-mobile-metrics.json'),
+    resolve(outputDirectory, 'v0.2.5.3-mobile-metrics.json'),
     `${JSON.stringify(metrics, null, 2)}\n`,
     'utf8',
   );
@@ -443,7 +498,7 @@ try {
     });
     await page.waitForTimeout(250);
     await page.screenshot({
-      path: resolve(outputDirectory, `v0.2.5.2-mobile-${viewport.name}.png`),
+      path: resolve(outputDirectory, `v0.2.5.3-mobile-${viewport.name}.png`),
     });
   }
   await session.detach();

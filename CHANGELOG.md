@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.2.5.3 - 2026-07-16
+
+### Cámara y trabajo visual
+
+- El offset móvil se aplica realmente en seguimiento, perfiles, resize,
+  restauración y recenter; el estado interno conserva únicamente opciones que
+  llegaron al adaptador de MapLibre.
+- El marcador 2D oculto deja de actualizarse por frame y se resincroniza antes
+  de reaparecer si Three.js falla.
+- Los efectos de conducción Three.js sólo cambian al transicionar entre vía y
+  offroad.
+
+### Overlays y estabilidad
+
+- `OverlayManager` controla explícitamente radio completa/compacta. La franja
+  compacta ya no bloquea consejos y volver a expandir solicita el slot grande.
+- Cambiar o repetir una radio reinicia sus 4.5 segundos; narrativa,
+  recuperación, elección y tutorial conservan prioridad.
+- Los errores de mapa se clasifican como fatales, degradados u opcionales con
+  contexto estructurado. PMTiles principal y WebGL limpian input y ofrecen
+  reintento; red vial degrada; modelos, audio y sprites identificados no
+  desmontan el juego.
+- Un fatal durante carga vial no puede ser sobrescrito por un `ready` tardío.
+
+### Validación
+
+- Cache PWA y paquete pasan a v0.2.5.3; PMTiles/Range continúan fuera de Cache
+  Storage.
+- Se añaden pruebas de offsets reales, resize, fallback, cola compacta,
+  repetición de radio, PMTiles tardío y carrera fatal/carga vial.
+- El benchmark usa tres corridas base y tres candidatas con SHA registrado; la
+  prueba física sigue pendiente.
+
 ## v0.2.5.2 - 2026-07-16
 
 ### Fluidez y cámara móvil

@@ -23,6 +23,29 @@ export interface FollowCameraOptions {
   offset: FollowCameraOffset;
 }
 
+export interface FollowCameraMapOptions {
+  center: [longitude: number, latitude: number];
+  bearing: number;
+  offset: FollowCameraOffset;
+  zoom?: number;
+  pitch?: number;
+}
+
+export type FollowCameraOmissionReason = 'within-tolerance';
+
+export interface FollowCameraUpdateResult {
+  mapOptions: FollowCameraMapOptions | null;
+  appliedOptions: FollowCameraOptions | null;
+  omissionReason: FollowCameraOmissionReason | null;
+  changes: {
+    center: boolean;
+    bearing: boolean;
+    zoom: boolean;
+    pitch: boolean;
+    offset: boolean;
+  };
+}
+
 export type MobileCameraMode = 'stopped' | 'driving' | 'fast';
 
 export interface MobileCameraModeInput {
@@ -76,6 +99,93 @@ export function followCameraUpdateIsSignificant(
     Math.abs(next.offset[1] - previous.offset[1]) >=
       tolerances.minimumOffsetDeltaPixels
   );
+}
+
+function cloneFollowCameraOptions(
+  options: FollowCameraOptions,
+): FollowCameraOptions {
+  return {
+    ...options,
+    center: [...options.center],
+    offset: [...options.offset],
+  };
+}
+
+export function buildFollowCameraUpdate(
+  previous: FollowCameraOptions | null,
+  requested: FollowCameraOptions,
+  tolerances: FollowCameraTolerances,
+): FollowCameraUpdateResult {
+  const changes = {
+    center:
+      !previous ||
+      Math.abs(requested.center[0] - previous.center[0]) >=
+        tolerances.minimumCoordinateDeltaDegrees ||
+      Math.abs(requested.center[1] - previous.center[1]) >=
+        tolerances.minimumCoordinateDeltaDegrees,
+    bearing:
+      !previous ||
+      shortestBearingDeltaDegrees(previous.bearing, requested.bearing) >=
+        tolerances.minimumBearingDeltaDegrees,
+    zoom:
+      !previous ||
+      Math.abs(requested.zoom - previous.zoom) >=
+        tolerances.minimumZoomDelta,
+    pitch:
+      !previous ||
+      Math.abs(requested.pitch - previous.pitch) >=
+        tolerances.minimumPitchDeltaDegrees,
+    offset:
+      !previous ||
+      Math.abs(requested.offset[0] - previous.offset[0]) >=
+        tolerances.minimumOffsetDeltaPixels ||
+      Math.abs(requested.offset[1] - previous.offset[1]) >=
+        tolerances.minimumOffsetDeltaPixels,
+  };
+
+  if (
+    previous &&
+    !changes.center &&
+    !changes.bearing &&
+    !changes.zoom &&
+    !changes.pitch &&
+    !changes.offset
+  ) {
+    return {
+      mapOptions: null,
+      appliedOptions: cloneFollowCameraOptions(previous),
+      omissionReason: 'within-tolerance',
+      changes,
+    };
+  }
+
+  const appliedOptions: FollowCameraOptions = previous
+    ? {
+        center: changes.center
+          ? [...requested.center]
+          : [...previous.center],
+        bearing: changes.bearing ? requested.bearing : previous.bearing,
+        zoom: changes.zoom ? requested.zoom : previous.zoom,
+        pitch: changes.pitch ? requested.pitch : previous.pitch,
+        offset: changes.offset
+          ? [...requested.offset]
+          : [...previous.offset],
+      }
+    : cloneFollowCameraOptions(requested);
+  const mapOptions: FollowCameraMapOptions = {
+    center: [...appliedOptions.center],
+    bearing: appliedOptions.bearing,
+    offset: [...appliedOptions.offset],
+  };
+  if (changes.zoom) mapOptions.zoom = appliedOptions.zoom;
+  if (changes.pitch) mapOptions.pitch = appliedOptions.pitch;
+
+  return {
+    mapOptions,
+    appliedOptions,
+    omissionReason: null,
+    changes,
+  };
 }
 
 export function cameraProfileSpeedChangedSignificantly(

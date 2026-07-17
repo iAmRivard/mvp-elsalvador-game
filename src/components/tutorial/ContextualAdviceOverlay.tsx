@@ -64,8 +64,7 @@ function readAdvice(
       state.isJournalOpen ||
       state.recoveryReason ||
       state.activeNarrativeEventId ||
-      state.activeMissionChoiceObjectiveId ||
-      state.activeRadioEventId,
+      state.activeMissionChoiceObjectiveId,
   );
   const boostIsSafe =
     !interactionLabel &&
