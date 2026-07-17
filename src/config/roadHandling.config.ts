@@ -32,6 +32,11 @@ export const mobileRoadContactConfig = {
   surfaceHistoryLimit: 20,
 } as const;
 
+export const savedRoadPositionConfig = {
+  alignmentToleranceMeters: 8,
+  validationRadiusMeters: 250,
+} as const;
+
 export const roadAssistModeMultipliers: Readonly<
   Record<RoadAssistMode, number>
 > = {

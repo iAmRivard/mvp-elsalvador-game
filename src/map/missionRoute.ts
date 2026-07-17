@@ -35,6 +35,7 @@ import { getRoadWorkerClient } from '../roads/roadWorkerClient';
 import { useGameStore } from '../store/gameStore';
 import type { RoadCoordinates } from '../types/roads';
 import type { RouteNavigationInstruction } from '../types/navigation';
+import { createTrailingUpdateScheduler } from './trailingUpdateScheduler';
 
 const ROUTE_SOURCE_ID = 'active-mission-route';
 const ROAD_CASING_LAYER_ID = 'active-mission-route-casing';
@@ -49,6 +50,14 @@ const IMMEDIATE_CHEVRON_LAYER_ID = 'active-mission-route-immediate-chevrons';
 const NAVIGATION_ARROW_LOOKAHEAD_METERS = 42;
 const TARGETS_SOURCE_ID = 'active-mission-targets';
 const TARGETS_LAYER_ID = 'active-mission-targets-circles';
+
+export function routeOriginMovedBeyondTolerance(
+  origin: RoadCoordinates,
+  currentPosition: RoadCoordinates,
+  toleranceMeters = routingConfig.routeRejoinDistanceMeters,
+): boolean {
+  return distanceBetweenMeters(origin, currentPosition) > toleranceMeters;
+}
 
 const emptyRoute: FeatureCollection<LineString> = {
   type: 'FeatureCollection',
@@ -447,8 +456,8 @@ export function addMissionRoute(
   let routeCoordinates: RoadCoordinates[] = [];
   let routeInstructions: RouteNavigationInstruction[] = [];
   let routeMode: 'road' | 'fallback' | null = null;
+  let routeTargetKey: string | null = null;
   let lastKnownSegmentIndex: number | null = null;
-  let lastNavigationUpdate = 0;
   let lastDeviationCheck = 0;
   let lastCalculationAt = 0;
   const routeSource = () => map.getSource<GeoJSONSource>(ROUTE_SOURCE_ID);
@@ -488,7 +497,10 @@ export function addMissionRoute(
     coordinates: readonly RoadCoordinates[],
     properties: Record<string, string | null> = {},
   ) => {
-    if (snapshot.key === key && sameCoordinates(snapshot.coordinates, coordinates)) {
+    if (
+      snapshot.key === key &&
+      sameCoordinates(snapshot.coordinates, coordinates)
+    ) {
       return;
     }
     const currentSource = source();
@@ -529,18 +541,17 @@ export function addMissionRoute(
     position: RoadCoordinates,
     physicalHeading: number,
   ) => {
+    mapContainer.dataset.navigationLastPositionLongitude = String(position[0]);
+    mapContainer.dataset.navigationLastPositionLatitude = String(position[1]);
     if (
       routeMode !== 'road' ||
       routeCoordinates.length < 2 ||
       routeInstructions.length === 0
     ) {
-      setLineSourceData(
-        immediateSource,
-        immediateSourceSnapshot,
-        'empty',
-        [],
-      );
+      setLineSourceData(immediateSource, immediateSourceSnapshot, 'empty', []);
       setLineSourceData(rejoinSource, rejoinSourceSnapshot, 'empty', []);
+      mapContainer.dataset.navigationRejoinStartLongitude = '';
+      mapContainer.dataset.navigationRejoinStartLatitude = '';
       maneuverMarkerElement.hidden = true;
       useGameStore.getState().setMissionNavigation({
         nextInstruction: null,
@@ -575,6 +586,13 @@ export function addMissionRoute(
       rejoinSourceSnapshot,
       'rejoin',
       reversing ? [] : progress.rejoinCoordinates,
+    );
+    const rejoinStart = reversing ? undefined : progress.rejoinCoordinates[0];
+    mapContainer.dataset.navigationRejoinStartLongitude = String(
+      rejoinStart?.[0] ?? '',
+    );
+    mapContainer.dataset.navigationRejoinStartLatitude = String(
+      rejoinStart?.[1] ?? '',
     );
     const orientation = vehicleOrientation(
       physicalHeading,
@@ -634,18 +652,21 @@ export function addMissionRoute(
       Math.round(progress.distanceToNextInstructionMeters ?? 0),
     );
   };
+  const navigationUpdates = createTrailingUpdateScheduler(
+    Math.max(200, minimumUpdateIntervalMilliseconds * 2),
+    (sample: { position: RoadCoordinates; heading: number }) => {
+      updateNavigation(sample.position, sample.heading);
+    },
+  );
   const clearRoute = () => {
+    navigationUpdates.cancel();
     routeCoordinates = [];
     routeInstructions = [];
     routeMode = null;
+    routeTargetKey = null;
     lastKnownSegmentIndex = null;
     setLineSourceData(routeSource, routeSourceSnapshot, 'empty', []);
-    setLineSourceData(
-      immediateSource,
-      immediateSourceSnapshot,
-      'empty',
-      [],
-    );
+    setLineSourceData(immediateSource, immediateSourceSnapshot, 'empty', []);
     setLineSourceData(rejoinSource, rejoinSourceSnapshot, 'empty', []);
     maneuverMarkerElement.hidden = true;
     exposeRoute(null, 0);
@@ -673,36 +694,48 @@ export function addMissionRoute(
       clearRoute();
       return;
     }
+    const hasUsableRoute =
+      routeTargetKey === target.key &&
+      routeMode !== null &&
+      routeCoordinates.length >= 2;
+    if (!hasUsableRoute) {
+      navigationUpdates.cancel();
+    }
     const token = ++calculationToken;
     const calculationStartedAt = performance.now();
     lastCalculationAt = calculationStartedAt;
-    const wasOffRoute = useGameStore.getState().missionRoute.offRoute;
-    routeMode = null;
-    routeInstructions = [];
-    lastKnownSegmentIndex = null;
-    setLineSourceData(routeSource, routeSourceSnapshot, 'empty', []);
-    setLineSourceData(
-      immediateSource,
-      immediateSourceSnapshot,
-      'empty',
-      [],
+    mapContainer.dataset.routeRequestedOriginLongitude = String(
+      target.playerCoordinates[0],
     );
-    setLineSourceData(rejoinSource, rejoinSourceSnapshot, 'empty', []);
-    maneuverMarkerElement.hidden = true;
-    useGameStore.getState().setMissionRoute({
-      status: 'calculating',
-      distanceMeters: null,
-      estimatedGameDurationSeconds: null,
-      coordinateCount: 0,
-      activeEdgeIds: [],
-      instructions: [],
-      nextInstruction: null,
-      distanceToNextInstructionMeters: null,
-      offRoute: wasOffRoute,
-      activeNavigation: null,
-      orientation: vehicleOrientation(target.state.telemetry.heading, null),
-    });
-    exposeRoute(null, 0);
+    mapContainer.dataset.routeRequestedOriginLatitude = String(
+      target.playerCoordinates[1],
+    );
+    mapContainer.dataset.routeRecalculating = 'true';
+    if (!hasUsableRoute) {
+      const wasOffRoute = useGameStore.getState().missionRoute.offRoute;
+      routeMode = null;
+      routeTargetKey = null;
+      routeInstructions = [];
+      lastKnownSegmentIndex = null;
+      setLineSourceData(routeSource, routeSourceSnapshot, 'empty', []);
+      setLineSourceData(immediateSource, immediateSourceSnapshot, 'empty', []);
+      setLineSourceData(rejoinSource, rejoinSourceSnapshot, 'empty', []);
+      maneuverMarkerElement.hidden = true;
+      useGameStore.getState().setMissionRoute({
+        status: 'calculating',
+        distanceMeters: null,
+        estimatedGameDurationSeconds: null,
+        coordinateCount: 0,
+        activeEdgeIds: [],
+        instructions: [],
+        nextInstruction: null,
+        distanceToNextInstructionMeters: null,
+        offRoute: wasOffRoute,
+        activeNavigation: null,
+        orientation: vehicleOrientation(target.state.telemetry.heading, null),
+      });
+      exposeRoute(null, 0);
+    }
 
     const route = await localRoutingService
       .getRoute({
@@ -736,11 +769,26 @@ export function addMissionRoute(
       void calculateRoute();
       return;
     }
+    const latestTarget = currentMissionTarget();
+    if (!latestTarget || latestTarget.key !== target.key) {
+      void calculateRoute();
+      return;
+    }
+    const originMoved = routeOriginMovedBeyondTolerance(
+      target.playerCoordinates,
+      latestTarget.playerCoordinates,
+    );
+    if (originMoved) {
+      mapContainer.dataset.routeDiscardedStaleOrigins = String(
+        Number(mapContainer.dataset.routeDiscardedStaleOrigins ?? 0) + 1,
+      );
+    }
 
     if (route) {
       routeCoordinates = route.coordinates;
       routeInstructions = generateNavigationInstructions(route.coordinates);
       routeMode = 'road';
+      routeTargetKey = target.key;
       lastKnownSegmentIndex = null;
       setLineSourceData(
         routeSource,
@@ -765,27 +813,33 @@ export function addMissionRoute(
         distanceToNextInstructionMeters: null,
         offRoute: false,
         activeNavigation: null,
-        orientation: vehicleOrientation(target.state.telemetry.heading, null),
+        orientation: vehicleOrientation(
+          latestTarget.state.telemetry.heading,
+          null,
+        ),
       });
       exposeRoute('road', route.coordinates.length);
       updateNavigation(
-        target.playerCoordinates,
-        target.state.telemetry.heading,
+        latestTarget.playerCoordinates,
+        latestTarget.state.telemetry.heading,
       );
+      mapContainer.dataset.routeRecalculating = String(originMoved);
+      if (originMoved) void calculateRoute();
       return;
     }
 
     const coordinates = [
-      target.playerCoordinates,
+      latestTarget.playerCoordinates,
       target.coordinates,
     ] as RoadCoordinates[];
     const distanceMeters = distanceBetweenMeters(
-      target.playerCoordinates,
+      latestTarget.playerCoordinates,
       target.coordinates,
     );
     routeCoordinates = coordinates;
     routeInstructions = generateNavigationInstructions(coordinates);
     routeMode = 'fallback';
+    routeTargetKey = target.key;
     lastKnownSegmentIndex = null;
     setLineSourceData(
       routeSource,
@@ -810,10 +864,18 @@ export function addMissionRoute(
       distanceToNextInstructionMeters: null,
       offRoute: false,
       activeNavigation: null,
-      orientation: vehicleOrientation(target.state.telemetry.heading, null),
+      orientation: vehicleOrientation(
+        latestTarget.state.telemetry.heading,
+        null,
+      ),
     });
     exposeRoute('fallback', coordinates.length);
-    updateNavigation(target.playerCoordinates, target.state.telemetry.heading);
+    updateNavigation(
+      latestTarget.playerCoordinates,
+      latestTarget.state.telemetry.heading,
+    );
+    mapContainer.dataset.routeRecalculating = String(originMoved);
+    if (originMoved) void calculateRoute();
   };
 
   updateTargets(map);
@@ -846,17 +908,10 @@ export function addMissionRoute(
       return;
 
     const now = performance.now();
-    const navigationInterval = Math.max(
-      200,
-      minimumUpdateIntervalMilliseconds * 2,
-    );
-    if (now - lastNavigationUpdate >= navigationInterval) {
-      lastNavigationUpdate = now;
-      updateNavigation(
-        [state.telemetry.longitude, state.telemetry.latitude],
-        state.telemetry.heading,
-      );
-    }
+    navigationUpdates.schedule({
+      position: [state.telemetry.longitude, state.telemetry.latitude],
+      heading: state.telemetry.heading,
+    });
     if (routeMode !== 'road') return;
     const deviationInterval = Math.max(
       routingConfig.deviationCheckIntervalMilliseconds,
@@ -880,6 +935,7 @@ export function addMissionRoute(
   return () => {
     disposed = true;
     calculationToken += 1;
+    navigationUpdates.cancel();
     unsubscribe();
     maneuverMarker.remove();
     if (map.getLayer(TARGETS_LAYER_ID)) map.removeLayer(TARGETS_LAYER_ID);

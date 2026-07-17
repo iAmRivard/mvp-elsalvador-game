@@ -3,6 +3,7 @@ import { distanceBetweenMeters } from '../src/game/discovery';
 import {
   distanceToRouteMeters,
   navigationArrowPosition,
+  routeOriginMovedBeyondTolerance,
 } from '../src/map/missionRoute';
 
 describe('mission route deviation', () => {
@@ -42,5 +43,16 @@ describe('mission route deviation', () => {
         35,
       ),
     ).toBeNull();
+  });
+
+  it('invalida una ruta si el jugador cambia de origen mientras se calcula', () => {
+    const origin: [number, number] = [-89.2, 13.7];
+
+    expect(routeOriginMovedBeyondTolerance(origin, [-89.19995, 13.7])).toBe(
+      false,
+    );
+    expect(routeOriginMovedBeyondTolerance(origin, [-89.1995, 13.7])).toBe(
+      true,
+    );
   });
 });

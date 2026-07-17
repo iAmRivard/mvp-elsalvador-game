@@ -34,6 +34,27 @@ describe('acciones de guardado del estado global', () => {
     expect(state.telemetry.totalDistanceMeters).toBe(8_200);
     expect(state.activeMissionId).toBe('la-transmision');
     expect(state.playerRuntimeRevision).toBe(previousRevision + 1);
+    expect(state.needsInitialRoadAlignment).toBe(true);
+  });
+
+  it('reanuda el seguimiento de camara y fuerza una ruta nueva al cargar', () => {
+    useGameStore.setState({ isFollowingPlayer: false });
+    expect(useGameStore.getState().saveGame()).toBe(true);
+
+    useGameStore.setState({
+      isFollowingPlayer: false,
+      missionRoute: {
+        ...useGameStore.getState().missionRoute,
+        recalculationRevision: 7,
+      },
+    });
+    expect(useGameStore.getState().loadGame()).toBe(true);
+
+    expect(useGameStore.getState()).toMatchObject({
+      isFollowingPlayer: true,
+      needsInitialRoadAlignment: true,
+      missionRoute: { recalculationRevision: 8 },
+    });
   });
 
   it('restaura una ruta temporal y permite volver a la misión', () => {
@@ -123,7 +144,7 @@ describe('acciones de guardado del estado global', () => {
       vehicle: { condition: 0 },
       recoveryReason: 'condition',
       isPaused: true,
-      needsInitialRoadAlignment: false,
+      needsInitialRoadAlignment: true,
     });
   });
 
