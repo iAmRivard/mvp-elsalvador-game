@@ -9,6 +9,7 @@ if (!baselineDirectory || !finalDirectory) {
 }
 
 const metricsFileName = 'arcade-core-mobile-metrics.json';
+const minimumCapturesPerGroup = 3;
 
 async function metricsPaths(directory) {
   const found = [];
@@ -35,9 +36,11 @@ async function loadGroup(directory, label) {
     })),
   );
   const shas = new Set();
-  for (const { path, metrics } of captures) {
+  const captureIdentities = new Set();
+  for (const capture of captures) {
+    const { path, metrics } = capture;
     const metadata = metrics.captureMetadata ?? {};
-    const { measuredSha, repositorySha, buildSha } = metadata;
+    const { measuredSha, repositorySha, buildSha, capturedAt } = metadata;
     if (
       typeof repositorySha !== 'string' ||
       typeof buildSha !== 'string' ||
@@ -49,6 +52,18 @@ async function loadGroup(directory, label) {
       throw new Error(`${label}: identidad repo/build inválida en ${path}.`);
     }
     shas.add(buildSha);
+    const capturedTimestamp = Date.parse(capturedAt);
+    if (typeof capturedAt !== 'string' || !Number.isFinite(capturedTimestamp)) {
+      throw new Error(`${label}: identidad de corrida invalida en ${path}.`);
+    }
+    const captureIdentity = new Date(capturedTimestamp).toISOString();
+    if (captureIdentities.has(captureIdentity)) {
+      throw new Error(
+        `${label}: identidad de corrida duplicada ${captureIdentity}.`,
+      );
+    }
+    captureIdentities.add(captureIdentity);
+    capture.captureIdentity = captureIdentity;
   }
   if (shas.size !== 1 || shas.has(null) || shas.has(undefined)) {
     throw new Error(
@@ -124,6 +139,33 @@ function captureSummary(metrics) {
     inputConsumedMs: metrics.inputConsumptionLatencyMilliseconds,
     usefulMapAreaRatio: Number(metrics.mapDataset?.usefulMapAreaRatio),
   };
+}
+
+function assertPerformanceInputs(group, label) {
+  if (group.captures.length < minimumCapturesPerGroup) {
+    throw new Error(
+      `${label}: se requieren al menos ${String(minimumCapturesPerGroup)} corridas.`,
+    );
+  }
+  const requiredMetrics = [
+    'frameP95Ms',
+    'framesOver33Ms',
+    'framesOver50Ms',
+    'framesOver100Ms',
+    'longTasks',
+    'cameraP95Ms',
+  ];
+  group.captures.forEach(({ path, metrics }) => {
+    const summary = captureSummary(metrics);
+    for (const metric of requiredMetrics) {
+      const value = summary[metric];
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error(
+          `${label}: ${metric} debe ser finito y no negativo en ${path}.`,
+        );
+      }
+    }
+  });
 }
 
 function requiredFinite(value, label) {
@@ -355,14 +397,115 @@ function summarizeGroup(group, dynamicLoad) {
   return {
     sha: group.sha,
     sampleCount: runs.length,
+    captureIdentities: group.captures.map(
+      ({ captureIdentity }) => captureIdentity,
+    ),
     runs,
     aggregate,
     dynamicLoad,
   };
 }
 
+function roundedTenths(value) {
+  return Math.round((value + Number.EPSILON) * 10);
+}
+
+function assertPerformanceGate(baseline, final) {
+  const baselineFrameP95 = baseline.aggregate.frameP95Ms;
+  const finalFrameP95 = final.aggregate.frameP95Ms;
+  if (
+    roundedTenths(finalFrameP95.median) >
+      roundedTenths(baselineFrameP95.median) + 1 ||
+    roundedTenths(finalFrameP95.maximum) >
+      roundedTenths(baselineFrameP95.maximum) + 1
+  ) {
+    throw new Error(
+      'performance gate: regresion de frame p95 mayor que el margen cuantizado de 0.1 ms.',
+    );
+  }
+
+  const nonRegressionCounters = [
+    ['framesOver50Ms', 'frames >50 ms'],
+    ['framesOver100Ms', 'frames >100 ms'],
+    ['longTasks', 'long tasks'],
+  ];
+  for (const [metric, label] of nonRegressionCounters) {
+    if (final.aggregate[metric].maximum > baseline.aggregate[metric].maximum) {
+      throw new Error(`performance gate: regresion en ${label}.`);
+    }
+  }
+
+  if (final.aggregate.cameraP95Ms.maximum >= 3) {
+    throw new Error('performance gate: camera p95 debe ser menor que 3 ms.');
+  }
+
+  const warnings = [];
+  const baselineOver33 = baseline.aggregate.framesOver33Ms;
+  const finalOver33 = final.aggregate.framesOver33Ms;
+  if (
+    (Number.isFinite(baselineOver33?.median) &&
+      Number.isFinite(finalOver33?.median) &&
+      finalOver33.median > baselineOver33.median) ||
+    (Number.isFinite(baselineOver33?.maximum) &&
+      Number.isFinite(finalOver33?.maximum) &&
+      finalOver33.maximum > baselineOver33.maximum)
+  ) {
+    warnings.push(
+      'frames >33 ms aumentaron; se registra como senal direccional y no como fallo por la cuantizacion observada.',
+    );
+  }
+
+  return {
+    status: 'passed',
+    rules: {
+      minimumCapturesPerGroup,
+      frameP95QuantizedToleranceMilliseconds: 0.1,
+      countersMustNotExceedBaselineMaximum: [
+        'framesOver50Ms',
+        'framesOver100Ms',
+        'longTasks',
+      ],
+      cameraP95MaximumExclusiveMilliseconds: 3,
+      framesOver33Ms: 'warning-only',
+    },
+    observations: {
+      frameP95Ms: {
+        baselineMedian: baselineFrameP95.median,
+        finalMedian: finalFrameP95.median,
+        baselineMaximum: baselineFrameP95.maximum,
+        finalMaximum: finalFrameP95.maximum,
+      },
+      framesOver50Ms: {
+        baselineMaximum: baseline.aggregate.framesOver50Ms.maximum,
+        finalMaximum: final.aggregate.framesOver50Ms.maximum,
+      },
+      framesOver100Ms: {
+        baselineMaximum: baseline.aggregate.framesOver100Ms.maximum,
+        finalMaximum: final.aggregate.framesOver100Ms.maximum,
+      },
+      longTasks: {
+        baselineMaximum: baseline.aggregate.longTasks.maximum,
+        finalMaximum: final.aggregate.longTasks.maximum,
+      },
+      cameraP95Ms: {
+        baselineMaximum: baseline.aggregate.cameraP95Ms.maximum,
+        finalMaximum: final.aggregate.cameraP95Ms.maximum,
+      },
+      framesOver33Ms: {
+        baselineMedian: baselineOver33.median,
+        finalMedian: finalOver33.median,
+        baselineMaximum: baselineOver33.maximum,
+        finalMaximum: finalOver33.maximum,
+      },
+    },
+    warnings,
+  };
+}
+
 const baseline = await loadGroup(baselineDirectory, 'baseline');
 const final = await loadGroup(finalDirectory, 'final');
+assertPerformanceInputs(baseline, 'baseline');
+assertPerformanceInputs(final, 'final');
 if (baseline.captures.length !== final.captures.length) {
   throw new Error(
     'Baseline y final deben tener la misma cantidad de muestras.',
@@ -385,12 +528,17 @@ for (const baselineSummary of baselineDynamicLoad) {
   }
 }
 
+const baselineSummary = summarizeGroup(baseline, baselineDynamicLoad);
+const finalSummary = summarizeGroup(final, finalDynamicLoad);
+const performanceGate = assertPerformanceGate(baselineSummary, finalSummary);
+
 const comparison = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: new Date().toISOString(),
   contract,
-  baseline: summarizeGroup(baseline, baselineDynamicLoad),
-  final: summarizeGroup(final, finalDynamicLoad),
+  baseline: baselineSummary,
+  final: finalSummary,
+  performanceGate,
 };
 const serialized = `${JSON.stringify(comparison, null, 2)}\n`;
 if (outputPath) await writeFile(resolve(outputPath), serialized, 'utf8');
