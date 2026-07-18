@@ -2,6 +2,9 @@ FROM node:24-alpine AS build
 
 WORKDIR /app
 
+ARG BUILD_SHA=local
+ENV VITE_BUILD_SHA=${BUILD_SHA}
+
 COPY package.json package-lock.json ./
 RUN npm ci
 

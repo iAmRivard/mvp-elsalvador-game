@@ -62,7 +62,13 @@ async function steerTowardRoute(
     await gameMap.getAttribute('data-navigation-physical-heading'),
   );
   const target = direction === 'away' ? (recommended + 180) % 360 : recommended;
-  const headingDelta = ((target - physical + 540) % 360) - 180;
+  const shortestHeadingDelta = ((target - physical + 540) % 360) - 180;
+  // Near 180 degrees both directions are equivalent. Commit to the right-hand
+  // turn so successive real touch gestures do not alternate around the tie.
+  const headingDelta =
+    Math.abs(shortestHeadingDelta) >= 170
+      ? Math.abs(shortestHeadingDelta)
+      : shortestHeadingDelta;
   if (!Number.isFinite(headingDelta) || Math.abs(headingDelta) <= 4) {
     await page.waitForTimeout(180);
     return;
@@ -90,12 +96,14 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
     window.sessionStorage.clear();
   });
   await page.goto('/');
+  const sessionStartedAt = Date.now();
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
 
   const introduction = page.getByRole('dialog', {
     name: 'Una señal de auxilio',
   });
   await expect(introduction).toBeVisible();
+  expect(Date.now() - sessionStartedAt).toBeLessThan(45_000);
   await expect(introduction).toContainText('JUEGO EN PAUSA');
   await expect(page.locator('[data-tutorial-card="mobile"]')).toHaveCount(0);
   await expect(page.getByTestId('mobile-driving-hud')).toHaveCount(0);
@@ -103,11 +111,12 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   await introduction
     .getByRole('button', { name: 'Comenzar investigación' })
     .click();
+  const drivingStartedAt = Date.now();
   const tutorialStartedAt = Date.now();
   await expect(introduction).toBeHidden();
   await expect(page.locator('html')).toHaveAttribute(
     'data-tutorial-target',
-    'steer',
+    'select-speed',
   );
   await expect(page.getByText('Paso 1 de 5')).toBeVisible();
   await expect(page.getByTestId('mobile-driving-hud')).toHaveCount(0);
@@ -117,26 +126,27 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
     'ready',
     { timeout: 20_000 },
   );
+  await expect(page.getByTestId('game-map')).toHaveAttribute(
+    'data-mission-route-mode',
+    'road',
+    { timeout: 20_000 },
+  );
+  await expect
+    .poll(async () =>
+      Number(
+        await page
+          .getByTestId('game-map')
+          .getAttribute('data-mission-route-coordinate-count'),
+      ),
+    )
+    .toBeGreaterThan(1);
 
-  const joystick = page.getByLabel('Joystick de velocidad objetivo');
+  const joystick = page.getByLabel('Joystick de conducción arcade');
   let center = await centerOf(joystick);
   const session = await context.newCDPSession(page);
 
   await touchStart(session, 1, center.x, center.y);
-  await touchMove(session, 1, center.x + center.width * 0.6, center.y);
-  await expect
-    .poll(() =>
-      page.getByTestId('game-map').getAttribute('data-input-turn').then(Number),
-    )
-    .toBeGreaterThan(0.4);
-  await expect(page.locator('html')).toHaveAttribute(
-    'data-tutorial-target',
-    'select-speed',
-  );
-  await touchEnd(session);
-
-  await touchStart(session, 2, center.x, center.y);
-  await touchMove(session, 2, center.x, center.y - center.width * 0.44);
+  await touchMove(session, 1, center.x, center.y - center.width * 0.44);
   await expect
     .poll(() =>
       page
@@ -144,7 +154,44 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
         .getAttribute('data-input-target-speed')
         .then(Number),
     )
-    .toBeGreaterThan(20);
+    .toBeGreaterThanOrEqual(25);
+  await expect
+    .poll(() =>
+      page
+        .getByTestId('game-map')
+        .getAttribute('data-player-speed-kilometers-per-hour')
+        .then(Number),
+    )
+    .toBeGreaterThan(5);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-tutorial-target',
+    'steer',
+  );
+  await touchEnd(session);
+
+  const headingBeforeTurn = Number(
+    await page
+      .getByTestId('game-map')
+      .getAttribute('data-navigation-physical-heading'),
+  );
+  await touchStart(session, 2, center.x, center.y);
+  await touchMove(session, 2, center.x + center.width * 0.6, center.y);
+  await expect
+    .poll(() =>
+      page.getByTestId('game-map').getAttribute('data-input-turn').then(Number),
+    )
+    .toBeGreaterThan(0.4);
+  await expect
+    .poll(async () => {
+      const heading = Number(
+        await page
+          .getByTestId('game-map')
+          .getAttribute('data-navigation-physical-heading'),
+      );
+      return Math.abs(((heading - headingBeforeTurn + 540) % 360) - 180);
+    })
+    .toBeGreaterThanOrEqual(4);
+  expect(Date.now() - drivingStartedAt).toBeLessThan(15_000);
   await expect(page.locator('html')).toHaveAttribute(
     'data-tutorial-target',
     'coast',
@@ -181,14 +228,11 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   let steeringTouchId = 10;
 
   await touchStart(session, 4, center.x, center.y);
-  await touchMove(session, 4, center.x, center.y - center.width * 0.44);
+  await touchMove(session, 4, center.x, center.y - center.width * 0.24);
   await expect(page.getByTestId('game-map')).toHaveAttribute(
     'data-input-cruise-reverse-state',
     'forward',
   );
-  await touchEnd(session);
-  await touchStart(session, 5, center.x, center.y);
-  await touchMove(session, 5, center.x, center.y - center.width * 0.44);
   await expect
     .poll(() =>
       page
@@ -196,7 +240,8 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
         .getAttribute('data-input-target-speed')
         .then(Number),
     )
-    .toBeGreaterThan(20);
+    .toBeGreaterThanOrEqual(15);
+  await touchEnd(session);
   await expect
     .poll(() =>
       page
@@ -205,7 +250,6 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
         .then(Number),
     )
     .toBeGreaterThan(5);
-  await touchEnd(session);
 
   const gameMap = page.getByTestId('game-map');
   const rejoinDeadline = Date.now() + 18_000;
@@ -248,6 +292,43 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   await expect
     .poll(() => gameMap.getAttribute('data-input-target-speed').then(Number))
     .toBeGreaterThan(50);
+  await touchEnd(session);
+
+  steeringTouchId += 1;
+  await touchStart(session, steeringTouchId, center.x, center.y);
+  await touchMove(
+    session,
+    steeringTouchId,
+    center.x,
+    center.y + center.width * 0.44,
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-input-cruise-reverse-state',
+    'braking-to-stop',
+  );
+  await touchEnd(session);
+  await expect
+    .poll(() =>
+      gameMap
+        .getAttribute('data-player-speed-kilometers-per-hour')
+        .then(Number),
+    )
+    .toBeLessThan(1);
+  await expect(gameMap).toHaveAttribute(
+    'data-input-cruise-reverse-state',
+    'reverse-armed',
+  );
+  steeringTouchId += 1;
+  await touchStart(session, steeringTouchId, center.x, center.y);
+  await touchMove(
+    session,
+    steeringTouchId,
+    center.x,
+    center.y - center.width * 0.24,
+  );
+  await expect
+    .poll(() => gameMap.getAttribute('data-input-target-speed').then(Number))
+    .toBeGreaterThanOrEqual(25);
   await touchEnd(session);
 
   const objectiveAdvice = page.locator('[data-contextual-advice="objective"]');
@@ -299,6 +380,10 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
   await expect(
     page.locator('.radio-message:not(.radio-message--compact)'),
   ).toBeVisible();
+  await expect(
+    page.getByText('Registro de frecuencia guardado', { exact: true }),
+  ).toBeVisible();
+  expect(Date.now() - sessionStartedAt).toBeLessThan(90_000);
   const compactRadio = page.getByRole('button', {
     name: 'Expandir transmisión de radio',
   });

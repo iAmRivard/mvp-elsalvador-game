@@ -17,6 +17,7 @@ import {
   followCameraTolerances,
 } from '../../config/followCamera.config';
 import { mapSourceConfig, mapViewConfig } from '../../config/map.config';
+import { movementSubstepConfig } from '../../config/movementSubstep.config';
 import {
   roadAssistConfig,
   savedRoadPositionConfig,
@@ -25,6 +26,11 @@ import { autoThrottleConfig } from '../../config/mobileControls.config';
 import { vehicleStateConfig } from '../../config/vehicleState.config';
 import { missionById } from '../../data/missions';
 import { restrictedAreaTypeAt } from '../../data/restrictedAreas';
+import {
+  vehicleDefinitionFor,
+  vehicleRuntimeFor,
+  vehicleSkinFor,
+} from '../../data/vehicles';
 import { detectDeviceProfile } from '../../game/deviceProfile';
 import {
   buildFollowCameraUpdate,
@@ -39,6 +45,25 @@ import {
   type FollowCameraOptions,
   type MobileCameraMode,
 } from '../../game/followCamera';
+import { runtimeGateFor } from '../../game/runtimeGate';
+import {
+  advanceRoadAssistActiveElapsedMilliseconds,
+  roadAssistMultiplierForLatePromotion,
+} from '../../game/roadPromotion';
+import {
+  AdaptiveCameraCadenceController,
+  cameraCadenceDeadlineAfterApplication,
+  cameraCadenceShouldApply,
+  type CameraCadenceHertz,
+} from '../../game/adaptiveCameraCadence';
+import {
+  followCameraOffsetForSafeViewport,
+  safeGameplayViewportFor,
+  type GameplayOcclusion,
+  type GameplayOcclusionKind,
+  type GameplayRect,
+  type SafeGameplayViewport,
+} from '../../game/safeGameplayViewport';
 import {
   effectiveDrivingSurfaceLabel,
   type DrivingPresentationMode,
@@ -75,7 +100,10 @@ import {
   type MapRuntimeErrorClassification,
   type MapLoadingStage,
 } from '../../map/mapStartup';
-import { createPlayerMarkerElement } from '../../map/playerMarker';
+import {
+  applyPlayerMarkerSkin,
+  createPlayerMarkerElement,
+} from '../../map/playerMarker';
 import { PlayerVisualUpdateCoordinator } from '../../map/playerVisualUpdates';
 import {
   registerPmtilesProtocol,
@@ -83,7 +111,7 @@ import {
 } from '../../map/pmtilesProtocol';
 import { addRoadDebugLayer } from '../../map/roadDebugLayer';
 import { addPlayableRoadSurfaceLayer } from '../../map/roadSurfaceLayer';
-import { createStyleResourceTransform } from '../../map/styleResources';
+import { createConfiguredStyleResourceTransform } from '../../map/styleResources';
 import {
   createMapDeclutterController,
   type MapDeclutterController,
@@ -91,10 +119,23 @@ import {
 import type { ThreeGameLayerController } from '../../map/threeLayer';
 import { shouldUseThreePlayer } from '../../map/threeTransforms';
 import { loadRoadNetwork } from '../../roads/roadNetwork';
+import {
+  clearRouteRejoinRoadSource,
+  setRouteRejoinRoadSource,
+} from '../../roads/routeRejoinRoadSource';
+import {
+  allowRoadlessStartup,
+  isRoadlessStartupAllowed,
+  ROAD_NETWORK_STARTUP_DEADLINE_MILLISECONDS,
+} from '../../roads/roadStartup';
 import { RoadTracker } from '../../roads/roadTracker';
 import type { RoadSpatialIndex } from '../../roads/spatialIndex';
 import { alignedRoadHeading } from '../../roads/initialRoadPosition';
-import { INITIAL_PLAYER, useGameStore } from '../../store/gameStore';
+import {
+  INITIAL_PLAYER,
+  useGameStore,
+  type DrivingWearSample,
+} from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import type { PlayerRuntime, PlayerTelemetry } from '../../types/game';
 import type { RoadContact, RoadEdge } from '../../types/roads';
@@ -117,6 +158,57 @@ function supportsWebGl(): boolean {
   } catch {
     return false;
   }
+}
+
+const SAFE_VIEWPORT_OCCLUDERS: readonly {
+  selector: string;
+  kind: GameplayOcclusionKind;
+}[] = [
+  { selector: '.topbar', kind: 'hud' },
+  { selector: '.mobile-driving-hud', kind: 'hud' },
+  { selector: '.virtual-joystick__base', kind: 'joystick' },
+  { selector: '.touch-actions', kind: 'actions' },
+  { selector: '.mobile-cruise-target', kind: 'target-speed' },
+  { selector: '[data-testid="mobile-mini-navigator"]', kind: 'navigator' },
+  { selector: '.radio-message--compact', kind: 'radio' },
+  { selector: '.stuck-vehicle-assist', kind: 'overlay' },
+  { selector: '.mobile-tutorial-card', kind: 'overlay' },
+  { selector: '.tutorial-coach', kind: 'overlay' },
+  { selector: '.contextual-advice', kind: 'overlay' },
+  { selector: '.discovery-toast--compact', kind: 'overlay' },
+  { selector: '.service-worker-update', kind: 'overlay' },
+  { selector: '.install-hint', kind: 'overlay' },
+  { selector: '.narrative-dialog', kind: 'overlay' },
+  { selector: '.pause-menu', kind: 'overlay' },
+] as const;
+
+function elementContainsSafeViewportOccluder(element: Element): boolean {
+  return SAFE_VIEWPORT_OCCLUDERS.some(
+    ({ selector }) =>
+      element.matches(selector) || element.querySelector(selector) !== null,
+  );
+}
+
+function mutationAffectsSafeViewport(record: MutationRecord): boolean {
+  if (record.type === 'attributes') {
+    return (
+      record.target instanceof Element &&
+      elementContainsSafeViewportOccluder(record.target)
+    );
+  }
+  return [...record.addedNodes, ...record.removedNodes].some(
+    (node) =>
+      node instanceof Element && elementContainsSafeViewportOccluder(node),
+  );
+}
+
+function gameplayRectFromDomRect(rect: DOMRectReadOnly): GameplayRect {
+  return {
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height,
+  };
 }
 
 function percentile95(values: readonly number[]): number | null {
@@ -246,6 +338,16 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     containerRef.current.dataset.followingPlayer = String(
       useGameStore.getState().isFollowingPlayer,
     );
+    let activeVehicleDefinition = vehicleDefinitionFor(
+      useGameStore.getState().selectedVehicleId,
+    );
+    let activeVehicleSkin = vehicleSkinFor(
+      activeVehicleDefinition.id,
+      useGameStore.getState().selectedVehicleSkinId,
+    );
+    let activeVehicleRuntime = vehicleRuntimeFor(activeVehicleDefinition.id);
+    containerRef.current.dataset.selectedVehicleId = activeVehicleDefinition.id;
+    containerRef.current.dataset.selectedVehicleSkinId = activeVehicleSkin.id;
 
     if (!deviceProfile.isCompact) {
       map.addControl(
@@ -287,7 +389,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let unsubscribeSettings: (() => void) | null = null;
     let unsubscribePresentation: (() => void) | null = null;
     let mapDeclutter: MapDeclutterController | null = null;
-    let lastCameraUpdate = 0;
+    let nextCameraUpdateDeadline = 0;
     let lastFollowedLongitude = Number.NaN;
     let lastFollowedLatitude = Number.NaN;
     let lastFollowedHeading = Number.NaN;
@@ -315,6 +417,64 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let cameraFallbackMarkerUpdates = 0;
     let cameraThreePlayerUpdates = 0;
     let threeDrivingEffectsUpdates = 0;
+    let cameraSafeProjectionUpdates = 0;
+    const initialCameraCadenceHertz: CameraCadenceHertz =
+      deviceProfile.cameraUpdateIntervalMilliseconds >= 45 ? 20 : 30;
+    const maximumCameraCadenceHertz: CameraCadenceHertz =
+      deviceProfile.quality === 'low'
+        ? 30
+        : deviceProfile.quality === 'medium'
+          ? 45
+          : 60;
+    const adaptiveCameraCadence = new AdaptiveCameraCadenceController({
+      initialHertz: initialCameraCadenceHertz,
+      maximumHertz: maximumCameraCadenceHertz,
+    });
+    containerRef.current.dataset.cameraCadenceHertz = String(
+      adaptiveCameraCadence.state.hertz,
+    );
+    containerRef.current.dataset.cameraCadenceMaximumHertz = String(
+      maximumCameraCadenceHertz,
+    );
+    const activeCameraUpdateIntervalMilliseconds = () =>
+      deviceProfile.isTouch
+        ? adaptiveCameraCadence.intervalMilliseconds
+        : deviceProfile.cameraUpdateIntervalMilliseconds;
+    const resetCameraUpdateDeadline = (timestampMilliseconds: number) => {
+      nextCameraUpdateDeadline =
+        timestampMilliseconds + activeCameraUpdateIntervalMilliseconds();
+    };
+    const initialCanvasWidth = Math.max(
+      1,
+      map.getCanvas().clientWidth || window.innerWidth,
+    );
+    const initialCanvasHeight = Math.max(
+      1,
+      map.getCanvas().clientHeight || window.innerHeight,
+    );
+    let safeCanvasRect: GameplayRect = {
+      x: 0,
+      y: 0,
+      width: initialCanvasWidth,
+      height: initialCanvasHeight,
+    };
+    let safeGameplayViewport: SafeGameplayViewport = safeGameplayViewportFor({
+      canvas: safeCanvasRect,
+      visibleViewport: safeCanvasRect,
+      safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
+      playerFootprint: { width: 48, height: 60 },
+      occlusions: [],
+    });
+    let lastValidSafeGameplayViewport = safeGameplayViewport;
+    let safeViewportObstructed = false;
+    let safeViewportMeasurementFrame: number | null = null;
+    let safeViewportResizeObserver: ResizeObserver | null = null;
+    let safeViewportMutationObserver: MutationObserver | null = null;
+    let safeViewportMeasurementCount = 0;
+    let safeViewportRevision = 0;
+    let lastExposedSafeViewportRevision = -1;
+    const safeViewportObservedElements = new Set<Element>();
+    let recoveryCameraUntil = 0;
     let effectActive = true;
     let roadTracker: RoadTracker | null = null;
     let roadIndex: RoadSpatialIndex | null = null;
@@ -324,13 +484,21 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       useGameStore.getState().missionRoute.activeEdgeIds,
     );
     let roadNetworkEnabled = false;
+    let lateRoadPromotionAssistElapsedMilliseconds: number | null = null;
+    let lateRoadPromotionAssistLastActiveTimestamp: number | null = null;
+    let lateRoadPromotionAssistFirstActiveSamplePending = false;
+    let lateRoadPromotionAssistResumeSamplePending = false;
+    let roadNetworkStartupDeadline: number | null = null;
     let lastBlockedImpactTimestamp = Number.NEGATIVE_INFINITY;
     let visualFrameCount = 0;
+    let lastExposedInputLatencySequence = 0;
     let lastFrameSampleTimestamp = performance.now();
     let previousHapticSurface = useGameStore.getState().driving.surface;
     let interactionWasActive = false;
     let startupReady = false;
     let fatalMapErrorHandled = false;
+    let lastRuntimeGateKey = -1;
+    let runtimeSimulationEnabled = false;
 
     const validateInitialRoadPosition = (player: PlayerRuntime): boolean => {
       if (!roadIndex || !useGameStore.getState().needsInitialRoadAlignment) {
@@ -604,8 +772,24 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               ? 'driving'
               : 'stopped'
           : presentationMode;
-      const profile = drivingCameraProfile(cameraMode, deviceProfile.isTouch);
-      const camera = followCameraTarget(cameraMode, deviceProfile.isTouch);
+      const profileOverride = deviceProfile.isTouch
+        ? timestampMilliseconds < recoveryCameraUntil
+          ? 'recovery'
+          : presentationMode === 'interaction' && speedKilometersPerHour <= 10
+            ? 'interaction'
+            : null
+        : null;
+      const profile = drivingCameraProfile(
+        cameraMode,
+        deviceProfile.isTouch,
+        undefined,
+        profileOverride,
+      );
+      const camera = followCameraTarget(
+        cameraMode,
+        deviceProfile.isTouch,
+        profileOverride,
+      );
       const canvas = map.getCanvas();
       return {
         options: {
@@ -613,19 +797,29 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           bearing: player.heading,
           zoom: Math.min(camera.zoom, mapSourceConfig.maxZoom),
           pitch: Math.min(camera.pitch, deviceProfile.maximumInitialPitch),
-          offset: followCameraOffset(
-            canvas.clientWidth,
-            canvas.clientHeight,
-            profile.offsetYRatio,
-          ),
+          offset: deviceProfile.isTouch
+            ? followCameraOffsetForSafeViewport(
+                safeCanvasRect,
+                safeGameplayViewport,
+                profile.safeAnchorYRatio,
+              )
+            : followCameraOffset(
+                canvas.clientWidth,
+                canvas.clientHeight,
+                profile.offsetYRatio,
+              ),
         },
         profile,
         profileName: deviceProfile.isTouch
-          ? cameraMode === 'fast'
-            ? 'mobileFast'
-            : cameraMode === 'driving'
-              ? 'mobileDriving'
-              : 'mobileStopped'
+          ? profileOverride === 'recovery'
+            ? 'mobileRecovery'
+            : profileOverride === 'interaction'
+              ? 'mobileInteraction'
+              : cameraMode === 'fast'
+                ? 'mobileFast'
+                : cameraMode === 'driving'
+                  ? 'mobileDriving'
+                  : 'mobileStopped'
           : cameraMode === 'fast'
             ? 'fast'
             : cameraMode === 'driving'
@@ -693,6 +887,41 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       cameraWindowAppliedUpdates = 0;
       cameraMetricsStartedAt = timestampMilliseconds;
     };
+    const exposeAppliedProjection = (center: [number, number]) => {
+      const container = containerRef.current;
+      if (!container) return;
+      const canvas = map.getCanvas();
+      const projected = map.project(center);
+      container.dataset.cameraAppliedScreenOffsetX = (
+        projected.x -
+        canvas.clientWidth / 2
+      ).toFixed(1);
+      container.dataset.cameraAppliedScreenOffsetY = (
+        projected.y -
+        canvas.clientHeight / 2
+      ).toFixed(1);
+      const playerX = safeCanvasRect.x + projected.x;
+      const playerY = safeCanvasRect.y + projected.y;
+      const playerHalfWidth = 24;
+      const playerHalfHeight = 30;
+      const safeRight = safeGameplayViewport.x + safeGameplayViewport.width;
+      const safeBottom = safeGameplayViewport.y + safeGameplayViewport.height;
+      container.dataset.safePlayerYRatio = (
+        (playerY - safeGameplayViewport.y) /
+        Math.max(1, safeGameplayViewport.height)
+      ).toFixed(3);
+      container.dataset.playerOutsideSafeViewport = String(
+        playerX - playerHalfWidth < safeGameplayViewport.x ||
+          playerX + playerHalfWidth > safeRight ||
+          playerY - playerHalfHeight < safeGameplayViewport.y ||
+          playerY + playerHalfHeight > safeBottom,
+      );
+      cameraSafeProjectionUpdates += 1;
+      container.dataset.cameraSafeProjectionUpdates = String(
+        cameraSafeProjectionUpdates,
+      );
+      lastExposedSafeViewportRevision = safeViewportRevision;
+    };
     const followCameraTransform = map.transform.clone();
     const applyFollowCamera = (
       camera: ReturnType<typeof cameraForPlayer>,
@@ -709,7 +938,15 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         camera.options,
         followCameraTolerances,
       );
-      if (!update.mapOptions || !update.appliedOptions) return update;
+      if (!update.mapOptions || !update.appliedOptions) {
+        if (
+          lastAppliedCameraOptions &&
+          lastExposedSafeViewportRevision !== safeViewportRevision
+        ) {
+          exposeAppliedProjection(lastAppliedCameraOptions.center);
+        }
+        return update;
+      }
 
       if (map.isEasing()) cameraInterruptedTransitions += 1;
       if (durationMilliseconds > 0) {
@@ -745,24 +982,19 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         }
         map.jumpTo(jumpOptions);
       }
-      const exposeAppliedProjection = () => {
-        const container = containerRef.current;
-        if (!container) return;
-        const canvas = map.getCanvas();
-        const projected = map.project(update.appliedOptions!.center);
-        container.dataset.cameraAppliedScreenOffsetX = (
-          projected.x -
-          canvas.clientWidth / 2
-        ).toFixed(1);
-        container.dataset.cameraAppliedScreenOffsetY = (
-          projected.y -
-          canvas.clientHeight / 2
-        ).toFixed(1);
-      };
-      if (durationMilliseconds > 0) {
-        void map.once('moveend', exposeAppliedProjection);
-      } else {
-        exposeAppliedProjection();
+      const projectionChanged =
+        lastExposedSafeViewportRevision !== safeViewportRevision ||
+        update.changes.offset ||
+        update.changes.zoom ||
+        update.changes.pitch;
+      if (projectionChanged) {
+        if (durationMilliseconds > 0) {
+          void map.once('moveend', () =>
+            exposeAppliedProjection(update.appliedOptions!.center),
+          );
+        } else {
+          exposeAppliedProjection(update.appliedOptions.center);
+        }
       }
 
       if (
@@ -785,6 +1017,205 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       }
       return update;
     };
+    const safeAreaProbe = document.createElement('div');
+    safeAreaProbe.setAttribute('aria-hidden', 'true');
+    safeAreaProbe.style.cssText = [
+      'position:fixed',
+      'inset:0 auto auto 0',
+      'width:0',
+      'height:0',
+      'padding-top:env(safe-area-inset-top)',
+      'padding-right:env(safe-area-inset-right)',
+      'padding-bottom:env(safe-area-inset-bottom)',
+      'padding-left:env(safe-area-inset-left)',
+      'visibility:hidden',
+      'pointer-events:none',
+    ].join(';');
+    document.body.append(safeAreaProbe);
+
+    const safeViewportOcclusions = (): {
+      elements: HTMLElement[];
+      occlusions: GameplayOcclusion[];
+    } => {
+      const elements: HTMLElement[] = [];
+      const occlusions: GameplayOcclusion[] = [];
+      for (const { selector, kind } of SAFE_VIEWPORT_OCCLUDERS) {
+        document
+          .querySelectorAll<HTMLElement>(selector)
+          .forEach((element, index) => {
+            const rect = element.getBoundingClientRect();
+            const style = window.getComputedStyle(element);
+            if (
+              rect.width <= 0 ||
+              rect.height <= 0 ||
+              style.display === 'none' ||
+              style.visibility === 'hidden'
+            ) {
+              return;
+            }
+            elements.push(element);
+            occlusions.push({
+              id: `${selector}:${String(index)}`,
+              kind,
+              rect: gameplayRectFromDomRect(rect),
+            });
+          });
+      }
+      return { elements, occlusions };
+    };
+
+    const measureSafeGameplayViewport = (): boolean => {
+      const canvasRect = gameplayRectFromDomRect(
+        map.getCanvas().getBoundingClientRect(),
+      );
+      if (canvasRect.width <= 0 || canvasRect.height <= 0) return false;
+      safeViewportMeasurementCount += 1;
+      const viewport = window.visualViewport;
+      const visibleViewport: GameplayRect = viewport
+        ? {
+            x: viewport.offsetLeft,
+            y: viewport.offsetTop,
+            width: viewport.width,
+            height: viewport.height,
+          }
+        : {
+            x: 0,
+            y: 0,
+            width: window.innerWidth,
+            height: window.innerHeight,
+          };
+      const probeStyle = window.getComputedStyle(safeAreaProbe);
+      const { elements, occlusions } = safeViewportOcclusions();
+      const measured = safeGameplayViewportFor({
+        canvas: canvasRect,
+        visibleViewport,
+        safeAreaInsets: {
+          top: Number.parseFloat(probeStyle.paddingTop) || 0,
+          right: Number.parseFloat(probeStyle.paddingRight) || 0,
+          bottom: Number.parseFloat(probeStyle.paddingBottom) || 0,
+          left: Number.parseFloat(probeStyle.paddingLeft) || 0,
+        },
+        playerFootprint: { width: 48, height: 60 },
+        occlusions,
+      });
+      const previousCanvas = safeCanvasRect;
+      const previousSafe = safeGameplayViewport;
+      const previousObstructed = safeViewportObstructed;
+      safeCanvasRect = canvasRect;
+      safeViewportObstructed = measured.obstructed;
+      if (!measured.obstructed) {
+        lastValidSafeGameplayViewport = measured;
+      }
+      safeGameplayViewport = measured.obstructed
+        ? lastValidSafeGameplayViewport
+        : measured;
+
+      const nextObservedElements = new Set<Element>([
+        map.getCanvas(),
+        ...elements,
+      ]);
+      for (const element of safeViewportObservedElements) {
+        if (!nextObservedElements.has(element)) {
+          safeViewportResizeObserver?.unobserve(element);
+          safeViewportObservedElements.delete(element);
+        }
+      }
+      for (const element of nextObservedElements) {
+        if (!safeViewportObservedElements.has(element)) {
+          safeViewportResizeObserver?.observe(element);
+          safeViewportObservedElements.add(element);
+        }
+      }
+
+      const container = containerRef.current;
+      if (container) {
+        container.dataset.safeViewportX = safeGameplayViewport.x.toFixed(1);
+        container.dataset.safeViewportY = safeGameplayViewport.y.toFixed(1);
+        container.dataset.safeViewportWidth =
+          safeGameplayViewport.width.toFixed(1);
+        container.dataset.safeViewportHeight =
+          safeGameplayViewport.height.toFixed(1);
+        container.dataset.usefulMapAreaRatio =
+          measured.usefulMapAreaRatio.toFixed(3);
+        container.dataset.safeViewportOcclusionCount = String(
+          occlusions.length,
+        );
+        container.dataset.safeViewportMeasurementCount = String(
+          safeViewportMeasurementCount,
+        );
+        container.dataset.safeViewportObstructed = String(measured.obstructed);
+        container.dataset.safeViewportMode = window.matchMedia(
+          '(display-mode: standalone)',
+        ).matches
+          ? 'pwa'
+          : 'browser';
+      }
+
+      const changed =
+        Math.abs(previousCanvas.x - safeCanvasRect.x) >= 0.5 ||
+        Math.abs(previousCanvas.y - safeCanvasRect.y) >= 0.5 ||
+        Math.abs(previousCanvas.width - safeCanvasRect.width) >= 0.5 ||
+        Math.abs(previousCanvas.height - safeCanvasRect.height) >= 0.5 ||
+        Math.abs(previousSafe.x - safeGameplayViewport.x) >= 0.5 ||
+        Math.abs(previousSafe.y - safeGameplayViewport.y) >= 0.5 ||
+        Math.abs(previousSafe.width - safeGameplayViewport.width) >= 0.5 ||
+        Math.abs(previousSafe.height - safeGameplayViewport.height) >= 0.5 ||
+        previousObstructed !== safeViewportObstructed;
+      if (changed) safeViewportRevision += 1;
+      return changed;
+    };
+
+    const updateCameraForSafeViewport = () => {
+      safeViewportMeasurementFrame = null;
+      const changed = measureSafeGameplayViewport();
+      if (!changed || !deviceProfile.isTouch) return;
+      const player = gameLoop?.getPlayer();
+      if (!player || !useGameStore.getState().isFollowingPlayer) return;
+      const timestamp = performance.now();
+      const update = applyFollowCamera(cameraForPlayer(player, timestamp));
+      if (update.mapOptions) resetCameraUpdateDeadline(timestamp);
+    };
+    const scheduleSafeViewportMeasurement = () => {
+      if (safeViewportMeasurementFrame !== null) return;
+      safeViewportMeasurementFrame = window.requestAnimationFrame(
+        updateCameraForSafeViewport,
+      );
+    };
+
+    if ('ResizeObserver' in window) {
+      safeViewportResizeObserver = new ResizeObserver(
+        scheduleSafeViewportMeasurement,
+      );
+    }
+    const mapStage = containerRef.current.closest('.map-stage');
+    if (mapStage && 'MutationObserver' in window) {
+      safeViewportMutationObserver = new MutationObserver((records) => {
+        if (records.some(mutationAffectsSafeViewport)) {
+          scheduleSafeViewportMeasurement();
+        }
+      });
+      safeViewportMutationObserver.observe(mapStage, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style'],
+      });
+    }
+    window.visualViewport?.addEventListener(
+      'resize',
+      scheduleSafeViewportMeasurement,
+    );
+    window.visualViewport?.addEventListener(
+      'scroll',
+      scheduleSafeViewportMeasurement,
+    );
+    window.addEventListener('resize', scheduleSafeViewportMeasurement);
+    window.addEventListener(
+      'orientationchange',
+      scheduleSafeViewportMeasurement,
+    );
+    scheduleSafeViewportMeasurement();
+
     const unbindKeyboard = inputController.bindKeyboard(
       window,
       useGameStore.getState().togglePaused,
@@ -802,7 +1233,12 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       inputController.resetMobileBoostCompletely();
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') clearInterruptedInput();
+      if (document.visibilityState === 'hidden') {
+        clearInterruptedInput();
+        lateRoadPromotionAssistLastActiveTimestamp = null;
+      }
+      adaptiveCameraCadence.resetSampling(performance.now());
+      resetCameraUpdateDeadline(performance.now());
     };
     window.addEventListener('blur', clearInterruptedInput);
     window.addEventListener('orientationchange', clearInterruptedInput);
@@ -828,9 +1264,34 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       const initialPlayer = runtimeFromTelemetry(
         useGameStore.getState().telemetry,
       );
+      const initialRoadLoadDistanceMeters =
+        useGameStore.getState().telemetry.totalDistanceMeters;
       useGameStore.getState().setRoadNetworkStatus('loading');
       if (containerRef.current) {
         containerRef.current.dataset.roadNetworkStatus = 'loading';
+      }
+      let roadNetworkSettled = false;
+      let roadlessStartupFinished = false;
+      const finishRoadlessStartup = (reason: 'shared-fallback' | 'timeout') => {
+        if (!effectActive || roadNetworkSettled || roadlessStartupFinished)
+          return;
+        roadlessStartupFinished = true;
+        roadNetworkEnabled = false;
+        useGameStore.getState().setRoadNetworkStatus('unavailable');
+        if (containerRef.current) {
+          containerRef.current.dataset.roadNetworkStatus = 'unavailable';
+          containerRef.current.dataset.roadNetworkFallbackReason = reason;
+        }
+        finishStartup();
+      };
+      if (isRoadlessStartupAllowed()) {
+        finishRoadlessStartup('shared-fallback');
+      }
+      if (!roadlessStartupFinished) {
+        roadNetworkStartupDeadline = window.setTimeout(() => {
+          allowRoadlessStartup();
+          finishRoadlessStartup('timeout');
+        }, ROAD_NETWORK_STARTUP_DEADLINE_MILLISECONDS);
       }
       void loadRoadNetwork()
         .then(
@@ -841,19 +1302,68 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             fileSizeBytes,
             metrics,
           }) => {
-            if (!effectActive) return;
+            if (!effectActive || roadNetworkSettled) return;
+            roadNetworkSettled = true;
+            if (roadNetworkStartupDeadline !== null) {
+              window.clearTimeout(roadNetworkStartupDeadline);
+              roadNetworkStartupDeadline = null;
+            }
             removeRoadSurfaceLayer = addPlayableRoadSurfaceLayer(map, network);
             roadIndex = index;
             roadEdgesById = new Map(
               network.edges.map((edge) => [edge.id, edge]),
             );
+            setRouteRejoinRoadSource({ index, edgesById: roadEdgesById });
             roadTracker = new RoadTracker(index);
             const currentPlayer =
               gameLoop?.getPlayer() ??
               runtimeFromTelemetry(useGameStore.getState().telemetry);
-            validateInitialRoadPosition(currentPlayer);
-            const validatedPlayer = runtimeFromTelemetry(
-              useGameStore.getState().telemetry,
+            const currentState = useGameStore.getState();
+            const alignmentRevisionBefore = currentState.playerRuntimeRevision;
+            const inputTargetBeforePromotion =
+              inputController.getDiagnostics().mobileCruise
+                .targetSpeedKilometersPerHour;
+            const movedDuringRoadlessStartup =
+              roadlessStartupFinished &&
+              (Math.abs(
+                currentState.telemetry.totalDistanceMeters -
+                  initialRoadLoadDistanceMeters,
+              ) >= 0.25 ||
+                distanceBetweenMeters(
+                  [currentPlayer.longitude, currentPlayer.latitude],
+                  [initialPlayer.longitude, initialPlayer.latitude],
+                ) >= 1 ||
+                Math.abs(currentPlayer.speedMetersPerSecond) >= 0.25);
+            let alignmentOutcome = 'validated';
+            if (movedDuringRoadlessStartup) {
+              currentState.acceptCurrentPlayerRoadPosition();
+              alignmentOutcome = 'preserved-runtime';
+              lateRoadPromotionAssistElapsedMilliseconds = 0;
+              lateRoadPromotionAssistLastActiveTimestamp = null;
+              lateRoadPromotionAssistFirstActiveSamplePending = true;
+            } else if (!validateInitialRoadPosition(currentPlayer)) {
+              currentState.acceptCurrentPlayerRoadPosition();
+              alignmentOutcome = 'accepted-current';
+            }
+            const validatedPlayer =
+              gameLoop?.getPlayer() ??
+              runtimeFromTelemetry(useGameStore.getState().telemetry);
+            const promotionRuntimeDisplacementMeters = distanceBetweenMeters(
+              [currentPlayer.longitude, currentPlayer.latitude],
+              [validatedPlayer.longitude, validatedPlayer.latitude],
+            );
+            const promotionRuntimeHeadingDelta = Math.abs(
+              ((validatedPlayer.heading - currentPlayer.heading + 540) % 360) -
+                180,
+            );
+            const promotionRuntimeSpeedDeltaKilometersPerHour =
+              Math.abs(
+                validatedPlayer.speedMetersPerSecond -
+                  currentPlayer.speedMetersPerSecond,
+              ) * 3.6;
+            const promotionInputTargetDeltaKilometersPerHour = Math.abs(
+              inputController.getDiagnostics().mobileCruise
+                .targetSpeedKilometersPerHour - inputTargetBeforePromotion,
             );
             roadContact = roadTracker.update(
               [validatedPlayer.longitude, validatedPlayer.latitude],
@@ -861,8 +1371,33 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             );
             roadNetworkEnabled = true;
             useGameStore.getState().setRoadNetworkStatus('ready');
+            useGameStore.getState().requestMissionRouteRecalculation();
             if (containerRef.current) {
               containerRef.current.dataset.roadNetworkStatus = 'ready';
+              containerRef.current.dataset.roadNetworkPromotedFromFallback =
+                String(roadlessStartupFinished);
+              containerRef.current.dataset.initialRoadAlignmentOutcome =
+                alignmentOutcome;
+              containerRef.current.dataset.initialRoadAlignmentRevisionDelta =
+                String(
+                  useGameStore.getState().playerRuntimeRevision -
+                    alignmentRevisionBefore,
+                );
+              containerRef.current.dataset.roadPromotionAssistRamp =
+                movedDuringRoadlessStartup ? 'active' : 'not-needed';
+              containerRef.current.dataset.roadPromotionAssistPausedElapsedMs =
+                '';
+              containerRef.current.dataset.roadPromotionAssistResumedElapsedMs =
+                '';
+              containerRef.current.dataset.roadPromotionAssistResumedRamp = '';
+              containerRef.current.dataset.roadPromotionRuntimeDisplacementMeters =
+                promotionRuntimeDisplacementMeters.toFixed(3);
+              containerRef.current.dataset.roadPromotionRuntimeHeadingDelta =
+                promotionRuntimeHeadingDelta.toFixed(3);
+              containerRef.current.dataset.roadPromotionRuntimeSpeedDeltaKph =
+                promotionRuntimeSpeedDeltaKilometersPerHour.toFixed(3);
+              containerRef.current.dataset.roadPromotionInputTargetDeltaKph =
+                promotionInputTargetDeltaKilometersPerHour.toFixed(3);
               containerRef.current.dataset.roadLoadMs =
                 loadDurationMilliseconds.toFixed(1);
               containerRef.current.dataset.roadFileBytes =
@@ -885,9 +1420,15 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           },
         )
         .catch((error: unknown) => {
-          if (!effectActive) return;
+          if (!effectActive || roadNetworkSettled) return;
+          roadNetworkSettled = true;
+          if (roadNetworkStartupDeadline !== null) {
+            window.clearTimeout(roadNetworkStartupDeadline);
+            roadNetworkStartupDeadline = null;
+          }
           roadNetworkEnabled = false;
           useGameStore.getState().setRoadNetworkStatus('unavailable');
+          if (roadlessStartupFinished) return;
           recordMapErrorClassification(
             classifyMapRuntimeError(error, {
               startupComplete: startupReady,
@@ -903,7 +1444,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           finishStartup();
         });
       playerMarker = new maplibregl.Marker({
-        element: createPlayerMarkerElement(),
+        element: createPlayerMarkerElement(activeVehicleSkin),
         anchor: 'center',
         rotationAlignment: 'map',
         pitchAlignment: 'map',
@@ -980,6 +1521,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 quality: deviceProfile.quality,
                 mobile: deviceProfile.isCompact,
                 reducedMotion: deviceProfile.reducedMotion,
+                playerModelUrl: activeVehicleDefinition.modelUrl,
+                playerModelScale: activeVehicleDefinition.modelScale,
+                vehicleBodyColor: activeVehicleSkin.bodyColor,
                 onPlayerReady: () => {
                   if (!effectActive) return;
                   playerVisualUpdates?.setFallbackHidden(true);
@@ -1032,7 +1576,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         true,
       );
       applyFollowCamera(initialCamera, { force: true });
-      lastCameraUpdate = initialCameraTimestamp;
+      resetCameraUpdateDeadline(initialCameraTimestamp);
       lastFollowedLongitude = initialPlayer.longitude;
       lastFollowedLatitude = initialPlayer.latitude;
       lastFollowedHeading = initialPlayer.heading;
@@ -1045,17 +1589,110 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         input: inputController,
         isPaused: () => {
           const state = useGameStore.getState();
-          return !startupReady || state.isPaused || state.isJournalOpen;
+          const runtimeGateKey =
+            Number(startupReady) |
+            (Number(fatalMapErrorHandled) << 1) |
+            (Number(state.isPaused) << 2) |
+            (Number(state.isJournalOpen) << 3) |
+            (Number(state.activeNarrativeEventId !== null) << 4) |
+            (Number(state.activeMissionChoiceObjectiveId !== null) << 5) |
+            (Number(state.recoveryReason !== null) << 6) |
+            (Number(state.vehicle.condition > 0) << 7);
+          if (runtimeGateKey !== lastRuntimeGateKey) {
+            lastRuntimeGateKey = runtimeGateKey;
+            const gate = runtimeGateFor({
+              startupReady,
+              fatalMapError: fatalMapErrorHandled,
+              paused: state.isPaused,
+              journalOpen: state.isJournalOpen,
+              narrativeActive: state.activeNarrativeEventId !== null,
+              missionChoiceActive:
+                state.activeMissionChoiceObjectiveId !== null,
+              recoveryActive: state.recoveryReason !== null,
+              vehicleEnabled: state.vehicle.condition > 0,
+            });
+            const simulationWasEnabled = runtimeSimulationEnabled;
+            runtimeSimulationEnabled = gate.simulationEnabled;
+            if (
+              !runtimeSimulationEnabled &&
+              lateRoadPromotionAssistElapsedMilliseconds !== null
+            ) {
+              lateRoadPromotionAssistLastActiveTimestamp = null;
+              if (simulationWasEnabled) {
+                lateRoadPromotionAssistResumeSamplePending = true;
+                if (containerRef.current) {
+                  containerRef.current.dataset.roadPromotionAssistPausedElapsedMs =
+                    lateRoadPromotionAssistElapsedMilliseconds.toFixed(3);
+                  containerRef.current.dataset.roadPromotionAssistResumedElapsedMs =
+                    '';
+                }
+              }
+            }
+            if (containerRef.current) {
+              containerRef.current.dataset.driveEnabled = String(
+                gate.drivingInputEnabled,
+              );
+              containerRef.current.dataset.runtimeBlockedBy =
+                gate.blockedBy ?? '';
+            }
+          }
+          return !runtimeSimulationEnabled;
         },
         getMovementOptions: () => {
           const roadContactTimestamp = performance.now();
+          let latePromotionAssistMultiplier = 1;
+          if (lateRoadPromotionAssistElapsedMilliseconds !== null) {
+            lateRoadPromotionAssistElapsedMilliseconds =
+              advanceRoadAssistActiveElapsedMilliseconds(
+                lateRoadPromotionAssistElapsedMilliseconds,
+                lateRoadPromotionAssistLastActiveTimestamp,
+                roadContactTimestamp,
+                movementSubstepConfig.maximumDeltaTimeSeconds * 1_000,
+              );
+            lateRoadPromotionAssistLastActiveTimestamp = roadContactTimestamp;
+            latePromotionAssistMultiplier =
+              roadAssistMultiplierForLatePromotion(
+                0,
+                lateRoadPromotionAssistElapsedMilliseconds,
+              );
+            if (lateRoadPromotionAssistResumeSamplePending) {
+              lateRoadPromotionAssistResumeSamplePending = false;
+              if (containerRef.current) {
+                containerRef.current.dataset.roadPromotionAssistResumedElapsedMs =
+                  lateRoadPromotionAssistElapsedMilliseconds.toFixed(3);
+                containerRef.current.dataset.roadPromotionAssistResumedRamp =
+                  latePromotionAssistMultiplier < 1 ? 'active' : 'complete';
+              }
+            }
+            if (lateRoadPromotionAssistFirstActiveSamplePending) {
+              lateRoadPromotionAssistFirstActiveSamplePending = false;
+              if (containerRef.current) {
+                containerRef.current.dataset.roadPromotionFirstActiveAssistMultiplier =
+                  latePromotionAssistMultiplier.toFixed(3);
+              }
+            }
+          }
+          if (
+            lateRoadPromotionAssistElapsedMilliseconds !== null &&
+            latePromotionAssistMultiplier >= 1
+          ) {
+            lateRoadPromotionAssistElapsedMilliseconds = null;
+            lateRoadPromotionAssistLastActiveTimestamp = null;
+            if (containerRef.current) {
+              containerRef.current.dataset.roadPromotionAssistRamp = 'complete';
+            }
+          }
           return {
+            travel: activeVehicleRuntime.travel,
+            handling: activeVehicleRuntime.handling,
+            fuel: activeVehicleRuntime.fuel,
             steeringSensitivity:
               useSettingsStore.getState().steeringSensitivity,
             roadAssistMode: useSettingsStore.getState().roadAssistMode,
             roadAssistStrengthMultiplier: deviceProfile.isTouch
-              ? roadAssistConfig.mobileStrengthMultiplier
-              : 1,
+              ? roadAssistConfig.mobileStrengthMultiplier *
+                latePromotionAssistMultiplier
+              : latePromotionAssistMultiplier,
             roadNetworkEnabled,
             roadContact,
             roadContactAt: roadTracker
@@ -1078,6 +1715,29 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           };
         },
         onVisualUpdate: (player, timestamp) => {
+          if (deviceProfile.isTouch) {
+            const completedCameraWindow =
+              adaptiveCameraCadence.recordVisualFrame(timestamp);
+            if (completedCameraWindow && containerRef.current) {
+              containerRef.current.dataset.cameraCadenceHertz = String(
+                adaptiveCameraCadence.state.hertz,
+              );
+              containerRef.current.dataset.cameraCadenceFrametimeP95Ms =
+                completedCameraWindow.frametimeP95Milliseconds.toFixed(2);
+              containerRef.current.dataset.cameraCadenceFramesOver50 = String(
+                completedCameraWindow.framesOver50Milliseconds,
+              );
+              containerRef.current.dataset.cameraCadenceFramesOver100 = String(
+                completedCameraWindow.framesOver100Milliseconds,
+              );
+              if (
+                Number.isFinite(completedCameraWindow.cameraP95Milliseconds)
+              ) {
+                containerRef.current.dataset.cameraCadenceCameraP95Ms =
+                  completedCameraWindow.cameraP95Milliseconds.toFixed(3);
+              }
+            }
+          }
           visualFrameCount += 1;
           const frameSampleDuration = timestamp - lastFrameSampleTimestamp;
           if (frameSampleDuration >= 1_000 && containerRef.current) {
@@ -1125,10 +1785,13 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             visualFrameCount = 0;
             lastFrameSampleTimestamp = timestamp;
           }
-          playerVisualUpdates?.update(
-            player,
-            gameLoop?.getSurface() === 'offroad',
-          );
+          if (playerVisualUpdates) {
+            playerVisualUpdates.update(
+              player,
+              gameLoop?.getSurface() === 'offroad',
+            );
+            inputController.markInputVisualFrame(timestamp);
+          }
 
           const isFollowing = useGameStore.getState().isFollowingPlayer;
           if (!isFollowing) {
@@ -1164,15 +1827,21 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           ) {
             cameraRequestedUpdates += 1;
             cameraWindowRequestedUpdates += 1;
+            const cameraUpdateIntervalMilliseconds =
+              activeCameraUpdateIntervalMilliseconds();
             if (
-              timestamp - lastCameraUpdate <
-              deviceProfile.cameraUpdateIntervalMilliseconds
+              !cameraCadenceShouldApply(timestamp, nextCameraUpdateDeadline)
             ) {
               cameraSkippedByInterval += 1;
               exposeCameraMetrics(timestamp);
               wasFollowing = true;
               return;
             }
+            nextCameraUpdateDeadline = cameraCadenceDeadlineAfterApplication(
+              nextCameraUpdateDeadline,
+              timestamp,
+              cameraUpdateIntervalMilliseconds,
+            );
             const isRecentering = !wasFollowing;
             const cameraStartedAt = performance.now();
             const camera = cameraForPlayer(player, timestamp);
@@ -1194,18 +1863,19 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             });
             if (!cameraUpdate.mapOptions) {
               cameraSkippedByTolerance += 1;
-              lastCameraUpdate = timestamp;
               exposeCameraMetrics(timestamp);
               wasFollowing = true;
               return;
             }
             recenterUntil = isRecentering ? timestamp + duration : 0;
-            lastCameraUpdate = timestamp;
             lastFollowedLongitude = player.longitude;
             lastFollowedLatitude = player.latitude;
             lastFollowedHeading = player.heading;
             lastFollowedSpeedKilometersPerHour = speedKilometersPerHour;
             const cameraUpdateDuration = performance.now() - cameraStartedAt;
+            if (deviceProfile.isTouch) {
+              adaptiveCameraCadence.recordCameraUpdate(cameraUpdateDuration);
+            }
             cameraAppliedUpdates += 1;
             cameraWindowAppliedUpdates += 1;
             cameraUpdateDurationTotal += cameraUpdateDuration;
@@ -1269,8 +1939,12 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             containerRef.current.dataset.inputInteract = String(
               inputDiagnostics.interact,
             );
-            if (performanceMetricsEnabled) {
-              const inputLatency = inputController.getInputLatencyDiagnostics();
+            const inputLatency = inputController.getInputLatencyDiagnostics();
+            if (
+              inputLatency.sequence !== lastExposedInputLatencySequence &&
+              inputLatency.inputToFirstVisualMilliseconds !== null
+            ) {
+              lastExposedInputLatencySequence = inputLatency.sequence;
               containerRef.current.dataset.inputLatencySequence = String(
                 inputLatency.sequence,
               );
@@ -1282,6 +1956,17 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 ) ?? '';
               containerRef.current.dataset.inputConsumptionLatencyMs =
                 inputLatency.inputConsumptionLatencyMilliseconds?.toFixed(3) ??
+                '';
+              containerRef.current.dataset.inputFirstPositionLatencyMs =
+                inputLatency.inputToFirstPositionMilliseconds?.toFixed(3) ?? '';
+              containerRef.current.dataset.inputFirstVisualLatencyMs =
+                inputLatency.inputToFirstVisualMilliseconds.toFixed(3);
+              containerRef.current.dataset.inputConsumptionToPositionLatencyMs =
+                inputLatency.consumptionToFirstPositionMilliseconds?.toFixed(
+                  3,
+                ) ?? '';
+              containerRef.current.dataset.inputConsumptionToVisualLatencyMs =
+                inputLatency.consumptionToFirstVisualMilliseconds?.toFixed(3) ??
                 '';
             }
             containerRef.current.dataset.inputPointerActive = String(
@@ -1360,6 +2045,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             );
             state.setDrivingEnvironment(environment);
             const hapticsEnabled = useSettingsStore.getState().hapticsEnabled;
+            const wearSamples: DrivingWearSample[] = [];
             for (const sample of movementSamples) {
               const blockedImpact =
                 sample.environment.movementBlockedBy !== null &&
@@ -1376,14 +2062,27 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               }
               if (blockedImpact) triggerHaptic('collision', hapticsEnabled);
               previousHapticSurface = sample.environment.surface;
-              state.applyDrivingWear(
-                sample.vehicleDistanceMeters,
-                sample.environment.surface,
-                blockedImpact,
-                selectedMissionChoiceOption(
+              if (
+                blockedImpact ||
+                sample.environment.surface === 'offroad' ||
+                sample.environment.surface === 'track' ||
+                sample.environment.surface === 'dirt-road'
+              ) {
+                wearSamples.push({
+                  vehicleDistanceMeters: sample.vehicleDistanceMeters,
+                  surface: sample.environment.surface,
+                  blockedImpact,
+                });
+              }
+            }
+            if (wearSamples.length > 0) {
+              state.applyDrivingWearSamples(
+                wearSamples,
+                (selectedMissionChoiceOption(
                   state.activeMissionId,
                   state.missionChoiceSelections,
-                )?.conditionMultiplier ?? 1,
+                )?.conditionMultiplier ?? 1) *
+                  activeVehicleRuntime.conditionWearMultiplier,
               );
             }
             if (containerRef.current) {
@@ -1450,6 +2149,32 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       });
 
       unsubscribeRuntime = useGameStore.subscribe((state, previousState) => {
+        if (
+          state.selectedVehicleId !== previousState.selectedVehicleId ||
+          state.selectedVehicleSkinId !== previousState.selectedVehicleSkinId
+        ) {
+          activeVehicleDefinition = vehicleDefinitionFor(
+            state.selectedVehicleId,
+          );
+          activeVehicleSkin = vehicleSkinFor(
+            activeVehicleDefinition.id,
+            state.selectedVehicleSkinId,
+          );
+          activeVehicleRuntime = vehicleRuntimeFor(activeVehicleDefinition.id);
+          const markerElement = playerMarker?.getElement();
+          if (markerElement)
+            applyPlayerMarkerSkin(markerElement, activeVehicleSkin);
+          threeLayer?.setVehicleSkin(
+            activeVehicleSkin.bodyColor,
+            activeVehicleDefinition.modelScale,
+          );
+          if (containerRef.current) {
+            containerRef.current.dataset.selectedVehicleId =
+              activeVehicleDefinition.id;
+            containerRef.current.dataset.selectedVehicleSkinId =
+              activeVehicleSkin.id;
+          }
+        }
         if (
           state.isFollowingPlayer !== previousState.isFollowingPlayer &&
           containerRef.current
@@ -1520,13 +2245,16 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           gameLoop?.getSurface() === 'offroad',
         );
         const restoredCameraTimestamp = performance.now();
+        if (state.lastCheckpoint.reason === 'rejoin') {
+          recoveryCameraUntil = restoredCameraTimestamp + 1_200;
+        }
         const restoredCamera = cameraForPlayer(
           restoredPlayer,
           restoredCameraTimestamp,
           true,
         );
         applyFollowCamera(restoredCamera, { force: true });
-        lastCameraUpdate = restoredCameraTimestamp;
+        resetCameraUpdateDeadline(restoredCameraTimestamp);
         lastFollowedLongitude = restoredPlayer.longitude;
         lastFollowedLatitude = restoredPlayer.latitude;
         lastFollowedHeading = restoredPlayer.heading;
@@ -1542,12 +2270,16 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       }
     };
     const handleResize = () => {
+      if (deviceProfile.isTouch) {
+        scheduleSafeViewportMeasurement();
+        return;
+      }
       const player = gameLoop?.getPlayer();
       if (!player || !useGameStore.getState().isFollowingPlayer) return;
       const camera = cameraForPlayer(player, performance.now());
       const cameraUpdate = applyFollowCamera(camera);
       if (!cameraUpdate.mapOptions) return;
-      lastCameraUpdate = performance.now();
+      resetCameraUpdateDeadline(performance.now());
     };
     const handleError = (event: ErrorEvent) => {
       const runtimeEvent = event as ErrorEvent & {
@@ -1612,12 +2344,36 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     map.on('error', handleError);
     map.on('webglcontextlost', handleWebglContextLost);
     map.setStyle(mapSourceConfig.styleUrl, {
-      transformStyle: createStyleResourceTransform(window.location.href),
+      transformStyle: createConfiguredStyleResourceTransform(
+        window.location.href,
+      ),
     });
 
     return () => {
       effectActive = false;
       window.cancelAnimationFrame(loadingFrame);
+      if (safeViewportMeasurementFrame !== null) {
+        window.cancelAnimationFrame(safeViewportMeasurementFrame);
+      }
+      safeViewportResizeObserver?.disconnect();
+      safeViewportMutationObserver?.disconnect();
+      window.visualViewport?.removeEventListener(
+        'resize',
+        scheduleSafeViewportMeasurement,
+      );
+      window.visualViewport?.removeEventListener(
+        'scroll',
+        scheduleSafeViewportMeasurement,
+      );
+      window.removeEventListener('resize', scheduleSafeViewportMeasurement);
+      window.removeEventListener(
+        'orientationchange',
+        scheduleSafeViewportMeasurement,
+      );
+      safeAreaProbe.remove();
+      if (roadNetworkStartupDeadline !== null) {
+        window.clearTimeout(roadNetworkStartupDeadline);
+      }
       map.off('load', handleLoad);
       map.off('dragstart', handleManualCameraStart);
       map.off('zoomstart', handleManualCameraStart);
@@ -1638,6 +2394,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       removeMissionRoute?.();
       removeRoadDebugLayer?.();
       removeRoadSurfaceLayer?.();
+      if (roadIndex) clearRouteRejoinRoadSource(roadIndex);
       threeLayer?.remove();
       playerMarker?.remove();
       unbindKeyboard();

@@ -44,8 +44,12 @@ describe('HUD móvil de conducción', () => {
     expect(screen.getByTestId('mobile-driving-speed').textContent).toBe(
       '61 km/h',
     );
-    expect(screen.getByText('⛽ 74%')).toBeTruthy();
-    expect(screen.getByText('🔧 99%')).toBeTruthy();
+    const fuel = screen.getByLabelText('Combustible 74 por ciento');
+    const condition = screen.getByLabelText('Condición 99 por ciento');
+    expect(fuel.textContent).toBe('⛽');
+    expect(condition.textContent).toBe('🔧');
+    expect(fuel.getAttribute('data-vital-state')).toBe('healthy');
+    expect(condition.getAttribute('data-vital-state')).toBe('healthy');
     expect(screen.queryByText(/XP|Energía|Posición|Recorrido/)).toBeNull();
   });
 
@@ -60,5 +64,20 @@ describe('HUD móvil de conducción', () => {
     });
     expect(useGameStore.getState().isJournalOpen).toBe(true);
     expect(screen.queryByTestId('mobile-driving-hud')).toBeNull();
+  });
+
+  it('expande únicamente vitales en advertencia o estado crítico', () => {
+    useGameStore.setState((state) => ({
+      telemetry: { ...state.telemetry, fuel: 30 },
+      vehicle: { ...state.vehicle, condition: 20 },
+    }));
+    render(<MobileDrivingHud />);
+
+    const fuel = screen.getByLabelText('Combustible 30 por ciento');
+    const condition = screen.getByLabelText('Condición 20 por ciento');
+    expect(fuel.textContent).toBe('⛽ 30%');
+    expect(condition.textContent).toBe('🔧 20%');
+    expect(fuel.getAttribute('data-vital-state')).toBe('warning');
+    expect(condition.getAttribute('data-vital-state')).toBe('critical');
   });
 });

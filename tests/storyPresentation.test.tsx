@@ -38,8 +38,7 @@ function ControlledRadioMessageOverlay({
 }: {
   initialMode?: RadioDisplayMode;
 }) {
-  const [displayMode, setDisplayMode] =
-    useState<RadioDisplayMode>(initialMode);
+  const [displayMode, setDisplayMode] = useState<RadioDisplayMode>(initialMode);
   return (
     <RadioMessageOverlay
       displayMode={displayMode}
@@ -73,6 +72,10 @@ describe('presentación narrativa', () => {
     expect(container.querySelector('.narrative-backdrop')).toBeNull();
     expect(container.querySelector('.radio-overlay')).not.toBeNull();
     expect(useGameStore.getState().isPaused).toBe(false);
+    expect(screen.getByText('Registro de frecuencia guardado')).toBeTruthy();
+    expect(
+      container.querySelector('[data-gameplay-reward="story-fragment"]'),
+    ).not.toBeNull();
   });
 
   it('abre la bitácora desde una transmisión', () => {

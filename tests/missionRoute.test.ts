@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { distanceBetweenMeters } from '../src/game/discovery';
 import {
+  directFallbackNavigationProgress,
   distanceToRouteMeters,
   navigationArrowPosition,
   routeOriginMovedBeyondTolerance,
@@ -54,5 +55,27 @@ describe('mission route deviation', () => {
     expect(routeOriginMovedBeyondTolerance(origin, [-89.1995, 13.7])).toBe(
       true,
     );
+  });
+
+  it('reduce la distancia fallback y cambia a llegada cerca del destino', () => {
+    const destination: [number, number] = [-89.199, 13.7];
+    const far = directFallbackNavigationProgress(
+      [-89.2, 13.7],
+      destination,
+      90,
+    );
+    const near = directFallbackNavigationProgress(
+      [-89.1991, 13.7],
+      destination,
+      90,
+    );
+
+    expect(far.nextInstruction?.type).toBe('continue');
+    expect(near.nextInstruction?.type).toBe('arrive');
+    expect(near.distanceToNextInstructionMeters).toBeLessThan(
+      far.distanceToNextInstructionMeters,
+    );
+    expect(near.activeNavigation?.requiresRejoin).toBe(false);
+    expect(near.distanceToRouteMeters).toBe(0);
   });
 });

@@ -1,12 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chapterOneMissionIds } from '../src/data/chapter1';
 import { missionById } from '../src/data/missions';
 import { fuelStationById } from '../src/data/fuelStations';
 import { initialMissionObjectiveProgress } from '../src/game/missions';
+import { alignedRoadHeading } from '../src/roads/initialRoadPosition';
+import {
+  clearRouteRejoinRoadSource,
+  setRouteRejoinRoadSource,
+} from '../src/roads/routeRejoinRoadSource';
+import { RoadSpatialIndex } from '../src/roads/spatialIndex';
 import { useGameStore } from '../src/store/gameStore';
+import { createRoadTestNetwork } from './roadTestNetwork';
 
 const repeater = [-89.3175451, 13.6820687] as const;
 const blockage = [-89.3592277, 13.7305749] as const;
+let routeRejoinTestIndex: RoadSpatialIndex | null = null;
 
 function reachRouteChoice(): void {
   useGameStore.setState({
@@ -33,6 +41,13 @@ function reachRouteChoice(): void {
 describe('estado de misiones y capítulo', () => {
   beforeEach(() => {
     useGameStore.setState(useGameStore.getInitialState(), true);
+  });
+
+  afterEach(() => {
+    if (routeRejoinTestIndex) {
+      clearRouteRejoinRoadSource(routeRejoinTestIndex);
+      routeRejoinTestIndex = null;
+    }
   });
 
   it('no notifica Zustand cuando la telemetría no cambió', () => {
@@ -109,6 +124,42 @@ describe('estado de misiones y capítulo', () => {
     expect(state.completedMissionIds).toContain('la-transmision');
     expect(state.experience).toBe(150);
     expect(state.unlockedStoryIds).toContain('registro-transmision-occidente');
+  });
+
+  it('entrega un registro durable como primera recompensa de interacción', () => {
+    useGameStore.getState().startMission('la-transmision');
+    useGameStore.getState().dismissNarrativeEvent();
+    useGameStore.getState().advanceActiveMission(
+      {
+        ...useGameStore.getState().telemetry,
+        longitude: -89.191111,
+        latitude: 13.6975,
+      },
+      true,
+    );
+
+    const state = useGameStore.getState();
+    expect(state.activeRadioEventId).toBe('radio-ruta-occidental');
+    expect(state.unlockedStoryIds).toContain('radio-ruta-occidental');
+    expect(state.storyLogEntries).toContainEqual(
+      expect.objectContaining({
+        id: 'radio:radio-ruta-occidental',
+        type: 'radio',
+      }),
+    );
+    expect(state.gameplayFeedback).toMatchObject({
+      message: 'Registro de frecuencia guardado en la bitácora',
+      tone: 'success',
+    });
+
+    useGameStore.getState().advanceActiveMission(state.telemetry, true);
+    expect(
+      useGameStore
+        .getState()
+        .storyLogEntries.filter(
+          (entry) => entry.id === 'radio:radio-ruta-occidental',
+        ),
+    ).toHaveLength(1);
   });
 
   it('activa un cierre local y recalcula al inspeccionar el bloqueo', () => {
@@ -358,6 +409,83 @@ describe('estado de misiones y capítulo', () => {
     });
   });
 
+  it('reincorpora de forma atómica sin perder misión ni recursos', () => {
+    const network = createRoadTestNetwork();
+    const index = new RoadSpatialIndex(network);
+    routeRejoinTestIndex = index;
+    const edgesById = new Map(network.edges.map((edge) => [edge.id, edge]));
+    setRouteRejoinRoadSource({ index, edgesById });
+    useGameStore.getState().startMission('la-transmision');
+    useGameStore.getState().dismissNarrativeEvent();
+    useGameStore.getState().addInventoryItem('bidon-combustible', 1);
+    useGameStore.setState((state) => ({
+      onboardingState: 'completed',
+      telemetry: {
+        ...state.telemetry,
+        longitude: -89.2995,
+        latitude: 13.7008,
+        heading: 260,
+        speedMetersPerSecond: 0,
+        speedKilometersPerHour: 0,
+        totalDistanceMeters: 321,
+      },
+      driving: {
+        ...state.driving,
+        roadNetworkStatus: 'ready',
+        surface: 'offroad',
+      },
+      missionRoute: { ...state.missionRoute, status: 'calculating' },
+      isFollowingPlayer: false,
+    }));
+    const before = useGameStore.getState();
+    const eligibility = before.getRouteRejoinEligibility();
+    expect(eligibility.eligible).toBe(true);
+    if (!eligibility.eligible)
+      throw new Error('Expected a safe road candidate');
+
+    expect(before.rejoinPlayerToRoad(999_999)).toBe(false);
+    expect(useGameStore.getState().telemetry).toBe(before.telemetry);
+    expect(useGameStore.getState().lastCheckpoint).toBe(before.lastCheckpoint);
+
+    clearRouteRejoinRoadSource(index);
+    expect(before.rejoinPlayerToRoad(eligibility.candidate.edgeId)).toBe(false);
+    expect(useGameStore.getState().telemetry).toBe(before.telemetry);
+    setRouteRejoinRoadSource({ index, edgesById });
+
+    expect(before.rejoinPlayerToRoad(eligibility.candidate.edgeId)).toBe(true);
+
+    const state = useGameStore.getState();
+    expect(state.telemetry).toMatchObject({
+      longitude: eligibility.candidate.coordinates[0],
+      latitude: eligibility.candidate.coordinates[1],
+      heading: alignedRoadHeading(
+        before.telemetry.heading,
+        eligibility.candidate.heading,
+        eligibility.candidate.oneWay,
+      ),
+      speedMetersPerSecond: 0,
+      fuel: before.telemetry.fuel,
+      totalDistanceMeters: 321,
+    });
+    expect(state.vehicle).toEqual(before.vehicle);
+    expect(state.inventory).toEqual(before.inventory);
+    expect(state.activeMissionId).toBe(before.activeMissionId);
+    expect(state.activeMissionCompletedObjectiveIds).toEqual(
+      before.activeMissionCompletedObjectiveIds,
+    );
+    expect(state.playerRuntimeRevision).toBe(before.playerRuntimeRevision + 1);
+    expect(state.missionRoute.recalculationRevision).toBe(
+      before.missionRoute.recalculationRevision + 1,
+    );
+    expect(state.isFollowingPlayer).toBe(true);
+    expect(state.lastCheckpoint.reason).toBe('rejoin');
+    expect(state.lastSafeCheckpoint.reason).toBe('rejoin');
+    expect(state.gameplayFeedback).toMatchObject({
+      message: 'Vehículo reincorporado a la ruta',
+      tone: 'success',
+    });
+  });
+
   it('prioriza una estación temporal sin borrar la misión activa', () => {
     useGameStore.getState().startMission('la-transmision');
     const revision = useGameStore.getState().missionRoute.recalculationRevision;
@@ -532,5 +660,19 @@ describe('estado de misiones y capítulo', () => {
       recoveryReason: 'out-of-bounds',
       isPaused: true,
     });
+  });
+
+  it('aplica la durabilidad al desgaste y a los impactos', () => {
+    useGameStore.getState().setRoadNetworkStatus('ready');
+    useGameStore.getState().applyDrivingWear(0, 'offroad', true, 1);
+    const fullImpactDamage = 100 - useGameStore.getState().vehicle.condition;
+
+    useGameStore.setState((state) => ({
+      vehicle: { ...state.vehicle, condition: 100 },
+    }));
+    useGameStore.getState().applyDrivingWear(0, 'offroad', true, 0.5);
+    const durableImpactDamage = 100 - useGameStore.getState().vehicle.condition;
+
+    expect(durableImpactDamage).toBeCloseTo(fullImpactDamage * 0.5, 8);
   });
 });

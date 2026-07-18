@@ -245,10 +245,23 @@ function stepPlayerOnce(
   const roadAssistMode = options.roadAssistMode ?? 'soft';
   const deltaTime = Math.max(0, deltaTimeSeconds);
   const { surface, contact } = roadState(player, options);
-  const speedMultiplier = roadSpeedMultipliers[surface];
+  const terrainGripMultiplier =
+    surface === 'offroad' || surface === 'track' || surface === 'dirt-road'
+      ? handling.offroadSpeedMultiplier /
+        vehicleHandlingConfig.offroadSpeedMultiplier
+      : 1;
+  const speedMultiplier = Math.min(
+    1,
+    roadSpeedMultipliers[surface] * terrainGripMultiplier,
+  );
+  const terrainFuelMultiplier =
+    surface === 'offroad' || surface === 'track' || surface === 'dirt-road'
+      ? roadFuelMultipliers[surface] *
+        (handling.offroadFuelMultiplier /
+          vehicleHandlingConfig.offroadFuelMultiplier)
+      : roadFuelMultipliers[surface];
   const fuelMultiplier =
-    roadFuelMultipliers[surface] *
-    Math.max(0.1, options.routeFuelMultiplier ?? 1);
+    terrainFuelMultiplier * Math.max(0.1, options.routeFuelMultiplier ?? 1);
   const hasFuel = player.fuel > 0;
   const driveEnabled = options.driveEnabled !== false;
   const throttle = hasFuel && driveEnabled ? input.throttle : 0;

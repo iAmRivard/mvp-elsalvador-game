@@ -30,11 +30,16 @@ interface TutorialStep {
   description: string;
   completed: boolean;
   available: boolean;
+  actionHint?: string;
 }
 
 const STEP_ADVANCE_DELAY_MILLISECONDS = 420;
 const COAST_HOLD_MILLISECONDS = 600;
 const ROUTE_FOLLOW_HOLD_MILLISECONDS = 900;
+
+function headingDifferenceDegrees(first: number, second: number): number {
+  return Math.abs(((first - second + 540) % 360) - 180);
+}
 
 export function TutorialOverlay({
   input,
@@ -55,10 +60,17 @@ export function TutorialOverlay({
   const brakeIntentObserved = useRef(false);
   const controlMode = useSettingsStore((state) => state.controlMode);
   const telemetry = useGameStore((state) => state.telemetry);
+  const [steerStartHeading, setSteerStartHeading] = useState(telemetry.heading);
   const routeStatus = useGameStore((state) => state.missionRoute.status);
+  const routeVisualReady = useGameStore(
+    (state) => state.missionRoute.visualReady,
+  );
   const routeOffRoute = useGameStore((state) => state.missionRoute.offRoute);
   const activeNavigation = useGameStore(
     (state) => state.missionRoute.activeNavigation,
+  );
+  const routeHeadingDifference = useGameStore(
+    (state) => state.missionRoute.orientation.headingDifference,
   );
   const drivingSurface = useGameStore((state) => state.driving.surface);
   const roadNetworkStatus = useGameStore(
@@ -89,16 +101,17 @@ export function TutorialOverlay({
 
   const hasBlockingOverlay = Boolean(
     recoveryReason ||
-      activeNarrativeEventId ||
-      activeMissionChoiceObjectiveId ||
-      isJournalOpen,
+    activeNarrativeEventId ||
+    activeMissionChoiceObjectiveId ||
+    isJournalOpen,
   );
   const coastEligible =
     !hasBlockingOverlay &&
     !isPaused &&
     telemetry.speedMetersPerSecond > 0 &&
     coastConditionIsMet(diagnostics, telemetry.speedKilometersPerHour);
-  const routeVisible = routeStatus === 'road';
+  const fallbackRoute = routeStatus === 'fallback';
+  const routeVisible = routeVisualReady && routeStatus === 'road';
   const routeFollowingValid =
     !hasBlockingOverlay &&
     !isPaused &&
@@ -110,8 +123,12 @@ export function TutorialOverlay({
       requiresRejoin: activeNavigation?.requiresRejoin ?? true,
       surface: drivingSurface,
       roadNetworkReady: roadNetworkStatus === 'ready',
+      fallbackMode: fallbackRoute,
       distanceToRouteMeters: activeNavigation?.distanceToRouteMeters ?? null,
       maximumDistanceToRouteMeters: routingConfig.routeRejoinDistanceMeters,
+      headingDifferenceDegrees: routeHeadingDifference,
+      maximumHeadingDifferenceDegrees:
+        routingConfig.tutorialRouteHeadingToleranceDegrees,
       reversing:
         diagnostics.mobileCruise.reversing ||
         telemetry.speedMetersPerSecond < -0.14,
@@ -153,11 +170,7 @@ export function TutorialOverlay({
   ]);
 
   useEffect(() => {
-    if (
-      stepIndex !== 4 ||
-      !routeFollowingValid ||
-      activeMissionId === null
-    )
+    if (stepIndex !== 4 || !routeFollowingValid || activeMissionId === null)
       return;
     const timeout = window.setTimeout(
       () => setRouteFollowCompleted(true),
@@ -174,17 +187,11 @@ export function TutorialOverlay({
       ? 'Mantén W para ganar velocidad.'
       : controlMode === 'classic-buttons'
         ? 'Mantén Avanzar para ganar velocidad.'
-        : controlMode === 'target-speed-joystick'
+        : controlMode === 'target-speed-joystick' ||
+            controlMode === 'arcade-driving'
           ? 'Empuja hacia arriba para elegir al menos 20 km/h.'
           : 'Acelera con el control derecho.';
     return [
-      {
-        id: 'steer',
-        title: 'Gira el vehículo',
-        description: 'Mueve la dirección hacia un lado.',
-        completed: Math.abs(diagnostics.turn) > 0.4,
-        available: true,
-      },
       {
         id: 'select-speed',
         title: 'Elige tu velocidad',
@@ -193,6 +200,16 @@ export function TutorialOverlay({
           conventionalThrottleIntent(diagnostics) > 0.45 ||
           diagnostics.mobileCruise.targetSpeedKilometersPerHour >= 20,
         available: true,
+      },
+      {
+        id: 'steer',
+        title: 'Gira en movimiento',
+        description: 'Mantén la marcha y mueve la dirección hacia un lado.',
+        completed:
+          telemetry.speedKilometersPerHour >= 5 &&
+          Math.abs(diagnostics.turn) > 0.4 &&
+          headingDifferenceDegrees(telemetry.heading, steerStartHeading) >= 4,
+        available: telemetry.speedKilometersPerHour >= 5,
       },
       {
         id: 'coast',
@@ -212,10 +229,17 @@ export function TutorialOverlay({
       },
       {
         id: 'route',
-        title: 'Sigue la línea cian',
-        description: 'Conduce sobre el tramo brillante de la ruta.',
+        title: fallbackRoute
+          ? 'Esperando la línea cian'
+          : 'Sigue la línea cian',
+        description: fallbackRoute
+          ? 'La guía directa mantiene la navegación mientras preparamos la ruta vial.'
+          : 'Conduce sobre el tramo brillante de la ruta.',
         completed: routeFollowCompleted && routeFollowingValid,
         available: routeVisible,
+        actionHint: fallbackRoute
+          ? 'La guía directa no completa este paso. Espera la línea cian o toca Omitir.'
+          : undefined,
       },
     ];
   }, [
@@ -223,9 +247,13 @@ export function TutorialOverlay({
     coastCompleted,
     controlMode,
     diagnostics,
+    fallbackRoute,
     routeFollowCompleted,
     routeFollowingValid,
     routeVisible,
+    steerStartHeading,
+    telemetry.heading,
+    telemetry.speedKilometersPerHour,
     usesCompactCard,
   ]);
   const current = steps[stepIndex];
@@ -262,10 +290,22 @@ export function TutorialOverlay({
     if (!current.available || !current.completed) return;
     const timeout = window.setTimeout(() => {
       if (isLast) complete();
-      else setStepIndex((value) => Math.min(value + 1, steps.length - 1));
+      else {
+        if (current.id === 'select-speed') {
+          setSteerStartHeading(useGameStore.getState().telemetry.heading);
+        }
+        setStepIndex((value) => Math.min(value + 1, steps.length - 1));
+      }
     }, STEP_ADVANCE_DELAY_MILLISECONDS);
     return () => window.clearTimeout(timeout);
-  }, [complete, current.available, current.completed, isLast, steps.length]);
+  }, [
+    complete,
+    current.available,
+    current.completed,
+    current.id,
+    isLast,
+    steps.length,
+  ]);
 
   if (usesCompactCard) {
     return (
@@ -275,6 +315,12 @@ export function TutorialOverlay({
         title={current.title}
         description={current.description}
         available={current.available}
+        actionHint={
+          current.actionHint ??
+          (current.available
+            ? 'Realiza la acción para continuar'
+            : 'Continúa la misión para habilitar esta acción')
+        }
         onSkip={skip}
       />
     );
@@ -299,9 +345,10 @@ export function TutorialOverlay({
       <h2 id="tutorial-title">{current.title}</h2>
       <p>{current.description}</p>
       <small className="tutorial-coach__action-hint">
-        {current.available
-          ? 'Realiza la acción para continuar'
-          : 'Continúa la misión para habilitar esta acción'}
+        {current.actionHint ??
+          (current.available
+            ? 'Realiza la acción para continuar'
+            : 'Continúa la misión para habilitar esta acción')}
       </small>
     </aside>
   );

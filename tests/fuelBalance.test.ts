@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { fuelConsumptionConfig } from '../src/config/travel.config';
 import { vehicleStateConfig } from '../src/config/vehicleState.config';
 import { missionById } from '../src/data/missions';
+import { vehicleRuntimeFor } from '../src/data/vehicles';
 import {
   estimateFuelAtDestination,
   estimateFuelRange,
@@ -117,5 +118,52 @@ describe('balance de combustible v0.2.3', () => {
     ).toBe('insufficient');
     expect(vehicleStateConfig.emergencyRecoveryFuel).toBeGreaterThan(0);
     expect(vehicleStateConfig.emergencyRecoveryFuel).toBeLessThanOrEqual(20);
+  });
+  it('aplica la eficiencia del vehiculo a estimaciones y autonomia', () => {
+    const torogoz = vehicleRuntimeFor('torogoz').fuel;
+    const volcan = vehicleRuntimeFor('volcan-gt').fuel;
+    const coyote = vehicleRuntimeFor('coyote-4x4').fuel;
+
+    const torogozConsumption = fuelConsumedForGeographicDistance(
+      20_000,
+      { fuelMultiplier: 1 },
+      torogoz,
+    );
+    const volcanConsumption = fuelConsumedForGeographicDistance(
+      20_000,
+      { fuelMultiplier: 1 },
+      volcan,
+    );
+    const coyoteConsumption = fuelConsumedForGeographicDistance(
+      20_000,
+      { fuelMultiplier: 1 },
+      coyote,
+    );
+
+    expect(volcanConsumption).toBeGreaterThan(coyoteConsumption);
+    expect(coyoteConsumption).toBeGreaterThan(torogozConsumption);
+    expect(estimateFuelRange(42, 'primary', volcan)).toBeLessThan(
+      estimateFuelRange(42, 'primary', torogoz),
+    );
+    expect(
+      estimateFuelRange(
+        42,
+        'offroad',
+        coyote,
+        vehicleRuntimeFor('coyote-4x4').handling.offroadFuelMultiplier,
+      ),
+    ).toBeGreaterThan(
+      estimateFuelRange(
+        42,
+        'offroad',
+        volcan,
+        vehicleRuntimeFor('volcan-gt').handling.offroadFuelMultiplier,
+      ),
+    );
+    expect(
+      estimateFuelAtDestination(20_000, 42, { fuelMultiplier: 1 }, torogoz),
+    ).toBeGreaterThan(
+      estimateFuelAtDestination(20_000, 42, { fuelMultiplier: 1 }, volcan),
+    );
   });
 });

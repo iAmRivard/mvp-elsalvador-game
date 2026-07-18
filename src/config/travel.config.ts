@@ -47,7 +47,7 @@ export const vehicleHandlingConfig: VehicleHandlingConfig = {
   baseTurnRate: 90,
   minimumSteeringSpeed: 2.2,
   maximumSpeedTurnMultiplier: 0.48,
-  offroadSpeedMultiplier: 0.25,
+  offroadSpeedMultiplier: 0.6,
   offroadFuelMultiplier: 1.75,
 };
 

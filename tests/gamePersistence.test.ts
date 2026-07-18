@@ -69,6 +69,9 @@ const game: PersistedGameData = {
     fuel: 72,
     maximumFuel: 100,
   },
+  selectedVehicleId: 'torogoz',
+  selectedVehicleSkinId: 'torogoz-cyan',
+  unlockedVehicleIds: ['torogoz'],
   lastCheckpoint: {
     id: 'checkpoint-test',
     createdAt: '2026-07-13T00:00:00.000Z',
@@ -380,6 +383,55 @@ describe('guardado versionado', () => {
       expect(result.migrated).toBe(true);
       expect(result.save.version).toBe(GAME_SAVE_VERSION);
       expect(result.save.game.onboardingState).toBe('completed');
+    }
+  });
+
+  it.each([1, 2, 3, 4, 5])(
+    'migra una partida v%i al loadout v6 sin perder progreso',
+    (version) => {
+      const legacy = createGameSave(game) as unknown as {
+        version: number;
+        game: Record<string, unknown>;
+      };
+      legacy.version = version;
+      delete legacy.game.selectedVehicleId;
+      delete legacy.game.selectedVehicleSkinId;
+      delete legacy.game.unlockedVehicleIds;
+      const result = parseGameSave(JSON.stringify(legacy));
+
+      expect(result.status).toBe('loaded');
+      if (result.status === 'loaded') {
+        expect(result.migrated).toBe(true);
+        expect(result.save.version).toBe(6);
+        expect(result.save.game.selectedVehicleId).toBe('torogoz');
+        expect(result.save.game.selectedVehicleSkinId).toBe('torogoz-cyan');
+        expect(result.save.game.unlockedVehicleIds).toEqual([
+          'torogoz',
+          'volcan-gt',
+        ]);
+        expect(result.save.game.experience).toBe(game.experience);
+      }
+    },
+  );
+
+  it('sanea IDs desconocidos, selección bloqueada y skin incompatible', () => {
+    const unsafe = createGameSave(game) as unknown as {
+      version: number;
+      game: Record<string, unknown>;
+    };
+    unsafe.version = 6;
+    unsafe.game.completedMissionIds = [];
+    unsafe.game.unlockedVehicleIds = ['desconocido', 'torogoz', 'torogoz'];
+    unsafe.game.selectedVehicleId = 'coyote-4x4';
+    unsafe.game.selectedVehicleSkinId = 'volcan-crimson';
+    const result = parseGameSave(JSON.stringify(unsafe));
+
+    expect(result.status).toBe('loaded');
+    if (result.status === 'loaded') {
+      expect(result.migrated).toBe(false);
+      expect(result.save.game.unlockedVehicleIds).toEqual(['torogoz']);
+      expect(result.save.game.selectedVehicleId).toBe('torogoz');
+      expect(result.save.game.selectedVehicleSkinId).toBe('torogoz-cyan');
     }
   });
 

@@ -382,7 +382,7 @@ test('guía la historia hasta la ruta cronometrada y conserva la decisión', asy
     };
   }, saveKey);
   expect(persisted).toMatchObject({
-    version: 5,
+    version: 6,
     activeMissionId: 'camino-hacia-santa-ana',
     selectedRoute: 'north',
   });

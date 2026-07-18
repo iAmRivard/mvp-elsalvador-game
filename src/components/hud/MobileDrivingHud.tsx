@@ -31,6 +31,22 @@ function maneuverSymbol(type: NavigationInstructionType): string {
   }
 }
 
+type VitalState = 'healthy' | 'warning' | 'critical';
+
+function vitalStateFor(
+  value: number,
+  warningThreshold: number,
+  criticalThreshold: number,
+): VitalState {
+  if (value <= criticalThreshold) return 'critical';
+  if (value <= warningThreshold) return 'warning';
+  return 'healthy';
+}
+
+function vitalText(icon: string, value: number, state: VitalState): string {
+  return state === 'healthy' ? icon : `${icon} ${value.toFixed(0)}%`;
+}
+
 function readHudSnapshot() {
   const state = useGameStore.getState();
   return {
@@ -96,6 +112,8 @@ function MobileDrivingHudContent() {
           )
         : 'Sigue la ruta hacia el objetivo';
   const distance = route.distanceMeters ?? next?.distanceMeters ?? null;
+  const fuelState = vitalStateFor(telemetry.fuel, 35, 15);
+  const conditionState = vitalStateFor(vehicleCondition, 50, 25);
 
   return (
     <aside
@@ -127,14 +145,16 @@ function MobileDrivingHudContent() {
           {Math.abs(telemetry.speedKilometersPerHour).toFixed(0)} km/h
         </strong>
         <span
+          data-vital-state={fuelState}
           aria-label={`Combustible ${telemetry.fuel.toFixed(0)} por ciento`}
         >
-          ⛽ {telemetry.fuel.toFixed(0)}%
+          {vitalText('⛽', telemetry.fuel, fuelState)}
         </span>
         <span
+          data-vital-state={conditionState}
           aria-label={`Condición ${vehicleCondition.toFixed(0)} por ciento`}
         >
-          🔧 {vehicleCondition.toFixed(0)}%
+          {vitalText('🔧', vehicleCondition, conditionState)}
         </span>
         {countdown > 0 && <span>⏱ {Math.ceil(countdown)} s</span>}
       </div>

@@ -1,8 +1,12 @@
 import { useEffect } from 'react';
+import {
+  adaptiveMusicStateChanged,
+  vehicleAudioStateChanged,
+} from '../../audio/audioStoreChanges';
 import { gameAudio } from '../../audio/gameAudio';
 import { musicStateForGame } from '../../audio/musicState';
-import { travelConfig } from '../../config/travel.config';
 import { missionById } from '../../data/missions';
+import { vehicleDefinitionFor, vehicleRuntimeFor } from '../../data/vehicles';
 import { activeMissionTimer } from '../../game/missionTimer';
 import { useGameStore } from '../../store/gameStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -52,14 +56,19 @@ function updateAdaptiveMusic(): number | null {
 function updateVehicleAudio(input: InputController): void {
   const state = useGameStore.getState();
   const drivingInput = input.getDiagnostics();
+  const maximumBoostSpeed = vehicleRuntimeFor(state.selectedVehicleId).handling
+    .maximumBoostSpeed;
+  const audioProfileId = vehicleDefinitionFor(
+    state.selectedVehicleId,
+  ).audioProfileId;
   gameAudio.updateVehicle({
     normalizedSpeed:
-      Math.abs(state.telemetry.speedMetersPerSecond) /
-      travelConfig.boostMaximumSpeedMetersPerSecond,
+      Math.abs(state.telemetry.speedMetersPerSecond) / maximumBoostSpeed,
     accelerationIntent: drivingInput.throttle,
     boostActive: drivingInput.boost,
     surface: state.driving.surface,
     paused: state.isPaused,
+    profileId: audioProfileId,
   });
 }
 
@@ -77,8 +86,12 @@ export function GameAudioBridge({ input }: { input: InputController }) {
     const unsubscribeSettings = useSettingsStore.subscribe(configureAudio);
     const unsubscribeInput = input.subscribe(() => updateVehicleAudio(input));
     const unsubscribeGame = useGameStore.subscribe((state, previousState) => {
-      updateVehicleAudio(input);
-      const timerSecond = updateAdaptiveMusic();
+      if (vehicleAudioStateChanged(state, previousState)) {
+        updateVehicleAudio(input);
+      }
+      const timerSecond = adaptiveMusicStateChanged(state, previousState)
+        ? updateAdaptiveMusic()
+        : previousTimerSecond;
       if (
         state.activeMissionId &&
         state.activeMissionId !== previousState.activeMissionId

@@ -49,8 +49,8 @@ function diagnostics(values: Partial<InputDiagnostics> = {}): InputDiagnostics {
 describe('reglas de onboarding', () => {
   it('mapea los nueve pasos a estados persistibles', () => {
     expect(onboardingStepIds).toEqual([
-      'steer',
       'select-speed',
+      'steer',
       'coast',
       'brake',
       'route',
@@ -140,19 +140,36 @@ describe('reglas de onboarding', () => {
       requiresRejoin: false,
       surface: 'primary' as const,
       roadNetworkReady: true,
+      fallbackMode: false,
       distanceToRouteMeters: 24,
       maximumDistanceToRouteMeters: 24,
+      headingDifferenceDegrees: 0,
+      maximumHeadingDifferenceDegrees: 18,
       reversing: false,
     };
     expect(routeFollowingIsValid(valid)).toBe(true);
-    expect(routeFollowingIsValid({ ...valid, routeVisible: false })).toBe(false);
-    expect(routeFollowingIsValid({ ...valid, speedKilometersPerHour: 4.99 })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, routeVisible: false })).toBe(
+      false,
+    );
+    expect(
+      routeFollowingIsValid({ ...valid, speedKilometersPerHour: 4.99 }),
+    ).toBe(false);
     expect(routeFollowingIsValid({ ...valid, offRoute: true })).toBe(false);
-    expect(routeFollowingIsValid({ ...valid, requiresRejoin: true })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, requiresRejoin: true })).toBe(
+      false,
+    );
     expect(routeFollowingIsValid({ ...valid, surface: 'offroad' })).toBe(false);
-    expect(routeFollowingIsValid({ ...valid, roadNetworkReady: false })).toBe(false);
-    expect(routeFollowingIsValid({ ...valid, distanceToRouteMeters: 24.01 })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, roadNetworkReady: false })).toBe(
+      false,
+    );
+    expect(
+      routeFollowingIsValid({ ...valid, distanceToRouteMeters: 24.01 }),
+    ).toBe(false);
+    expect(
+      routeFollowingIsValid({ ...valid, headingDifferenceDegrees: 18.01 }),
+    ).toBe(false);
     expect(routeFollowingIsValid({ ...valid, reversing: true })).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, fallbackMode: true })).toBe(false);
   });
 
   it('reconoce solo el objetivo de misión por proximidad o visibilidad sostenida', () => {

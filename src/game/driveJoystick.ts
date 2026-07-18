@@ -29,6 +29,22 @@ export function driveJoystickOutput(
   };
 }
 
+export function arcadeDriveJoystickOutput(
+  normalizedX: number,
+  normalizedY: number,
+): DriveJoystickOutput {
+  return {
+    turn: applyResponseCurve(
+      applyDeadZone(normalizedX, driveJoystickConfig.horizontalDeadZone),
+      driveJoystickConfig.steeringExponent,
+    ),
+    verticalIntent: applyResponseCurve(
+      applyDeadZone(-normalizedY, driveJoystickConfig.verticalDeadZone),
+      driveJoystickConfig.throttleExponent,
+    ),
+  };
+}
+
 export function legacyDriveJoystickThrottle(normalizedY: number): number {
   const throttle = applyResponseCurve(
     applyDeadZone(-normalizedY, driveJoystickConfig.verticalDeadZone),

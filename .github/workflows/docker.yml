@@ -32,7 +32,7 @@ jobs:
         run: npm ci && npx playwright install --with-deps chromium
 
       - name: Construir imagen de prueba
-        run: docker build --tag rutas-perdidas:test .
+        run: docker build --build-arg BUILD_SHA="$GITHUB_SHA" --tag rutas-perdidas:test .
 
       - name: Iniciar contenedor
         run: docker run --detach --rm --name rutas-perdidas --publish 8080:80 rutas-perdidas:test
@@ -69,6 +69,15 @@ jobs:
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
         run: npm run test:e2e
+
+      - name: Conservar evidencia E2E fallida
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure
+          path: test-results
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Detener contenedor de prueba
         if: always()

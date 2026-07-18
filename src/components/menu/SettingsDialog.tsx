@@ -63,8 +63,13 @@ const mobileControlOptions: readonly {
   description: string;
 }[] = [
   {
+    value: 'arcade-driving',
+    label: 'Conducción Arcade',
+    description: 'Primer gesto arranca; soltar mantiene',
+  },
+  {
     value: 'target-speed-joystick',
-    label: 'Velocidad objetivo',
+    label: 'Control de crucero',
     description: 'Ajusta y mantiene la marcha',
   },
   {
@@ -79,7 +84,7 @@ const mobileControlOptions: readonly {
   },
   {
     value: 'joystick-pedals',
-    label: 'Joystick + pedales',
+    label: 'Joystick y pedales',
     description: 'Control manual',
   },
   {

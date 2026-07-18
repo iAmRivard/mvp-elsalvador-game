@@ -16,6 +16,7 @@ import {
   smoothFollowBearing,
   type FollowCameraOptions,
 } from '../src/game/followCamera';
+import { drivingPresentationThresholds } from '../src/game/drivingPresentation';
 
 const baseCamera: FollowCameraOptions = {
   center: [-89.19, 13.69],
@@ -41,7 +42,10 @@ describe('cámara de seguimiento', () => {
     expect(drivingCameraProfile('driving', true)).toBe(
       drivingCameraProfiles.mobileDriving,
     );
-    expect(drivingCameraProfiles.mobileFast.zoom).toBeGreaterThanOrEqual(15);
+    expect(drivingCameraProfiles.mobileDriving.zoom).toBe(15.55);
+    expect(drivingCameraProfiles.mobileDriving.pitch).toBe(58);
+    expect(drivingCameraProfiles.mobileFast.zoom).toBe(15.4);
+    expect(drivingCameraProfiles.mobileFast.pitch).toBe(59.5);
     expect(drivingCameraProfiles.mobileStopped.updateIntervalMilliseconds).toBe(
       33,
     );
@@ -51,6 +55,15 @@ describe('cámara de seguimiento', () => {
     expect(drivingCameraProfiles.mobileFast.updateIntervalMilliseconds).toBe(
       33,
     );
+    expect(
+      drivingCameraProfile('stopped', true, undefined, 'interaction'),
+    ).toBe(drivingCameraProfiles.mobileInteraction);
+    expect(drivingCameraProfile('driving', true, undefined, 'recovery')).toBe(
+      drivingCameraProfiles.mobileRecovery,
+    );
+    expect(drivingCameraProfiles.mobileStopped.safeAnchorYRatio).toBe(0.58);
+    expect(drivingCameraProfiles.mobileDriving.safeAnchorYRatio).toBe(0.62);
+    expect(drivingCameraProfiles.mobileFast.safeAnchorYRatio).toBe(0.6);
   });
 
   it('coloca el jugador debajo del centro mediante el ratio del perfil', () => {
@@ -246,9 +259,9 @@ describe('cámara de seguimiento', () => {
     expect(significant.appliedOptions?.bearing).toBe(1);
   });
 
-  it('mantiene driving ante picos cortos y entra a fast con velocidad sostenida', () => {
+  it('mantiene driving ante picos de crucero y entra a fast con velocidad sostenida', () => {
     const base = {
-      speedKilometersPerHour: 86,
+      speedKilometersPerHour: 64,
       previousMode: 'driving' as const,
       hasAlert: false,
       hasInteraction: false,
@@ -263,6 +276,7 @@ describe('cámara de seguimiento', () => {
     expect(
       mobileCameraModeForSpeed({
         ...base,
+        speedKilometersPerHour: 70,
         timeInStateMilliseconds:
           mobileCameraHysteresis.fastEnterDelayMilliseconds,
       }),
@@ -272,7 +286,7 @@ describe('cámara de seguimiento', () => {
   it('usa histéresis al volver de fast y no deja que alertas alteren el zoom', () => {
     expect(
       mobileCameraModeForSpeed({
-        speedKilometersPerHour: 76,
+        speedKilometersPerHour: 66,
         previousMode: 'fast',
         timeInStateMilliseconds: 10_000,
         hasAlert: true,
@@ -281,7 +295,7 @@ describe('cámara de seguimiento', () => {
     ).toBe('fast');
     expect(
       mobileCameraModeForSpeed({
-        speedKilometersPerHour: 73,
+        speedKilometersPerHour: 63,
         previousMode: 'fast',
         timeInStateMilliseconds:
           mobileCameraHysteresis.fastExitDelayMilliseconds - 1,
@@ -291,7 +305,7 @@ describe('cámara de seguimiento', () => {
     ).toBe('fast');
     expect(
       mobileCameraModeForSpeed({
-        speedKilometersPerHour: 73,
+        speedKilometersPerHour: 63,
         previousMode: 'fast',
         timeInStateMilliseconds:
           mobileCameraHysteresis.fastExitDelayMilliseconds,
@@ -299,6 +313,17 @@ describe('cámara de seguimiento', () => {
         hasInteraction: false,
       }),
     ).toBe('driving');
+  });
+
+  it('reserva el encuadre amplio para velocidades superiores al efecto visual r\u00e1pido', () => {
+    expect(mobileCameraHysteresis.fastEnterKilometersPerHour).toBe(70);
+    expect(mobileCameraHysteresis.fastExitKilometersPerHour).toBe(64);
+    expect(mobileCameraHysteresis.fastEnterKilometersPerHour).toBeGreaterThan(
+      drivingPresentationThresholds.fastEnterKilometersPerHour,
+    );
+    expect(mobileCameraHysteresis.fastExitKilometersPerHour).toBeGreaterThan(
+      drivingPresentationThresholds.fastExitKilometersPerHour,
+    );
   });
 
   it('mantiene una cámara cercana durante interacción lenta', () => {

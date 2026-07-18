@@ -38,7 +38,8 @@ export type CheckpointReason =
   | 'city'
   | 'fuel-station'
   | 'objective'
-  | 'chapter';
+  | 'chapter'
+  | 'rejoin';
 
 export interface StoryLogEntry {
   id: string;

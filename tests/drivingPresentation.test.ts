@@ -36,7 +36,7 @@ describe('presentación de conducción', () => {
     expect(
       deriveDrivingPresentationMode({
         ...baseInput,
-        speedKilometersPerHour: 57,
+        speedKilometersPerHour: 57.99,
         previousMode: 'driving',
         stoppedForMilliseconds: 0,
       }),
@@ -44,7 +44,15 @@ describe('presentación de conducción', () => {
     expect(
       deriveDrivingPresentationMode({
         ...baseInput,
-        speedKilometersPerHour: 59,
+        speedKilometersPerHour: 58,
+        previousMode: 'driving',
+        stoppedForMilliseconds: 0,
+      }),
+    ).toBe('fast');
+    expect(
+      deriveDrivingPresentationMode({
+        ...baseInput,
+        speedKilometersPerHour: 58.01,
         previousMode: 'driving',
         stoppedForMilliseconds: 0,
       }),
@@ -57,6 +65,14 @@ describe('presentación de conducción', () => {
         stoppedForMilliseconds: 0,
       }),
     ).toBe('fast');
+    expect(
+      deriveDrivingPresentationMode({
+        ...baseInput,
+        speedKilometersPerHour: 52,
+        previousMode: 'fast',
+        stoppedForMilliseconds: 0,
+      }),
+    ).toBe('driving');
   });
 
   it('espera 1.25 segundos antes de volver a detenido', () => {

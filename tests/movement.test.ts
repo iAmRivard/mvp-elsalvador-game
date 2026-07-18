@@ -11,6 +11,7 @@ import {
   stepPlayerDetailed,
 } from '../src/game/movement';
 import type { PlayerInput, PlayerRuntime } from '../src/types/game';
+import { vehicleRuntimeById } from '../src/data/vehicles';
 
 const player: PlayerRuntime = {
   longitude: -89.2182,
@@ -34,6 +35,56 @@ const travelAtScale = (geographicTravelScale: number) => ({
 });
 
 describe('movimiento geografico del jugador', () => {
+  it('aplica el agarre offroad real de cada vehículo sin superar el límite vial', () => {
+    const input = { ...idleInput, throttle: 1 as const };
+    const volcan = stepPlayerDetailed(player, input, 0.05, {
+      roadNetworkEnabled: true,
+      roadContact: null,
+      handling: vehicleRuntimeById.get('volcan-gt')!.handling,
+    });
+    const coyote = stepPlayerDetailed(player, input, 0.05, {
+      roadNetworkEnabled: true,
+      roadContact: null,
+      handling: vehicleRuntimeById.get('coyote-4x4')!.handling,
+    });
+
+    expect(volcan.environment.surface).toBe('offroad');
+    expect(coyote.environment.surface).toBe('offroad');
+    expect(coyote.environment.speedMultiplier).toBeGreaterThan(
+      volcan.environment.speedMultiplier,
+    );
+    expect(coyote.environment.speedMultiplier).toBeLessThanOrEqual(1);
+  });
+
+  it('aplica el consumo offroad del perfil de cada vehiculo', () => {
+    const movingPlayer = { ...player, speedMetersPerSecond: 10 };
+    const torogoz = vehicleRuntimeById.get('torogoz')!;
+    const volcan = vehicleRuntimeById.get('volcan-gt')!;
+    const coyote = vehicleRuntimeById.get('coyote-4x4')!;
+    const sharedHandling = torogoz.handling;
+    const sample = (offroadFuelMultiplier: number) =>
+      stepPlayerDetailed(movingPlayer, idleInput, 0.05, {
+        roadNetworkEnabled: true,
+        roadContact: null,
+        travel: travelAtScale(1),
+        fuel: fuelConsumptionConfig,
+        handling: { ...sharedHandling, offroadFuelMultiplier },
+      });
+
+    const volcanResult = sample(volcan.handling.offroadFuelMultiplier);
+    const torogozResult = sample(torogoz.handling.offroadFuelMultiplier);
+    const coyoteResult = sample(coyote.handling.offroadFuelMultiplier);
+
+    expect(volcanResult.environment.fuelMultiplier).toBeGreaterThan(
+      torogozResult.environment.fuelMultiplier,
+    );
+    expect(torogozResult.environment.fuelMultiplier).toBeGreaterThan(
+      coyoteResult.environment.fuelMultiplier,
+    );
+    expect(volcanResult.player.fuel).toBeLessThan(torogozResult.player.fuel);
+    expect(torogozResult.player.fuel).toBeLessThan(coyoteResult.player.fuel);
+  });
+
   it('normaliza el rumbo al intervalo de 0 a 360 grados', () => {
     expect(normalizeHeading(-10)).toBe(350);
     expect(normalizeHeading(370)).toBe(10);

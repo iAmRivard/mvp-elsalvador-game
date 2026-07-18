@@ -3,8 +3,8 @@ import type { OnboardingState } from '../types/onboarding';
 import type { RoadSurface } from '../types/roads';
 
 export const onboardingStepIds = [
-  'steer',
   'select-speed',
+  'steer',
   'coast',
   'brake',
   'route',
@@ -116,26 +116,40 @@ export interface RouteFollowingObservation {
   requiresRejoin: boolean;
   surface: RoadSurface;
   roadNetworkReady: boolean;
+  fallbackMode: boolean;
   distanceToRouteMeters: number | null;
   maximumDistanceToRouteMeters: number;
+  headingDifferenceDegrees: number | null;
+  maximumHeadingDifferenceDegrees: number;
   reversing: boolean;
 }
 
 export function routeFollowingIsValid(
   observation: RouteFollowingObservation,
 ): boolean {
-  return (
+  if (observation.fallbackMode) return false;
+  const movementIsValid =
     observation.routeVisible &&
     observation.speedKilometersPerHour >= 5 &&
     observation.forwardSpeedMetersPerSecond > 0 &&
-    !observation.offRoute &&
+    !observation.reversing;
+  const routePositionIsValid =
     !observation.requiresRejoin &&
-    observation.surface !== 'offroad' &&
-    observation.roadNetworkReady &&
     observation.distanceToRouteMeters !== null &&
     observation.distanceToRouteMeters <=
-      observation.maximumDistanceToRouteMeters &&
-    !observation.reversing
+      observation.maximumDistanceToRouteMeters;
+  const routeHeadingIsValid =
+    observation.headingDifferenceDegrees !== null &&
+    Number.isFinite(observation.headingDifferenceDegrees) &&
+    Math.abs(observation.headingDifferenceDegrees) <=
+      observation.maximumHeadingDifferenceDegrees;
+  return (
+    movementIsValid &&
+    !observation.offRoute &&
+    routePositionIsValid &&
+    routeHeadingIsValid &&
+    observation.surface !== 'offroad' &&
+    observation.roadNetworkReady
   );
 }
 

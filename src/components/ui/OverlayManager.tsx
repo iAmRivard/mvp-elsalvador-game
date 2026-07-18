@@ -27,6 +27,7 @@ interface OverlayManagerProps {
   input?: InputController;
   showTutorial?: boolean;
   showContextualAdvice?: boolean;
+  suppressContextualAdvice?: boolean;
   onTutorialComplete?: () => void;
   onTutorialSkip?: () => void;
 }
@@ -42,6 +43,7 @@ export function OverlayManager({
   input,
   showTutorial = false,
   showContextualAdvice = false,
+  suppressContextualAdvice = false,
   onTutorialComplete = () => undefined,
   onTutorialSkip = () => undefined,
 }: OverlayManagerProps) {
@@ -71,12 +73,12 @@ export function OverlayManager({
     setRadioPresentation({ eventId: radioId, mode: 'expanded' });
   }
   const storedRadioMode =
-    radioPresentation.eventId === radioId
-      ? radioPresentation.mode
+    radioPresentation.eventId === radioId ? radioPresentation.mode : 'expanded';
+  const radioDisplayMode: RadioDisplayMode = isJournalOpen
+    ? 'compact'
+    : mobileRadioViewport
+      ? storedRadioMode
       : 'expanded';
-  const radioDisplayMode: RadioDisplayMode = mobileRadioViewport
-    ? storedRadioMode
-    : 'expanded';
 
   const setCurrentRadioMode = useCallback(
     (mode: RadioDisplayMode) => {
@@ -104,9 +106,10 @@ export function OverlayManager({
     presentationMode === 'stopped' || presentationMode === 'interaction';
   const radioExpansionBlocked = Boolean(
     narrativeId ||
-      recoveryReason ||
-      missionChoiceId ||
-      (showTutorial && input),
+    recoveryReason ||
+    missionChoiceId ||
+    isJournalOpen ||
+    (showTutorial && input),
   );
   const compactRadio = useCallback(
     () => setCurrentRadioMode('compact'),
@@ -157,24 +160,25 @@ export function OverlayManager({
     candidates.push({
       id: `radio:${radioId}`,
       kind: 'radio',
-      priority:
-        radioDisplayMode === 'expanded' ? 'radio' : 'compact-radio',
+      priority: radioDisplayMode === 'expanded' ? 'radio' : 'compact-radio',
       large: radioDisplayMode === 'expanded',
       sequence: 4,
     });
   }
   const hasLargeBlocker = candidates.some((candidate) => candidate.large);
+  const contextualAdviceEnabled =
+    showContextualAdvice &&
+    !suppressContextualAdvice &&
+    !hasLargeBlocker &&
+    !isJournalOpen &&
+    Boolean(input);
   const adviceController = useContextualAdviceController({
-    enabled:
-      showContextualAdvice &&
-      !hasLargeBlocker &&
-      !isJournalOpen &&
-      Boolean(input),
+    enabled: contextualAdviceEnabled,
     input: input ?? null,
     journalHasNewContent: journalAdvicePending,
     onJournalAdviceHandled: handleJournalAdvice,
   });
-  if (adviceController.advice) {
+  if (contextualAdviceEnabled && adviceController.advice) {
     candidates.push({
       id: `contextual-advice:${adviceController.advice.id}`,
       kind: 'contextual-advice',
@@ -251,18 +255,21 @@ export function OverlayManager({
           ? 'true'
           : 'false'
       }
-      data-radio-expansion-blocked={
-        radioExpansionBlocked ? 'true' : 'false'
+      data-radio-expansion-blocked={radioExpansionBlocked ? 'true' : 'false'}
+      data-contextual-advice-suppressed={
+        suppressContextualAdvice ? 'true' : 'false'
       }
     >
       {renderLargeOverlay(activeKind)}
-      {contextualAdviceCompact && adviceController.advice && (
-        <ContextualAdviceOverlay
-          advice={adviceController.advice}
-          onDismiss={adviceController.dismiss}
-          onOpenJournal={adviceController.openJournal}
-        />
-      )}
+      {contextualAdviceEnabled &&
+        contextualAdviceCompact &&
+        adviceController.advice && (
+          <ContextualAdviceOverlay
+            advice={adviceController.advice}
+            onDismiss={adviceController.dismiss}
+            onOpenJournal={adviceController.openJournal}
+          />
+        )}
       {radioCompact && (
         <RadioMessageOverlay
           displayMode="compact"

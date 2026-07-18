@@ -122,11 +122,14 @@ function movingPresentation(
     return 'stopped';
   }
 
-  const fastThreshold =
-    previousMode === 'fast'
-      ? drivingPresentationThresholds.fastExitKilometersPerHour
-      : drivingPresentationThresholds.fastEnterKilometersPerHour;
-  return speed > fastThreshold ? 'fast' : 'driving';
+  if (previousMode === 'fast') {
+    return speed > drivingPresentationThresholds.fastExitKilometersPerHour
+      ? 'fast'
+      : 'driving';
+  }
+  return speed >= drivingPresentationThresholds.fastEnterKilometersPerHour
+    ? 'fast'
+    : 'driving';
 }
 
 export function derivePresentationFromState(

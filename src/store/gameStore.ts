@@ -4,6 +4,14 @@ import { fuelStationById } from '../data/fuelStations';
 import { initiallyUnlockedLocationIds, locationById } from '../data/locations';
 import { missionById } from '../data/missions';
 import {
+  initialVehicleId,
+  isVehicleId,
+  unlockedVehicleIdsFor,
+  validVehicleSkinId,
+  vehicleDefinitionFor,
+} from '../data/vehicles';
+import { restrictedAreaTypeAt } from '../data/restrictedAreas';
+import {
   CHAPTER_ONE_ID,
   chapterRoadClosureEdgeIds,
   isChapterOneFinalMission,
@@ -45,6 +53,12 @@ import {
 import { distanceBetweenMeters } from '../game/discovery';
 import { isFuelStationAvailable } from '../game/fuelStations';
 import {
+  routeRejoinCandidatesNear,
+  routeRejoinEligibilityFor,
+  type RouteRejoinCandidate,
+  type RouteRejoinEligibility,
+} from '../game/routeRejoin';
+import {
   addInventoryItem as addItemToInventory,
   consumeInventoryItem as consumeItemFromInventory,
 } from '../game/inventory';
@@ -55,7 +69,8 @@ import {
 } from '../game/progression';
 import type { PlayerStepEnvironment } from '../game/movement';
 import type { PlayerRuntime, PlayerTelemetry } from '../types/game';
-import type { OnboardingState } from '../types/onboarding';
+import { alignedRoadHeading } from '../roads/initialRoadPosition';
+import { onboardingIsActive, type OnboardingState } from '../types/onboarding';
 import type {
   ActiveNavigationState,
   NavigationTarget,
@@ -72,6 +87,7 @@ import type {
   StoryLogEntry,
   VehicleState,
 } from '../types/progression';
+import type { VehicleId } from '../types/vehicles';
 import {
   browserGameStorage,
   clearGameSave,
@@ -114,6 +130,12 @@ export type SaveMessage =
 
 export type RoadNetworkStatus = 'loading' | 'ready' | 'unavailable';
 
+export interface DrivingWearSample {
+  vehicleDistanceMeters: number;
+  surface: RoadSurface;
+  blockedImpact: boolean;
+}
+
 interface DrivingRuntimeState extends PlayerStepEnvironment {
   roadNetworkStatus: RoadNetworkStatus;
 }
@@ -133,6 +155,7 @@ export interface MissionRouteRuntimeState {
   activeNavigation: ActiveNavigationState | null;
   orientation: VehicleOrientation;
   recalculationRevision: number;
+  visualReady: boolean;
 }
 
 interface GameData {
@@ -160,6 +183,9 @@ interface GameData {
   unlockedStoryIds: string[];
   inventory: InventoryEntry[];
   vehicle: VehicleState;
+  selectedVehicleId: VehicleId;
+  selectedVehicleSkinId: string;
+  unlockedVehicleIds: VehicleId[];
   lastCheckpoint: CheckpointSnapshot;
   lastSafeCheckpoint: CheckpointSnapshot;
   currentChapterId: string;
@@ -198,10 +224,17 @@ interface GameStore extends GameData {
   addInventoryItem: (itemId: string, quantity?: number) => void;
   consumeInventoryItem: (itemId: string, quantity?: number) => boolean;
   repairVehicle: (amount: number) => void;
+  unlockVehicle: (vehicleId: string) => boolean;
+  selectVehicle: (vehicleId: string, skinId?: string) => boolean;
+  selectVehicleSkin: (skinId: string) => boolean;
   applyDrivingWear: (
     vehicleDistanceMeters: number,
     surface: RoadSurface,
     blockedImpact: boolean,
+    conditionMultiplier?: number,
+  ) => void;
+  applyDrivingWearSamples: (
+    samples: readonly DrivingWearSample[],
     conditionMultiplier?: number,
   ) => void;
   alignInitialPlayerToRoad: (
@@ -209,6 +242,9 @@ interface GameStore extends GameData {
     heading: number,
     distanceMeters: number,
   ) => boolean;
+  acceptCurrentPlayerRoadPosition: () => void;
+  getRouteRejoinEligibility: () => RouteRejoinEligibility;
+  rejoinPlayerToRoad: (edgeId: number) => boolean;
   createCheckpoint: (reason: CheckpointReason, safe?: boolean) => void;
   retryFromCheckpoint: () => boolean;
   recoverAtLastSafeCheckpoint: (abandonMission?: boolean) => boolean;
@@ -217,12 +253,16 @@ interface GameStore extends GameData {
   setMissionRoute: (
     route: Omit<
       MissionRouteRuntimeState,
-      'recalculationRevision' | 'activeNavigation' | 'orientation'
+      | 'recalculationRevision'
+      | 'activeNavigation'
+      | 'orientation'
+      | 'visualReady'
     > &
       Partial<
         Pick<MissionRouteRuntimeState, 'activeNavigation' | 'orientation'>
       >,
   ) => void;
+  setMissionRouteVisualReady: (ready: boolean) => void;
   setMissionNavigation: (
     navigation: Pick<
       MissionRouteRuntimeState,
@@ -279,6 +319,58 @@ interface GameStore extends GameData {
   resetGame: () => void;
   dismissSaveMessage: () => void;
   dismissConditionWarning: () => void;
+}
+
+function drivingWearDamageFor(
+  samples: readonly DrivingWearSample[],
+  conditionMultiplier: number,
+): number {
+  let damage = 0;
+  for (const sample of samples) {
+    const distanceDamage =
+      Math.max(0, sample.vehicleDistanceMeters) *
+      (sample.surface === 'offroad'
+        ? vehicleStateConfig.offroadConditionPerVehicleMeter
+        : sample.surface === 'track'
+          ? vehicleStateConfig.trackConditionPerVehicleMeter
+          : sample.surface === 'dirt-road'
+            ? vehicleStateConfig.trackConditionPerVehicleMeter *
+              roadConditionMultipliers[sample.surface]
+            : 0);
+    damage +=
+      distanceDamage +
+      (sample.blockedImpact ? vehicleStateConfig.blockedImpactCondition : 0);
+  }
+  return damage * Math.max(0.1, conditionMultiplier);
+}
+
+function drivingWearStateFor(
+  state: GameStore,
+  samples: readonly DrivingWearSample[],
+  conditionMultiplier: number,
+): GameStore | Partial<GameStore> {
+  if (state.driving.roadNetworkStatus !== 'ready') return state;
+  const damage = drivingWearDamageFor(samples, conditionMultiplier);
+  if (damage <= 0) return state;
+  const condition = Math.max(0, state.vehicle.condition - damage);
+  const nextWarning = conditionWarningForTransition(
+    state.vehicle.condition,
+    condition,
+  );
+  const shouldShowWarning =
+    nextWarning !== null && !state.conditionWarningsShown.includes(nextWarning);
+  return {
+    vehicle: { ...state.vehicle, condition },
+    conditionWarning: shouldShowWarning ? nextWarning : state.conditionWarning,
+    conditionWarningsShown: shouldShowWarning
+      ? [...state.conditionWarningsShown, nextWarning]
+      : state.conditionWarningsShown,
+    recoveryReason:
+      condition <= 0
+        ? (state.recoveryReason ?? 'condition')
+        : state.recoveryReason,
+    isPaused: condition <= 0 ? true : state.isPaused,
+  };
 }
 
 const presentationController = new DrivingPresentationController();
@@ -376,6 +468,7 @@ function narrativeState(
     activeRadioEventId: null,
     storyLogEntries,
     isPaused: true,
+    isJournalOpen: false,
   };
 }
 
@@ -451,6 +544,63 @@ function checkpointFromState(
   };
 }
 
+function insideExplicitOffroadObjective(
+  state: Pick<
+    GameStore,
+    'activeMissionId' | 'activeMissionCompletedObjectiveIds'
+  >,
+  position: RoadCoordinates,
+): boolean {
+  const mission = state.activeMissionId
+    ? missionById.get(state.activeMissionId)
+    : null;
+  if (!mission) return false;
+  const completed = new Set(state.activeMissionCompletedObjectiveIds);
+  return mission.objectives.some((objective) => {
+    if (
+      !objective.explicitlyOffroad ||
+      completed.has(objective.id) ||
+      !objectiveIsAvailable(objective, completed)
+    ) {
+      return false;
+    }
+    const coordinates = objectiveCoordinates(objective);
+    return (
+      coordinates !== null &&
+      distanceBetweenMeters(position, coordinates) <= objective.radiusMeters
+    );
+  });
+}
+
+function routeRejoinEligibilityFromState(
+  state: GameStore,
+  candidates: readonly RouteRejoinCandidate[],
+): RouteRejoinEligibility {
+  const origin: RoadCoordinates = [
+    state.telemetry.longitude,
+    state.telemetry.latitude,
+  ];
+  return routeRejoinEligibilityFor({
+    gameActive: state.onboardingState !== 'not-started',
+    roadNetworkReady: state.driving.roadNetworkStatus === 'ready',
+    surface: state.driving.surface,
+    speedKilometersPerHour: state.telemetry.speedKilometersPerHour,
+    paused: state.isPaused,
+    journalOpen: state.isJournalOpen,
+    recoveryActive: state.recoveryReason !== null,
+    narrativeActive: state.activeNarrativeEventId !== null,
+    choiceActive: state.activeMissionChoiceObjectiveId !== null,
+    originRestricted: restrictedAreaTypeAt(origin) !== null,
+    insideExplicitOffroadObjective: insideExplicitOffroadObjective(
+      state,
+      origin,
+    ),
+    routeStatus: state.missionRoute.status,
+    temporarilyClosedEdgeIds: state.temporarilyClosedRoadEdgeIds,
+    candidates,
+  });
+}
+
 function defaultGameData(): GameData {
   const telemetry = telemetryFromPlayer(INITIAL_PLAYER);
   const vehicle: VehicleState = {
@@ -498,6 +648,9 @@ function defaultGameData(): GameData {
     unlockedStoryIds: [],
     inventory: [],
     vehicle,
+    selectedVehicleId: initialVehicleId,
+    selectedVehicleSkinId: vehicleDefinitionFor(initialVehicleId).defaultSkinId,
+    unlockedVehicleIds: [initialVehicleId],
     lastCheckpoint: checkpoint,
     lastSafeCheckpoint: checkpoint,
     currentChapterId: 'chapter-1',
@@ -577,6 +730,9 @@ function gameDataFromPersistence(game: PersistedGameData): GameData {
     unlockedStoryIds: [...game.unlockedStoryIds],
     inventory: game.inventory.map((entry) => ({ ...entry })),
     vehicle: { ...game.vehicle },
+    selectedVehicleId: game.selectedVehicleId,
+    selectedVehicleSkinId: game.selectedVehicleSkinId,
+    unlockedVehicleIds: [...game.unlockedVehicleIds],
     lastCheckpoint: structuredClone(game.lastCheckpoint),
     lastSafeCheckpoint: structuredClone(game.lastSafeCheckpoint),
     currentChapterId: game.currentChapterId,
@@ -616,6 +772,9 @@ function persistableGame(state: GameData): PersistedGameData {
     unlockedStoryIds: [...state.unlockedStoryIds],
     inventory: state.inventory.map((entry) => ({ ...entry })),
     vehicle: { ...state.vehicle, fuel: state.telemetry.fuel },
+    selectedVehicleId: state.selectedVehicleId,
+    selectedVehicleSkinId: state.selectedVehicleSkinId,
+    unlockedVehicleIds: [...state.unlockedVehicleIds],
     lastCheckpoint: structuredClone(state.lastCheckpoint),
     lastSafeCheckpoint: structuredClone(state.lastSafeCheckpoint),
     currentChapterId: state.currentChapterId,
@@ -675,6 +834,7 @@ const defaultMissionRouteState: MissionRouteRuntimeState = {
     headingDifference: null,
   },
   recalculationRevision: 0,
+  visualReady: false,
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -775,46 +935,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     blockedImpact,
     conditionMultiplier = 1,
   ) =>
-    set((state) => {
-      if (state.driving.roadNetworkStatus !== 'ready') return state;
-      const distanceDamage =
-        Math.max(0, vehicleDistanceMeters) *
-        (surface === 'offroad'
-          ? vehicleStateConfig.offroadConditionPerVehicleMeter
-          : surface === 'track'
-            ? vehicleStateConfig.trackConditionPerVehicleMeter
-            : surface === 'dirt-road'
-              ? vehicleStateConfig.trackConditionPerVehicleMeter *
-                roadConditionMultipliers[surface]
-              : 0) *
-        Math.max(0.1, conditionMultiplier);
-      const damage =
-        distanceDamage +
-        (blockedImpact ? vehicleStateConfig.blockedImpactCondition : 0);
-      if (damage <= 0) return state;
-      const condition = Math.max(0, state.vehicle.condition - damage);
-      const nextWarning = conditionWarningForTransition(
-        state.vehicle.condition,
-        condition,
-      );
-      const shouldShowWarning =
-        nextWarning !== null &&
-        !state.conditionWarningsShown.includes(nextWarning);
-      return {
-        vehicle: { ...state.vehicle, condition },
-        conditionWarning: shouldShowWarning
-          ? nextWarning
-          : state.conditionWarning,
-        conditionWarningsShown: shouldShowWarning
-          ? [...state.conditionWarningsShown, nextWarning]
-          : state.conditionWarningsShown,
-        recoveryReason:
-          condition <= 0
-            ? (state.recoveryReason ?? 'condition')
-            : state.recoveryReason,
-        isPaused: condition <= 0 ? true : state.isPaused,
-      };
-    }),
+    set((state) =>
+      drivingWearStateFor(
+        state,
+        [{ vehicleDistanceMeters, surface, blockedImpact }],
+        conditionMultiplier,
+      ),
+    ),
+  applyDrivingWearSamples: (samples, conditionMultiplier = 1) =>
+    set((state) => drivingWearStateFor(state, samples, conditionMultiplier)),
   alignInitialPlayerToRoad: (coordinates, heading, distanceMeters) => {
     let aligned = false;
     set((state) => {
@@ -850,6 +979,74 @@ export const useGameStore = create<GameStore>((set, get) => ({
       };
     });
     return aligned;
+  },
+  acceptCurrentPlayerRoadPosition: () =>
+    set((state) =>
+      state.needsInitialRoadAlignment
+        ? { needsInitialRoadAlignment: false }
+        : state,
+    ),
+  getRouteRejoinEligibility: () => {
+    const state = get();
+    const position: RoadCoordinates = [
+      state.telemetry.longitude,
+      state.telemetry.latitude,
+    ];
+    const preliminary = routeRejoinEligibilityFromState(state, []);
+    if (preliminary.blockedBy !== 'no-road') return preliminary;
+    return routeRejoinEligibilityFromState(
+      state,
+      routeRejoinCandidatesNear(position),
+    );
+  },
+  rejoinPlayerToRoad: (edgeId) => {
+    let rejoined = false;
+    set((state) => {
+      const origin: RoadCoordinates = [
+        state.telemetry.longitude,
+        state.telemetry.latitude,
+      ];
+      const eligibility = routeRejoinEligibilityFromState(
+        state,
+        routeRejoinCandidatesNear(origin),
+      );
+      if (!eligibility.eligible || eligibility.candidate.edgeId !== edgeId) {
+        return state;
+      }
+
+      const telemetry = telemetryFromPlayer({
+        ...state.telemetry,
+        longitude: eligibility.candidate.coordinates[0],
+        latitude: eligibility.candidate.coordinates[1],
+        heading: alignedRoadHeading(
+          state.telemetry.heading,
+          eligibility.candidate.heading,
+          eligibility.candidate.oneWay,
+        ),
+        speedMetersPerSecond: 0,
+      });
+      const checkpoint = checkpointFromState({ ...state, telemetry }, 'rejoin');
+      rejoined = true;
+      return {
+        telemetry,
+        lastCheckpoint: checkpoint,
+        lastSafeCheckpoint: checkpoint,
+        isFollowingPlayer: true,
+        playerRuntimeRevision: state.playerRuntimeRevision + 1,
+        missionRoute: {
+          ...state.missionRoute,
+          recalculationRevision: state.missionRoute.recalculationRevision + 1,
+          visualReady: false,
+        },
+        gameplayFeedback: feedback(
+          state,
+          'Vehículo reincorporado a la ruta',
+          'success',
+        ),
+      };
+    });
+    if (rejoined) get().saveGame(true);
+    return rejoined;
   },
   createCheckpoint: (reason, safe = false) =>
     set((state) => {
@@ -994,8 +1191,58 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeNavigation: route.activeNavigation ?? null,
         orientation: route.orientation ?? state.missionRoute.orientation,
         recalculationRevision: state.missionRoute.recalculationRevision,
+        visualReady: false,
       },
     })),
+  unlockVehicle: (vehicleId) => {
+    if (!isVehicleId(vehicleId)) return false;
+    set((state) =>
+      state.unlockedVehicleIds.includes(vehicleId)
+        ? state
+        : {
+            unlockedVehicleIds: unlockedVehicleIdsFor(
+              state.completedMissionIds,
+              [...state.unlockedVehicleIds, vehicleId],
+            ),
+          },
+    );
+    get().saveGame(true);
+    return true;
+  },
+  selectVehicle: (vehicleId, skinId) => {
+    const state = get();
+    if (
+      !isVehicleId(vehicleId) ||
+      !state.unlockedVehicleIds.includes(vehicleId)
+    ) {
+      return false;
+    }
+    const vehicle = vehicleDefinitionFor(vehicleId);
+    const selectedVehicleSkinId = validVehicleSkinId(vehicleId, skinId)
+      ? skinId!
+      : state.selectedVehicleId === vehicleId &&
+          validVehicleSkinId(vehicleId, state.selectedVehicleSkinId)
+        ? state.selectedVehicleSkinId
+        : vehicle.defaultSkinId;
+    set({ selectedVehicleId: vehicleId, selectedVehicleSkinId });
+    get().saveGame(true);
+    return true;
+  },
+  selectVehicleSkin: (skinId) => {
+    const state = get();
+    if (!validVehicleSkinId(state.selectedVehicleId, skinId)) return false;
+    set({ selectedVehicleSkinId: skinId });
+    get().saveGame(true);
+    return true;
+  },
+  setMissionRouteVisualReady: (visualReady) =>
+    set((state) =>
+      state.missionRoute.visualReady === visualReady
+        ? state
+        : {
+            missionRoute: { ...state.missionRoute, visualReady },
+          },
+    ),
   setMissionNavigation: (navigation) =>
     set((state) => {
       if (
@@ -1456,6 +1703,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         : null;
       if (!mission) return state;
       if (state.isPaused) return state;
+      if (isInteracting && onboardingIsActive(state.onboardingState)) {
+        return state;
+      }
 
       const completedObjectiveIds = new Set(
         state.activeMissionCompletedObjectiveIds,
@@ -1608,8 +1858,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
           mission.id,
           progress.newlyCompletedObjectiveIds,
         );
-        const objectiveFeedback =
-          progress.effects.fuelRestored > 0
+        const narrativeReward = narrativeEventId
+          ? narrativeEventById.get(narrativeEventId)?.reward
+          : undefined;
+        const objectiveFeedback = narrativeReward
+          ? `${narrativeReward.label} en la bitácora`
+          : progress.effects.fuelRestored > 0
             ? `Combustible +${progress.effects.fuelRestored.toFixed(0)}%`
             : progress.effects.conditionRestored > 0
               ? `Condición +${progress.effects.conditionRestored.toFixed(0)}%`
@@ -1653,7 +1907,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
           gameplayFeedback: feedback(
             state,
             objectiveFeedback,
-            completedChoice || progress.effects.addItems.length > 0
+            narrativeReward ||
+              completedChoice ||
+              progress.effects.addItems.length > 0
               ? 'success'
               : 'info',
           ),
@@ -1693,6 +1949,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
       completion = { missionId: mission.id, fuelReward: rewards.fuel };
       const chapterCompleted = isChapterOneFinalMission(mission.id);
+      const completedMissionIds = appendUnique(state.completedMissionIds, [
+        mission.id,
+      ]);
+      const unlockedVehicleIds = unlockedVehicleIdsFor(
+        completedMissionIds,
+        state.unlockedVehicleIds,
+      );
+      const newlyUnlockedVehicle = unlockedVehicleIds.find(
+        (vehicleId) => !state.unlockedVehicleIds.includes(vehicleId),
+      );
       const activeNarrativeEventId = missionCompletionNarrativeEventId(
         mission.id,
       );
@@ -1725,9 +1991,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeMissionId: null,
         activeMissionCompletedObjectiveIds: [],
         activeMissionObjectiveProgress: {},
-        completedMissionIds: appendUnique(state.completedMissionIds, [
-          mission.id,
-        ]),
+        completedMissionIds,
         lastCompletedMissionId: mission.id,
         experience,
         level,
@@ -1749,6 +2013,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           state.unlockedLocationIds,
           rewards.unlockedLocationIds,
         ),
+        unlockedVehicleIds,
         specialItemIds: appendUnique(state.specialItemIds, rewards.itemIds),
         unlockedStoryIds: appendUnique(
           state.unlockedStoryIds,
@@ -1772,7 +2037,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 `Consecuencia de ruta: condición -${String(routeConditionCost)}%`,
                 routeConditionCost >= 8 ? 'warning' : 'info',
               )
-            : state.gameplayFeedback,
+            : newlyUnlockedVehicle
+              ? feedback(
+                  state,
+                  `Vehículo desbloqueado: ${vehicleDefinitionFor(newlyUnlockedVehicle).name}`,
+                  'success',
+                )
+              : state.gameplayFeedback,
         ...narrativeState(
           { storyLogEntries, isPaused: state.isPaused },
           activeNarrativeEventId,
@@ -1858,14 +2129,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     })),
   setOnboardingState: (onboardingState) => set({ onboardingState }),
   openJournal: (journalSection = 'history') =>
-    set((state) => ({
-      isJournalOpen: true,
-      journalSection,
-      storyLogRequest: {
-        section: journalSection,
-        revision: state.storyLogRequest.revision + 1,
-      },
-    })),
+    set((state) =>
+      state.recoveryReason ||
+      state.activeNarrativeEventId ||
+      state.activeMissionChoiceObjectiveId
+        ? state
+        : {
+            isJournalOpen: true,
+            journalSection,
+            storyLogRequest: {
+              section: journalSection,
+              revision: state.storyLogRequest.revision + 1,
+            },
+          },
+    ),
   closeJournal: () => set({ isJournalOpen: false }),
   setInsideValidObjectiveZone: (insideValidObjectiveZone) =>
     set((state) =>
@@ -1883,14 +2160,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
           },
     ),
   requestStoryLog: (section = 'history') =>
-    set((state) => ({
-      isJournalOpen: true,
-      journalSection: section,
-      storyLogRequest: {
-        section,
-        revision: state.storyLogRequest.revision + 1,
-      },
-    })),
+    set((state) =>
+      state.recoveryReason ||
+      state.activeNarrativeEventId ||
+      state.activeMissionChoiceObjectiveId
+        ? state
+        : {
+            isJournalOpen: true,
+            journalSection: section,
+            storyLogRequest: {
+              section,
+              revision: state.storyLogRequest.revision + 1,
+            },
+          },
+    ),
   dismissGameplayFeedback: () => set({ gameplayFeedback: null }),
   dismissLevelUp: () => set({ lastLevelUp: null }),
   saveGame: (silent = false) => {

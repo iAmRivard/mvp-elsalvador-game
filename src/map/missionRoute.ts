@@ -36,6 +36,16 @@ import { useGameStore } from '../store/gameStore';
 import type { RoadCoordinates } from '../types/roads';
 import type { RouteNavigationInstruction } from '../types/navigation';
 import { createTrailingUpdateScheduler } from './trailingUpdateScheduler';
+import {
+  createNavigationGuidanceElement,
+  navigationGuidanceOffsetForPlayerSeparation,
+} from './navigationGuidanceMarker';
+import {
+  boundedRetryDelayMilliseconds,
+  initialBoundedRetryState,
+  scheduleBoundedRetry,
+  settleBoundedRetry,
+} from './boundedRetry';
 
 const ROUTE_SOURCE_ID = 'active-mission-route';
 const ROAD_CASING_LAYER_ID = 'active-mission-route-casing';
@@ -47,14 +57,14 @@ const REJOIN_LAYER_ID = 'active-mission-route-rejoin-line';
 const IMMEDIATE_SOURCE_ID = 'active-mission-route-immediate';
 const IMMEDIATE_LAYER_ID = 'active-mission-route-immediate-line';
 const IMMEDIATE_CHEVRON_LAYER_ID = 'active-mission-route-immediate-chevrons';
-const NAVIGATION_ARROW_LOOKAHEAD_METERS = 42;
+const NAVIGATION_ARROW_LOOKAHEAD_METERS = 90;
 const TARGETS_SOURCE_ID = 'active-mission-targets';
 const TARGETS_LAYER_ID = 'active-mission-targets-circles';
 
 export function routeOriginMovedBeyondTolerance(
   origin: RoadCoordinates,
   currentPosition: RoadCoordinates,
-  toleranceMeters = routingConfig.routeRejoinDistanceMeters,
+  toleranceMeters: number = routingConfig.routeRejoinDistanceMeters,
 ): boolean {
   return distanceBetweenMeters(origin, currentPosition) > toleranceMeters;
 }
@@ -287,6 +297,46 @@ function fallbackDurationSeconds(distanceMeters: number): number {
   );
 }
 
+export function directFallbackNavigationProgress(
+  position: RoadCoordinates,
+  destination: RoadCoordinates,
+  physicalHeading: number,
+) {
+  const coordinates: RoadCoordinates[] = [position, destination];
+  const instructions = generateNavigationInstructions(coordinates);
+  const progress = navigationProgress(
+    position,
+    coordinates,
+    instructions,
+    physicalHeading,
+    0,
+  );
+  const distanceMeters = distanceBetweenMeters(position, destination);
+  const nextInstruction =
+    distanceMeters <= routingConfig.routeRejoinDistanceMeters
+      ? (instructions.at(-1) ?? null)
+      : (instructions[0] ?? null);
+  return {
+    ...progress,
+    nextInstruction,
+    distanceToNextInstructionMeters: distanceMeters,
+    distanceToRouteMeters: 0,
+    offRoute: false,
+    rejoinCoordinates: [],
+    activeNavigation: progress.activeNavigation
+      ? {
+          ...progress.activeNavigation,
+          maneuverType:
+            nextInstruction?.type ?? progress.activeNavigation.maneuverType,
+          maneuverCoordinates: destination,
+          distanceToManeuverMeters: distanceMeters,
+          distanceToRouteMeters: 0,
+          requiresRejoin: false,
+        }
+      : null,
+  };
+}
+
 export function addMissionRoute(
   map: MapLibreMap,
   minimumUpdateIntervalMilliseconds = 100,
@@ -411,16 +461,7 @@ export function addMissionRoute(
     },
   });
 
-  const maneuverMarkerElement = document.createElement('div');
-  maneuverMarkerElement.className =
-    'mission-route-arrow navigation-guidance-arrow';
-  maneuverMarkerElement.setAttribute('role', 'img');
-  maneuverMarkerElement.setAttribute(
-    'aria-label',
-    'Dirección recomendada de la ruta',
-  );
-  maneuverMarkerElement.textContent = '⌃';
-  maneuverMarkerElement.hidden = true;
+  const maneuverMarkerElement = createNavigationGuidanceElement();
   const maneuverMarker = new Marker({
     element: maneuverMarkerElement,
     anchor: 'center',
@@ -460,6 +501,8 @@ export function addMissionRoute(
   let lastKnownSegmentIndex: number | null = null;
   let lastDeviationCheck = 0;
   let lastCalculationAt = 0;
+  let fallbackRoadRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  let fallbackRoadRetryState = initialBoundedRetryState();
   const routeSource = () => map.getSource<GeoJSONSource>(ROUTE_SOURCE_ID);
   const immediateSource = () =>
     map.getSource<GeoJSONSource>(IMMEDIATE_SOURCE_ID);
@@ -536,6 +579,9 @@ export function addMissionRoute(
     const container = map.getContainer();
     container.dataset.missionRouteMode = mode ?? 'idle';
     container.dataset.missionRouteCoordinateCount = String(coordinateCount);
+    useGameStore
+      .getState()
+      .setMissionRouteVisualReady(mode !== null && coordinateCount >= 2);
   };
   const updateNavigation = (
     position: RoadCoordinates,
@@ -544,7 +590,7 @@ export function addMissionRoute(
     mapContainer.dataset.navigationLastPositionLongitude = String(position[0]);
     mapContainer.dataset.navigationLastPositionLatitude = String(position[1]);
     if (
-      routeMode !== 'road' ||
+      routeMode === null ||
       routeCoordinates.length < 2 ||
       routeInstructions.length === 0
     ) {
@@ -553,6 +599,21 @@ export function addMissionRoute(
       mapContainer.dataset.navigationRejoinStartLongitude = '';
       mapContainer.dataset.navigationRejoinStartLatitude = '';
       maneuverMarkerElement.hidden = true;
+      mapContainer.dataset.navigationReversing = String(
+        vehicleIsReversing(
+          useGameStore.getState().telemetry.speedMetersPerSecond,
+        ),
+      );
+      mapContainer.dataset.navigationOffRoute = 'false';
+      mapContainer.dataset.navigationRequiresRejoin = 'false';
+      mapContainer.dataset.navigationRouteSegment = '';
+      mapContainer.dataset.navigationRecommendedHeading = '';
+      mapContainer.dataset.navigationPhysicalHeading =
+        physicalHeading.toFixed(1);
+      mapContainer.dataset.navigationHeadingDifference = '';
+      mapContainer.dataset.navigationDistanceToRoute = '';
+      mapContainer.dataset.navigationNextType = '';
+      mapContainer.dataset.navigationNextDistance = '0';
       useGameStore.getState().setMissionNavigation({
         nextInstruction: null,
         distanceToNextInstructionMeters: null,
@@ -562,13 +623,22 @@ export function addMissionRoute(
       });
       return;
     }
-    const progress = navigationProgress(
-      position,
-      routeCoordinates,
-      routeInstructions,
-      physicalHeading,
-      lastKnownSegmentIndex,
-    );
+    // Fallback is direct bearing guidance, not a road corridor. Keep its
+    // GeoJSON stable and update only the in-memory navigation projection.
+    const progress =
+      routeMode === 'fallback'
+        ? directFallbackNavigationProgress(
+            position,
+            routeCoordinates.at(-1)!,
+            physicalHeading,
+          )
+        : navigationProgress(
+            position,
+            routeCoordinates,
+            routeInstructions,
+            physicalHeading,
+            lastKnownSegmentIndex,
+          );
     const gameState = useGameStore.getState();
     const reversing = vehicleIsReversing(
       gameState.telemetry.speedMetersPerSecond,
@@ -579,7 +649,9 @@ export function addMissionRoute(
       immediateSource,
       immediateSourceSnapshot,
       'immediate',
-      reversing ? [] : progress.immediateCoordinates,
+      reversing || routeMode === 'fallback'
+        ? []
+        : progress.immediateCoordinates,
     );
     setLineSourceData(
       rejoinSource,
@@ -605,10 +677,16 @@ export function addMissionRoute(
       activeNavigation: progress.activeNavigation,
       orientation,
     });
+    const arrowPosition = navigationArrowPosition(
+      progress.immediateCoordinates,
+      0,
+      NAVIGATION_ARROW_LOOKAHEAD_METERS,
+    );
     if (
       reversing ||
       !progress.activeNavigation ||
-      orientation.headingDifference === null
+      orientation.headingDifference === null ||
+      !arrowPosition
     ) {
       maneuverMarkerElement.hidden = true;
       const container = map.getContainer();
@@ -616,24 +694,25 @@ export function addMissionRoute(
       container.dataset.navigationArrowLatitude = '';
       container.dataset.navigationArrowFallback = '';
     } else {
-      const arrowPosition = navigationArrowPosition(
-        progress.immediateCoordinates,
-        0,
-        NAVIGATION_ARROW_LOOKAHEAD_METERS,
+      const guidanceOffset = navigationGuidanceOffsetForPlayerSeparation(
+        map.project(position),
+        map.project(arrowPosition),
       );
       maneuverMarker
-        .setLngLat(arrowPosition ?? position)
-        .setOffset(arrowPosition ? [0, 0] : [0, -40])
+        .setLngLat(arrowPosition)
+        .setOffset(guidanceOffset)
         .setRotation(progress.activeNavigation.recommendedHeading);
       maneuverMarkerElement.hidden = false;
       const container = map.getContainer();
       container.dataset.navigationArrowLongitude = String(
-        (arrowPosition ?? position)[0],
+        arrowPosition[0],
       );
       container.dataset.navigationArrowLatitude = String(
-        (arrowPosition ?? position)[1],
+        arrowPosition[1],
       );
-      container.dataset.navigationArrowFallback = String(!arrowPosition);
+      container.dataset.navigationArrowFallback = String(
+        routeMode === 'fallback',
+      );
     }
     const container = map.getContainer();
     container.dataset.navigationReversing = String(reversing);
@@ -647,6 +726,10 @@ export function addMissionRoute(
     container.dataset.navigationRecommendedHeading =
       progress.activeNavigation?.recommendedHeading.toFixed(1) ?? '';
     container.dataset.navigationPhysicalHeading = physicalHeading.toFixed(1);
+    container.dataset.navigationHeadingDifference =
+      orientation.headingDifference?.toFixed(1) ?? '';
+    container.dataset.navigationDistanceToRoute =
+      progress.activeNavigation?.distanceToRouteMeters.toFixed(1) ?? '';
     container.dataset.navigationNextType = progress.nextInstruction?.type ?? '';
     container.dataset.navigationNextDistance = String(
       Math.round(progress.distanceToNextInstructionMeters ?? 0),
@@ -669,6 +752,8 @@ export function addMissionRoute(
     setLineSourceData(immediateSource, immediateSourceSnapshot, 'empty', []);
     setLineSourceData(rejoinSource, rejoinSourceSnapshot, 'empty', []);
     maneuverMarkerElement.hidden = true;
+    mapContainer.dataset.navigationHeadingDifference = '';
+    mapContainer.dataset.navigationDistanceToRoute = '';
     exposeRoute(null, 0);
     useGameStore.getState().setMissionRoute({
       status: 'idle',
@@ -688,9 +773,61 @@ export function addMissionRoute(
     });
   };
 
+  const cancelFallbackRoadRetry = () => {
+    if (fallbackRoadRetryTimer !== null) {
+      clearTimeout(fallbackRoadRetryTimer);
+      fallbackRoadRetryTimer = null;
+    }
+    fallbackRoadRetryState = settleBoundedRetry(fallbackRoadRetryState);
+  };
+
+  const resetFallbackRoadRetry = (resolved = false) => {
+    const attempts = fallbackRoadRetryState.attempts;
+    cancelFallbackRoadRetry();
+    fallbackRoadRetryState = initialBoundedRetryState();
+    mapContainer.dataset.routeFallbackRoadRetryAttempts = '0';
+    mapContainer.dataset.routeFallbackRoadResolvedAttempts = resolved
+      ? String(attempts)
+      : '0';
+  };
+
+  const scheduleFallbackRoadRetry = () => {
+    if (
+      disposed ||
+      useGameStore.getState().driving.roadNetworkStatus !== 'ready'
+    ) {
+      return;
+    }
+    const scheduled = scheduleBoundedRetry(
+      fallbackRoadRetryState,
+      routingConfig.fallbackRoadMaximumRetryAttempts,
+    );
+    if (!scheduled) return;
+    fallbackRoadRetryState = scheduled.state;
+    mapContainer.dataset.routeFallbackRoadRetryAttempts = String(
+      scheduled.attempt,
+    );
+    fallbackRoadRetryTimer = setTimeout(() => {
+      fallbackRoadRetryTimer = null;
+      fallbackRoadRetryState = settleBoundedRetry(fallbackRoadRetryState);
+      if (
+        disposed ||
+        routeMode !== 'fallback' ||
+        useGameStore.getState().driving.roadNetworkStatus !== 'ready'
+      ) {
+        return;
+      }
+      void calculateRoute();
+    }, boundedRetryDelayMilliseconds(
+      routingConfig.fallbackRoadRetryDelayMilliseconds,
+      scheduled.attempt,
+    ));
+  };
+
   const calculateRoute = async (): Promise<void> => {
     const target = currentMissionTarget();
     if (!target) {
+      resetFallbackRoadRetry();
       clearRoute();
       return;
     }
@@ -737,14 +874,17 @@ export function addMissionRoute(
       exposeRoute(null, 0);
     }
 
-    const route = await localRoutingService
-      .getRoute({
-        origin: target.playerCoordinates,
-        destination: target.coordinates,
-        temporarilyClosedEdgeIds:
-          useGameStore.getState().temporarilyClosedRoadEdgeIds,
-      })
-      .catch(() => null);
+    const route =
+      useGameStore.getState().driving.roadNetworkStatus === 'unavailable'
+        ? null
+        : await localRoutingService
+            .getRoute({
+              origin: target.playerCoordinates,
+              destination: target.coordinates,
+              temporarilyClosedEdgeIds:
+                useGameStore.getState().temporarilyClosedRoadEdgeIds,
+            })
+            .catch(() => null);
     map.getContainer().dataset.routeCalculationMs = (
       performance.now() - calculationStartedAt
     ).toFixed(2);
@@ -785,6 +925,7 @@ export function addMissionRoute(
     }
 
     if (route) {
+      resetFallbackRoadRetry(true);
       routeCoordinates = route.coordinates;
       routeInstructions = generateNavigationInstructions(route.coordinates);
       routeMode = 'road';
@@ -875,7 +1016,11 @@ export function addMissionRoute(
       latestTarget.state.telemetry.heading,
     );
     mapContainer.dataset.routeRecalculating = String(originMoved);
-    if (originMoved) void calculateRoute();
+    if (useGameStore.getState().driving.roadNetworkStatus === 'ready') {
+      scheduleFallbackRoadRetry();
+    } else {
+      resetFallbackRoadRetry();
+    }
   };
 
   updateTargets(map);
@@ -887,6 +1032,7 @@ export function addMissionRoute(
   const unsubscribe = useGameStore.subscribe((state, previousState) => {
     const nextTargetKey = targetKey();
     if (nextTargetKey !== activeTargetKey) {
+      resetFallbackRoadRetry();
       activeTargetKey = nextTargetKey;
       previousRecalculationRevision = state.missionRoute.recalculationRevision;
       previousClosedEdges = state.temporarilyClosedRoadEdgeIds;
@@ -899,6 +1045,7 @@ export function addMissionRoute(
         previousRecalculationRevision ||
       state.temporarilyClosedRoadEdgeIds !== previousClosedEdges
     ) {
+      resetFallbackRoadRetry();
       previousRecalculationRevision = state.missionRoute.recalculationRevision;
       previousClosedEdges = state.temporarilyClosedRoadEdgeIds;
       void calculateRoute();
@@ -935,6 +1082,7 @@ export function addMissionRoute(
   return () => {
     disposed = true;
     calculationToken += 1;
+    cancelFallbackRoadRetry();
     navigationUpdates.cancel();
     unsubscribe();
     maneuverMarker.remove();
@@ -962,5 +1110,7 @@ export function addMissionRoute(
     delete mapContainer.dataset.missionRouteFuelColor;
     delete mapContainer.dataset.navigationTargetKind;
     delete mapContainer.dataset.navigationTargetId;
+    delete mapContainer.dataset.navigationHeadingDifference;
+    delete mapContainer.dataset.navigationDistanceToRoute;
   };
 }

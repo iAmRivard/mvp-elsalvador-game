@@ -99,9 +99,21 @@ describe('arranque recuperable del mapa', () => {
     ).toMatchObject({ severity: 'degraded', reason: 'auxiliary-layer' });
   });
 
-  it('no ignora errores desconocidos', () => {
+  it('tolera un error desconocido transitorio durante el arranque', () => {
+    const transientStartupFailure = classifyMapRuntimeError(
+      new Error('error desconocido'),
+      primaryContext,
+    );
+    expect(transientStartupFailure).toMatchObject({
+      severity: 'degraded',
+      reason: 'unknown-during-startup',
+    });
+    expect(mapRuntimeErrorStopsGameplay(transientStartupFailure)).toBe(false);
     expect(
-      classifyMapRuntimeError(new Error('error desconocido'), primaryContext),
+      classifyMapRuntimeError(new Error('error desconocido persistente'), {
+        ...primaryContext,
+        persistent: true,
+      }),
     ).toMatchObject({
       severity: 'fatal',
       reason: 'unknown-during-startup',

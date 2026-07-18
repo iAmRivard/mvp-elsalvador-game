@@ -53,12 +53,18 @@ export interface InputLatencyDiagnostics {
   eventToStoredMilliseconds: number | null;
   eventToNextAnimationFrameMilliseconds: number | null;
   inputConsumptionLatencyMilliseconds: number | null;
+  inputToFirstPositionMilliseconds: number | null;
+  inputToFirstVisualMilliseconds: number | null;
+  consumptionToFirstPositionMilliseconds: number | null;
+  consumptionToFirstVisualMilliseconds: number | null;
 }
 
 export interface MobileBoostAvailability {
   fuel: number;
   condition: number;
 }
+
+export type MobileCruiseMode = 'off' | 'target-speed' | 'arcade';
 
 const keyActions: Readonly<Record<string, InputAction>> = {
   KeyW: 'forward',
@@ -100,6 +106,8 @@ export class InputController {
   };
   private autoThrottleScale = 1;
   private mobileCruiseEnabled = false;
+  private mobileCruiseMode: MobileCruiseMode = 'off';
+  private arcadeTargetJustLatched = false;
   private overlaySuspended = false;
   private mobileCruiseVerticalIntent = 0;
   private mobileCruiseThrottle = 0;
@@ -127,6 +135,8 @@ export class InputController {
     storedTimestamp: number;
     animationFrameTimestamp: number | null;
     consumedTimestamp: number | null;
+    firstPositionTimestamp: number | null;
+    firstVisualTimestamp: number | null;
   } | null = null;
 
   bindKeyboard(
@@ -197,6 +207,14 @@ export class InputController {
   }
 
   recordInputStored(eventTimestamp: number): number {
+    if (
+      this.inputLatencySample &&
+      (this.inputLatencySample.consumedTimestamp === null ||
+        (this.inputLatencySample.firstPositionTimestamp !== null &&
+          this.inputLatencySample.firstVisualTimestamp === null))
+    ) {
+      return this.inputLatencySample.sequence;
+    }
     const storedTimestamp = performance.now();
     const normalizedEventTimestamp =
       Number.isFinite(eventTimestamp) &&
@@ -210,6 +228,8 @@ export class InputController {
       storedTimestamp,
       animationFrameTimestamp: null,
       consumedTimestamp: null,
+      firstPositionTimestamp: null,
+      firstVisualTimestamp: null,
     };
     return sequence;
   }
@@ -234,6 +254,28 @@ export class InputController {
     this.inputLatencySample.consumedTimestamp = timestamp;
   }
 
+  markInputPositionChanged(timestamp: number): void {
+    if (
+      !this.inputLatencySample ||
+      this.inputLatencySample.consumedTimestamp === null ||
+      this.inputLatencySample.firstPositionTimestamp !== null
+    ) {
+      return;
+    }
+    this.inputLatencySample.firstPositionTimestamp = timestamp;
+  }
+
+  markInputVisualFrame(timestamp: number): void {
+    if (
+      !this.inputLatencySample ||
+      this.inputLatencySample.firstPositionTimestamp === null ||
+      this.inputLatencySample.firstVisualTimestamp !== null
+    ) {
+      return;
+    }
+    this.inputLatencySample.firstVisualTimestamp = timestamp;
+  }
+
   getInputLatencyDiagnostics(): InputLatencyDiagnostics {
     const sample = this.inputLatencySample;
     if (!sample) {
@@ -242,6 +284,10 @@ export class InputController {
         eventToStoredMilliseconds: null,
         eventToNextAnimationFrameMilliseconds: null,
         inputConsumptionLatencyMilliseconds: null,
+        inputToFirstPositionMilliseconds: null,
+        inputToFirstVisualMilliseconds: null,
+        consumptionToFirstPositionMilliseconds: null,
+        consumptionToFirstVisualMilliseconds: null,
       };
     }
     return {
@@ -261,6 +307,29 @@ export class InputController {
         sample.consumedTimestamp === null
           ? null
           : Math.max(0, sample.consumedTimestamp - sample.eventTimestamp),
+      inputToFirstPositionMilliseconds:
+        sample.firstPositionTimestamp === null
+          ? null
+          : Math.max(0, sample.firstPositionTimestamp - sample.eventTimestamp),
+      inputToFirstVisualMilliseconds:
+        sample.firstVisualTimestamp === null
+          ? null
+          : Math.max(0, sample.firstVisualTimestamp - sample.eventTimestamp),
+      consumptionToFirstPositionMilliseconds:
+        sample.consumedTimestamp === null ||
+        sample.firstPositionTimestamp === null
+          ? null
+          : Math.max(
+              0,
+              sample.firstPositionTimestamp - sample.consumedTimestamp,
+            ),
+      consumptionToFirstVisualMilliseconds:
+        sample.consumedTimestamp === null || sample.firstVisualTimestamp === null
+          ? null
+          : Math.max(
+              0,
+              sample.firstVisualTimestamp - sample.consumedTimestamp,
+            ),
     };
   }
 
@@ -335,24 +404,48 @@ export class InputController {
   }
 
   setMobileCruiseEnabled(enabled: boolean): void {
-    if (this.mobileCruiseEnabled === enabled) return;
-    this.mobileCruiseEnabled = enabled;
+    this.setMobileCruiseMode(enabled ? 'target-speed' : 'off');
+  }
+
+  setMobileCruiseMode(mode: MobileCruiseMode): void {
+    if (this.mobileCruiseMode === mode) return;
+    this.mobileCruiseMode = mode;
+    this.mobileCruiseEnabled = mode !== 'off';
     this.joystickThrottle = 0;
     this.mobileCruiseVerticalIntent = 0;
     this.mobileCruiseThrottle = 0;
     this.reverseIntentMilliseconds = 0;
     this.mobileReverseState = 'forward';
+    this.arcadeTargetJustLatched = false;
     this.mobileCruiseTarget = { ...stoppedMobileCruiseTarget };
-    if (enabled) this.disableAutoThrottle();
+    if (mode !== 'off') this.disableAutoThrottle();
     this.notify();
   }
 
   setTargetSpeedJoystick(verticalIntent: number, turn: number): void {
     const nextIntent = clampAnalogInput(verticalIntent);
     const nextTurn = clampAnalogInput(turn);
+    const shouldLatchArcadeTarget =
+      this.mobileCruiseMode === 'arcade' &&
+      this.mobileReverseState === 'forward' &&
+      nextIntent > mobileCruiseConfig.reverseReleaseDeadZone &&
+      this.mobileCruiseTarget.targetSpeedKilometersPerHour <= 0.5;
+    if (shouldLatchArcadeTarget) {
+      const targetSpeedKilometersPerHour =
+        mobileCruiseConfig.arcadeInitialTargetSpeedKilometersPerHour;
+      this.mobileCruiseTarget = {
+        targetSpeedKilometersPerHour,
+        selectedGear: mobileCruiseGear(targetSpeedKilometersPerHour),
+        braking: false,
+        reversing: false,
+        reverseState: 'forward',
+      };
+      this.arcadeTargetJustLatched = true;
+    }
     if (
       this.mobileCruiseVerticalIntent === nextIntent &&
-      this.joystickTurn === nextTurn
+      this.joystickTurn === nextTurn &&
+      !shouldLatchArcadeTarget
     ) {
       return;
     }
@@ -377,13 +470,17 @@ export class InputController {
       0,
       Number.isFinite(deltaTimeSeconds) ? deltaTimeSeconds : 0,
     );
+    const preserveArcadeLatch = this.arcadeTargetJustLatched && intent > 0;
+    this.arcadeTargetJustLatched = false;
     let targetSpeedKilometersPerHour = previous.reversing
       ? 0
-      : updateCruiseTarget(
-          previous.targetSpeedKilometersPerHour,
-          intent,
-          deltaTime,
-        );
+      : preserveArcadeLatch
+        ? previous.targetSpeedKilometersPerHour
+        : updateCruiseTarget(
+            previous.targetSpeedKilometersPerHour,
+            intent,
+            deltaTime,
+          );
     const stopped =
       Math.abs(currentSpeedMetersPerSecond) <=
       mobileCruiseConfig.stoppedSpeedMetersPerSecond;
@@ -497,6 +594,24 @@ export class InputController {
 
   getMobileCruiseTarget(): MobileCruiseTarget {
     return this.mobileCruiseTarget;
+  }
+
+  retryArcadeAcceleration(): void {
+    const targetSpeedKilometersPerHour = Math.max(
+      this.mobileCruiseTarget.targetSpeedKilometersPerHour,
+      mobileCruiseConfig.arcadeInitialTargetSpeedKilometersPerHour,
+    );
+    this.mobileReverseState = 'forward';
+    this.reverseIntentMilliseconds = 0;
+    this.mobileCruiseVerticalIntent = 0;
+    this.mobileCruiseTarget = {
+      targetSpeedKilometersPerHour,
+      selectedGear: mobileCruiseGear(targetSpeedKilometersPerHour),
+      braking: false,
+      reversing: false,
+      reverseState: 'forward',
+    };
+    this.notify();
   }
 
   setAutoThrottle(enabled: boolean, targetThrottle = 0.72): void {
@@ -624,6 +739,7 @@ export class InputController {
     this.mobileCruiseVerticalIntent = 0;
     this.reverseIntentMilliseconds = 0;
     this.mobileReverseState = 'forward';
+    this.arcadeTargetJustLatched = false;
     this.mobileCruiseTarget = {
       ...this.mobileCruiseTarget,
       braking: false,
@@ -662,6 +778,7 @@ export class InputController {
     this.mobileCruiseTarget = { ...stoppedMobileCruiseTarget };
     this.reverseIntentMilliseconds = 0;
     this.mobileReverseState = 'forward';
+    this.arcadeTargetJustLatched = false;
     this.lastNotifiedCruiseTarget = 0;
     this.autoThrottle = { ...this.autoThrottle, enabled: false };
     this.autoThrottleScale = 1;
@@ -722,6 +839,7 @@ export class InputController {
     this.mobileCruiseVerticalIntent = 0;
     this.mobileCruiseThrottle = 0;
     this.mobileReverseState = 'forward';
+    this.arcadeTargetJustLatched = false;
     this.reverseIntentMilliseconds = 0;
     this.mobileCruiseTarget = preserveCruiseTarget
       ? {

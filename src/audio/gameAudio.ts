@@ -7,6 +7,7 @@ import {
   type MusicTrackId,
 } from '../config/audio.config';
 import type { RoadSurface } from '../types/roads';
+import type { VehicleAudioProfileId } from '../types/vehicles';
 
 export interface AudioSettings {
   masterVolume: number;
@@ -23,6 +24,7 @@ export interface DrivingAudioState {
   boostActive: boolean;
   surface: RoadSurface;
   paused: boolean;
+  profileId: VehicleAudioProfileId;
 }
 
 export interface AdaptiveMusicState {
@@ -48,6 +50,51 @@ const musicTrackIds = Object.keys(musicTrackUrls) as MusicTrackId[];
 
 function clampedRatio(value: number): number {
   return Math.min(1, Math.max(0, value));
+}
+
+const vehicleAudioProfiles: Readonly<
+  Record<
+    VehicleAudioProfileId,
+    {
+      enginePitchBase: number;
+      enginePitchRange: number;
+      rollingGainMultiplier: number;
+      offroadGainMultiplier: number;
+    }
+  >
+> = {
+  'expedition-balanced': {
+    enginePitchBase: 0.75,
+    enginePitchRange: 0.85,
+    rollingGainMultiplier: 1,
+    offroadGainMultiplier: 1,
+  },
+  'expedition-sport': {
+    enginePitchBase: 0.82,
+    enginePitchRange: 0.92,
+    rollingGainMultiplier: 0.95,
+    offroadGainMultiplier: 0.8,
+  },
+  'expedition-offroad': {
+    enginePitchBase: 0.68,
+    enginePitchRange: 0.72,
+    rollingGainMultiplier: 1.05,
+    offroadGainMultiplier: 1.25,
+  },
+};
+
+export function vehicleAudioMixFor(
+  profileId: VehicleAudioProfileId,
+  normalizedSpeed: number,
+) {
+  const profile = vehicleAudioProfiles[profileId];
+  const speed = clampedRatio(normalizedSpeed);
+  return {
+    enginePlaybackRate:
+      profile.enginePitchBase + speed * profile.enginePitchRange,
+    rollingGainMultiplier: profile.rollingGainMultiplier,
+    offroadGainMultiplier: profile.offroadGainMultiplier,
+  } as const;
 }
 
 export function adaptiveMusicGainMultiplier(
@@ -88,6 +135,7 @@ class LocalGameAudio {
     boostActive: false,
     surface: 'primary',
     paused: true,
+    profileId: 'expedition-balanced',
   };
   private music: AdaptiveMusicState = {
     state: 'silent',
@@ -124,6 +172,7 @@ class LocalGameAudio {
       boostActive: next.boostActive,
       surface: next.surface,
       paused: next.paused,
+      profileId: next.profileId,
     };
     if (this.vehicle.boostActive && !previous.boostActive) {
       this.play('turbo');
@@ -297,6 +346,7 @@ class LocalGameAudio {
     const context = this.context;
     if (!context) return;
     const speed = this.vehicle.normalizedSpeed;
+    const vehicleMix = vehicleAudioMixFor(this.vehicle.profileId, speed);
     const active = this.vehicle.paused ? 0 : 1;
     const acceleration = Math.max(0, this.vehicle.accelerationIntent);
     const wind = Math.max(
@@ -319,10 +369,18 @@ class LocalGameAudio {
         audioConfig.engineDriveMaximumGain *
         speed *
         (0.45 + acceleration * 0.55),
-      rolling: active * audioConfig.rollingMaximumGain * speed,
+      rolling:
+        active *
+        audioConfig.rollingMaximumGain *
+        speed *
+        vehicleMix.rollingGainMultiplier,
       wind: active * audioConfig.windMaximumGain * wind,
       offroad:
-        active * audioConfig.offroadMaximumGain * speed * offroadMultiplier,
+        active *
+        audioConfig.offroadMaximumGain *
+        speed *
+        offroadMultiplier *
+        vehicleMix.offroadGainMultiplier,
     };
     for (const cue of vehicleLoopCues) {
       this.vehicleLoops
@@ -336,7 +394,7 @@ class LocalGameAudio {
     this.vehicleLoops
       .get('engineDrive')
       ?.source.playbackRate.setTargetAtTime(
-        0.75 + speed * 0.85,
+        vehicleMix.enginePlaybackRate,
         context.currentTime,
         audioConfig.parameterSmoothingSeconds,
       );

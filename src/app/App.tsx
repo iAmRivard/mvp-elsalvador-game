@@ -4,6 +4,7 @@ import { GameActions } from '../components/hud/GameActions';
 import { FuelAssist } from '../components/hud/FuelAssist';
 import { GameplayToast } from '../components/hud/GameplayToast';
 import { GameAudioBridge } from '../components/audio/GameAudioBridge';
+import { StuckVehicleAssist } from '../components/game/StuckVehicleAssist';
 import { CurrentRegion } from '../components/hud/CurrentRegion';
 import { LevelUpToast } from '../components/hud/LevelUpToast';
 import { MissionPanel } from '../components/hud/MissionPanel';
@@ -30,6 +31,8 @@ const GameMap = lazy(async () => {
 
 export function App() {
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [stuckVehicleAssistVisible, setStuckVehicleAssistVisible] =
+    useState(false);
   const [inputController] = useState(() => new InputController());
   const hasSavedGame = useGameStore((state) => state.hasSavedGame);
   const isPaused = useGameStore((state) => state.isPaused);
@@ -89,6 +92,7 @@ export function App() {
             enterGame(false);
           }}
         />
+        <RecommendedControlsPrompt />
         <ServiceWorkerUpdatePrompt deferUpdate={Boolean(activeMissionId)} />
       </main>
     );
@@ -149,10 +153,16 @@ export function App() {
           showContextualAdvice={
             onboardingState === 'completed' || onboardingState === 'skipped'
           }
+          suppressContextualAdvice={stuckVehicleAssistVisible}
           allowDiscovery={!showTutorial}
-          allowStory={!isJournalOpen}
+          allowStory
           onTutorialComplete={() => setPaused(false)}
           onTutorialSkip={() => setPaused(false)}
+        />
+        <StuckVehicleAssist
+          input={inputController}
+          enabled={!showTutorial && onboardingState !== 'introducing'}
+          onVisibilityChange={setStuckVehicleAssistVisible}
         />
         <LevelUpToast />
         {diagnosticsEnabled && <DiagnosticsPanel input={inputController} />}
@@ -171,7 +181,6 @@ export function App() {
             }}
           />
         )}
-      <RecommendedControlsPrompt />
       <ServiceWorkerUpdatePrompt deferUpdate={Boolean(activeMissionId)} />
     </main>
   );

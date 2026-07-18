@@ -1,4 +1,5 @@
 export type MobileControlMode =
+  | 'arcade-driving'
   | 'single-drive-joystick'
   | 'target-speed-joystick'
   | 'joystick-auto-throttle'
@@ -42,7 +43,7 @@ export const virtualJoystickConfig: VirtualJoystickConfig = {
 };
 
 export const defaultMobileControlsSettings: MobileControlsSettings = {
-  controlMode: 'target-speed-joystick',
+  controlMode: 'arcade-driving',
   joystickPositionMode: 'fixed',
   joystickSize: 'medium',
   joystickDeadZone: 0.12,
@@ -76,6 +77,7 @@ export const mobileCruiseConfig = {
   boostRecoveryMilliseconds: 1_000,
   boostRecoveryMaximumBrake: 0.18,
   diagnosticsUpdateIntervalMilliseconds: 100,
+  arcadeInitialTargetSpeedKilometersPerHour: 25,
 } as const;
 
 export const mobileBoostConfig = {

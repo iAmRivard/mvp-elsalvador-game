@@ -82,6 +82,7 @@ export function startPlayerGameLoop(
       );
       const input = options.input.snapshot();
       options.input.markInputConsumed(performance.now());
+      const previousPlayer = player;
       const result = stepPlayerDetailed(
         player,
         input,
@@ -89,6 +90,12 @@ export function startPlayerGameLoop(
         options.getMovementOptions?.(),
       );
       player = result.player;
+      if (
+        player.longitude !== previousPlayer.longitude ||
+        player.latitude !== previousPlayer.latitude
+      ) {
+        options.input.markInputPositionChanged(performance.now());
+      }
       environment = result.environment;
       pendingSamples.push(
         ...result.samples.map((sample) => ({ ...sample, input })),
