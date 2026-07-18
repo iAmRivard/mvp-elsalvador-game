@@ -81,8 +81,8 @@ export const drivingCameraProfiles: DrivingCameraProfiles = {
     transitionDurationMilliseconds: 50,
   },
   mobileFast: {
-    zoom: 15.2,
-    pitch: 61,
+    zoom: 15.42,
+    pitch: 59.25,
     offsetYRatio: 0.26,
     safeAnchorYRatio: 0.6,
     updateIntervalMilliseconds: 33,

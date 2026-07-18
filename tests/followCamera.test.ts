@@ -63,6 +63,16 @@ describe('cámara de seguimiento', () => {
     expect(drivingCameraProfiles.mobileFast.safeAnchorYRatio).toBe(0.6);
   });
 
+  it('limita el área extra del perfil rápido en móviles', () => {
+    const driving = drivingCameraProfiles.mobileDriving;
+    const fast = drivingCameraProfiles.mobileFast;
+
+    expect(fast.zoom).toBeLessThan(driving.zoom);
+    expect(driving.zoom - fast.zoom).toBeLessThanOrEqual(0.03);
+    expect(fast.pitch).toBeGreaterThanOrEqual(driving.pitch);
+    expect(fast.pitch - driving.pitch).toBeLessThanOrEqual(0.25);
+  });
+
   it('coloca el jugador debajo del centro mediante el ratio del perfil', () => {
     expect(followCameraOffset(1440, 900, 0.21)).toEqual([0, 189]);
     expect(followCameraOffset(390, 844, 0.24)).toEqual([0, 203]);
