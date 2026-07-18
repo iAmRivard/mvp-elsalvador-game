@@ -26,6 +26,52 @@ describe('velocidad objetivo móvil', () => {
     expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(25);
   });
 
+  it('el primer gesto lateral arcade arranca sin inventar intención vertical', () => {
+    const input = new InputController();
+    input.setMobileCruiseMode('arcade');
+
+    input.setTargetSpeedJoystick(0, 0.35, true);
+
+    expect(input.getMobileCruiseTarget()).toMatchObject({
+      targetSpeedKilometersPerHour: 25,
+      reversing: false,
+      reverseState: 'forward',
+    });
+    input.advanceMobileCruise(0, 1 / 60);
+    expect(input.snapshot().turn).toBe(0.35);
+    expect(input.snapshot().throttle).toBeGreaterThan(0);
+  });
+
+  it('saliendo de reverse-armed con gesto lateral lateral en arcade vuelve a avanzar', () => {
+    const input = new InputController();
+    input.setMobileCruiseMode('arcade');
+    input.setTargetSpeedJoystick(1, 0);
+    input.advanceMobileCruise(0, 0.5);
+    input.setTargetSpeedJoystick(-1, 0);
+    input.advanceMobileCruise(9, 0.35);
+    input.setTargetSpeedJoystick(0, 0);
+    input.advanceMobileCruise(0, 1);
+
+    expect(input.getMobileCruiseTarget().reverseState).toBe('reverse-armed');
+
+    input.setTargetSpeedJoystick(0, 0.35, true);
+    input.advanceMobileCruise(0, 1 / 60);
+    expect(input.getMobileCruiseTarget()).toMatchObject({
+      reverseState: 'forward',
+      targetSpeedKilometersPerHour: 25,
+      reversing: false,
+    });
+  });
+
+  it('un gesto hacia abajo no puede solicitar el arranque arcade', () => {
+    const input = new InputController();
+    input.setMobileCruiseMode('arcade');
+
+    input.setTargetSpeedJoystick(-0.1, 0, true);
+
+    expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(0);
+  });
+
   it('frenar en arcade no activa reversa sin detener, soltar y repetir', () => {
     const input = new InputController();
     input.setMobileCruiseMode('arcade');

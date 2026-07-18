@@ -5,6 +5,7 @@ import {
   type Page,
   test,
 } from '@playwright/test';
+import { navigationGuidanceViewportMarginPixels } from '../../src/map/navigationGuidanceMarker';
 
 interface ViewportCase {
   name: string;
@@ -157,6 +158,7 @@ async function selectMobileTarget(
 
 async function selectFastMobileTarget(context: BrowserContext, page: Page) {
   await selectMobileTarget(context, page, 88, 1);
+  const gameMap = page.getByTestId('game-map');
   await expect
     .poll(
       async () =>
@@ -166,6 +168,20 @@ async function selectFastMobileTarget(context: BrowserContext, page: Page) {
       { timeout: 20_000 },
     )
     .toBeGreaterThanOrEqual(58);
+  await page.getByRole('button', { name: 'Turbo' }).click();
+  await expect
+    .poll(
+      () =>
+        gameMap
+          .getAttribute('data-player-speed-kilometers-per-hour')
+          .then(Number),
+      { timeout: 20_000 },
+    )
+    .toBeGreaterThanOrEqual(72);
+  await expect(gameMap).toHaveAttribute(
+    'data-current-camera-profile',
+    'mobileFast',
+  );
 }
 
 async function expectAppliedSafeCamera(
@@ -223,55 +239,77 @@ async function expectFastRouteAnticipation(page: Page, gameMap: Locator) {
     /^(continue|turn-left|turn-right|slight-left|slight-right|u-turn|arrive)$/,
   );
   await expect(gameMap).toHaveAttribute(
-    'data-navigation-arrow-fallback',
-    'false',
-  );
-  await expect(gameMap).toHaveAttribute(
     'data-mission-route-road-color',
     '#28D7F5',
   );
 
   const routeArrow = page.locator('.mission-route-arrow');
-  const playerMarker = page.locator('.player-marker');
   const instruction = page.locator('.mobile-driving-hud__copy strong');
   const objectiveAndDistance = page.locator('.mobile-driving-hud__copy small');
-  await expect(routeArrow).toBeVisible();
   await expect(instruction).toBeVisible();
   await expect(instruction).not.toHaveText('Sigue la ruta hacia el objetivo');
   await expect(objectiveAndDistance).toBeVisible();
   await expect(objectiveAndDistance).toHaveText(/.+ · \d+(?:\.\d+)? (?:m|km)$/);
 
-  const [mapBox, arrowBox, playerBox, nextDistance] = await Promise.all([
-    gameMap.boundingBox(),
-    routeArrow.boundingBox(),
-    playerMarker.boundingBox(),
-    gameMap.getAttribute('data-navigation-next-distance').then(Number),
-  ]);
-  expect(mapBox).not.toBeNull();
-  expect(arrowBox).not.toBeNull();
-  expect(playerBox).not.toBeNull();
-  expect(nextDistance).toBeGreaterThanOrEqual(0);
-  const transformedMarkerTolerancePixels = 1;
-  expect(arrowBox!.x).toBeGreaterThanOrEqual(
-    mapBox!.x - transformedMarkerTolerancePixels,
-  );
-  expect(arrowBox!.y).toBeGreaterThanOrEqual(
-    mapBox!.y - transformedMarkerTolerancePixels,
-  );
-  expect(arrowBox!.x + arrowBox!.width).toBeLessThanOrEqual(
-    mapBox!.x + mapBox!.width + transformedMarkerTolerancePixels,
-  );
-  expect(arrowBox!.y + arrowBox!.height).toBeLessThanOrEqual(
-    mapBox!.y + mapBox!.height + transformedMarkerTolerancePixels,
-  );
-  expect(
-    Math.hypot(
-      arrowBox!.x + arrowBox!.width / 2 - (playerBox!.x + playerBox!.width / 2),
-      arrowBox!.y +
-        arrowBox!.height / 2 -
-        (playerBox!.y + playerBox!.height / 2),
-    ),
-  ).toBeGreaterThan(12);
+  const guidanceSnapshot = await page.evaluate(() => {
+    const map = document.querySelector<HTMLElement>('[data-testid="game-map"]');
+    const arrow = document.querySelector<HTMLElement>('.mission-route-arrow');
+    const player = document.querySelector<HTMLElement>('.player-marker');
+    if (!map || !arrow || !player) return null;
+    const mapRect = map.getBoundingClientRect();
+    const arrowRect = arrow.getBoundingClientRect();
+    const playerRect = player.getBoundingClientRect();
+    const visible =
+      map.dataset.navigationArrowVisible === 'true' &&
+      !arrow.hidden &&
+      arrowRect.width > 0 &&
+      arrowRect.height > 0;
+    const tolerance = 1;
+    return {
+      visible,
+      hidden: arrow.hidden,
+      fallback: map.dataset.navigationArrowFallback ?? '',
+      nextDistance: Number(map.dataset.navigationNextDistance),
+      screenX: Number(map.dataset.navigationArrowScreenX),
+      screenY: Number(map.dataset.navigationArrowScreenY),
+      viewportWidth: Number(map.dataset.navigationArrowViewportWidth),
+      viewportHeight: Number(map.dataset.navigationArrowViewportHeight),
+      inside:
+        arrowRect.left >= mapRect.left - tolerance &&
+        arrowRect.top >= mapRect.top - tolerance &&
+        arrowRect.right <= mapRect.right + tolerance &&
+        arrowRect.bottom <= mapRect.bottom + tolerance,
+      separation: Math.hypot(
+        arrowRect.left +
+          arrowRect.width / 2 -
+          (playerRect.left + playerRect.width / 2),
+        arrowRect.top +
+          arrowRect.height / 2 -
+          (playerRect.top + playerRect.height / 2),
+      ),
+    };
+  });
+  expect(guidanceSnapshot).not.toBeNull();
+  expect(guidanceSnapshot!.nextDistance).toBeGreaterThanOrEqual(0);
+  const expectedVisible =
+    guidanceSnapshot!.screenX >= navigationGuidanceViewportMarginPixels &&
+    guidanceSnapshot!.screenX <=
+      guidanceSnapshot!.viewportWidth - navigationGuidanceViewportMarginPixels &&
+    guidanceSnapshot!.screenY >= navigationGuidanceViewportMarginPixels &&
+    guidanceSnapshot!.screenY <=
+      guidanceSnapshot!.viewportHeight -
+        navigationGuidanceViewportMarginPixels;
+  expect(guidanceSnapshot!.visible).toBe(expectedVisible);
+  if (expectedVisible) {
+    expect(guidanceSnapshot).toMatchObject({
+      fallback: 'false',
+      hidden: false,
+      inside: true,
+    });
+    expect(guidanceSnapshot!.separation).toBeGreaterThan(12);
+  } else {
+    await expect(routeArrow).toBeHidden();
+  }
 }
 
 async function stopMobileTarget(context: BrowserContext, page: Page) {
@@ -551,6 +589,92 @@ test('recalcula y aplica el offset al cambiar el viewport', async ({
         ).__overlayOverlapState?.overlapObserved ?? false,
     ),
   ).toBe(false);
+});
+
+test('actualiza la visibilidad de la guia al rotar sin mover el vehiculo', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-mobile');
+  await page.setViewportSize({ width: 392, height: 850 });
+  await page.addInitScript(() => window.localStorage.clear());
+  await enterExpedition(page);
+
+  const gameMap = page.getByTestId('game-map');
+  const guidance = page.locator('.mission-route-arrow');
+  await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road');
+  await expect(gameMap).toHaveAttribute(
+    'data-navigation-arrow-visible',
+    'true',
+  );
+  await expect(guidance).toBeVisible();
+  await page.getByRole('button', { name: 'Pausar partida' }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Partida en pausa' }),
+  ).toBeVisible();
+  const positionBeforeRotation = await gameMap.evaluate(
+    (element) =>
+      `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+  );
+
+  const viewportWidthBeforeRotation = Number(
+    await gameMap.getAttribute('data-navigation-arrow-viewport-width'),
+  );
+  const viewportHeightBeforeRotation = Number(
+    await gameMap.getAttribute('data-navigation-arrow-viewport-height'),
+  );
+
+  await page.setViewportSize({ width: 850, height: 392 });
+  await expect
+    .poll(() =>
+      gameMap
+        .getAttribute('data-navigation-arrow-viewport-width')
+        .then(Number),
+    )
+    .not.toBe(viewportWidthBeforeRotation);
+  await expect
+    .poll(() =>
+      gameMap
+        .getAttribute('data-navigation-arrow-viewport-height')
+        .then(Number),
+    )
+    .not.toBe(viewportHeightBeforeRotation);
+  const landscapeGuidance = await gameMap.evaluate((element) => ({
+    visible: element.dataset.navigationArrowVisible === 'true',
+    screenX: Number(element.dataset.navigationArrowScreenX),
+    screenY: Number(element.dataset.navigationArrowScreenY),
+    viewportWidth: Number(element.dataset.navigationArrowViewportWidth),
+    viewportHeight: Number(element.dataset.navigationArrowViewportHeight),
+  }));
+  const landscapeGuidanceFits =
+    landscapeGuidance.screenX >= navigationGuidanceViewportMarginPixels &&
+    landscapeGuidance.screenX <=
+      landscapeGuidance.viewportWidth -
+        navigationGuidanceViewportMarginPixels &&
+    landscapeGuidance.screenY >= navigationGuidanceViewportMarginPixels &&
+    landscapeGuidance.screenY <=
+      landscapeGuidance.viewportHeight -
+        navigationGuidanceViewportMarginPixels;
+  expect(landscapeGuidance.visible).toBe(landscapeGuidanceFits);
+  if (landscapeGuidanceFits) {
+    await expect(guidance).toBeVisible();
+  } else {
+    await expect(guidance).toBeHidden();
+  }
+  await expect
+    .poll(() =>
+      gameMap.evaluate(
+        (element) =>
+          `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+      ),
+    )
+    .toBe(positionBeforeRotation);
+
+  await page.setViewportSize({ width: 392, height: 850 });
+  await expect(gameMap).toHaveAttribute(
+    'data-navigation-arrow-visible',
+    'true',
+  );
+  await expect(guidance).toBeVisible();
 });
 
 for (const viewport of [

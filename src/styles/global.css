@@ -3329,7 +3329,8 @@ html[data-tutorial-target='objective'] .map-canvas {
   color: #ffc187;
 }
 
-.mission-route-arrow[hidden] {
+.mission-route-arrow[hidden],
+.mission-route-arrow.navigation-guidance-arrow--hidden {
   display: none;
 }
 

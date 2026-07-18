@@ -10,6 +10,7 @@ interface ClassicTouchControlsProps {
   onCenter: () => void;
   onTogglePause: () => void;
   hapticsEnabled: boolean;
+  controlsDisabled: boolean;
 }
 
 export function ClassicTouchControls({
@@ -19,6 +20,7 @@ export function ClassicTouchControls({
   onCenter,
   onTogglePause,
   hapticsEnabled,
+  controlsDisabled,
 }: ClassicTouchControlsProps) {
   return (
     <>
@@ -27,8 +29,12 @@ export function ClassicTouchControls({
           type="button"
           className="touch-button touch-button--up"
           aria-label="Avanzar"
-          {...pointerActionHandlers(input, 'forward', 0, () =>
-            triggerHaptic('button', hapticsEnabled),
+          {...pointerActionHandlers(
+            input,
+            'forward',
+            0,
+            controlsDisabled,
+            () => triggerHaptic('button', hapticsEnabled),
           )}
         >
           <span aria-hidden="true">▲</span>
@@ -37,8 +43,12 @@ export function ClassicTouchControls({
           type="button"
           className="touch-button touch-button--left"
           aria-label="Girar a la izquierda"
-          {...pointerActionHandlers(input, 'left', 0, () =>
-            triggerHaptic('button', hapticsEnabled),
+          {...pointerActionHandlers(
+            input,
+            'left',
+            0,
+            controlsDisabled,
+            () => triggerHaptic('button', hapticsEnabled),
           )}
         >
           <span aria-hidden="true">◀</span>
@@ -47,8 +57,12 @@ export function ClassicTouchControls({
           type="button"
           className="touch-button touch-button--right"
           aria-label="Girar a la derecha"
-          {...pointerActionHandlers(input, 'right', 0, () =>
-            triggerHaptic('button', hapticsEnabled),
+          {...pointerActionHandlers(
+            input,
+            'right',
+            0,
+            controlsDisabled,
+            () => triggerHaptic('button', hapticsEnabled),
           )}
         >
           <span aria-hidden="true">▶</span>
@@ -57,8 +71,12 @@ export function ClassicTouchControls({
           type="button"
           className="touch-button touch-button--down"
           aria-label="Retroceder"
-          {...pointerActionHandlers(input, 'backward', 0, () =>
-            triggerHaptic('button', hapticsEnabled),
+          {...pointerActionHandlers(
+            input,
+            'backward',
+            0,
+            controlsDisabled,
+            () => triggerHaptic('button', hapticsEnabled),
           )}
         >
           <span aria-hidden="true">▼</span>
@@ -72,6 +90,7 @@ export function ClassicTouchControls({
           onCenter={onCenter}
           onTogglePause={onTogglePause}
           hapticsEnabled={hapticsEnabled}
+          controlsDisabled={controlsDisabled}
         />
       </div>
     </>

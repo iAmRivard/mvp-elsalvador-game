@@ -23,6 +23,7 @@ interface MobileActionButtonsProps {
   onTogglePause: () => void;
   autoThrottleAvailable?: boolean;
   hapticsEnabled: boolean;
+  controlsDisabled?: boolean;
 }
 
 export function MobileActionButtons({
@@ -33,6 +34,7 @@ export function MobileActionButtons({
   onTogglePause,
   autoThrottleAvailable = false,
   hapticsEnabled,
+  controlsDisabled = false,
 }: MobileActionButtonsProps) {
   const fuel = useGameStore((state) => state.telemetry.fuel);
   const condition = useGameStore((state) => state.vehicle.condition);
@@ -105,8 +107,13 @@ export function MobileActionButtons({
             type="button"
             className="touch-button touch-button--interact"
             aria-label={interactionLabel}
-            {...pointerActionHandlers(input, 'interact', 250, () =>
-              triggerHaptic('button', hapticsEnabled),
+            disabled={controlsDisabled}
+            {...pointerActionHandlers(
+              input,
+              'interact',
+              250,
+              controlsDisabled,
+              () => triggerHaptic('button', hapticsEnabled),
             )}
           >
             <span aria-hidden="true">✦</span>
@@ -118,13 +125,14 @@ export function MobileActionButtons({
           className={`touch-button touch-button--boost touch-button--boost-${boostStatus}`}
           aria-label="Turbo"
           aria-describedby="mobile-boost-status"
-          disabled={boostStatus === 'unavailable'}
+          disabled={controlsDisabled || boostStatus === 'unavailable'}
           style={
             {
               '--boost-progress': Math.max(0, Math.min(1, boostProgress)),
             } as CSSProperties
           }
           onClick={() => {
+            if (controlsDisabled) return;
             if (input.activateMobileBoost({ fuel, condition })) {
               triggerHaptic('boost', hapticsEnabled);
             }
@@ -148,9 +156,11 @@ export function MobileActionButtons({
                 : 'Activar crucero'
             }
             aria-pressed={autoThrottleStatus !== 'off'}
+            disabled={controlsDisabled}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              if (controlsDisabled) return;
               const enabled = input.toggleAutoThrottle(
                 autoThrottleConfig.targetThrottle,
               );

@@ -31,9 +31,38 @@ describe('joystick único de conducción', () => {
   });
 
   it('arcade conserva aceleración y giro en una diagonal lateral', () => {
-    const output = arcadeDriveJoystickOutput(0.8, -0.65);
+    const output = arcadeDriveJoystickOutput(0.8, -0.65, 72);
     expect(output.turn).toBeGreaterThan(0.5);
     expect(output.verticalIntent).toBeGreaterThan(0.3);
+  });
+
+  it('arcade reconoce un primer gesto visible dentro de la zona muerta vertical', () => {
+    expect(
+      arcadeDriveJoystickOutput(0, -(10 / 72), 10).startRequested,
+    ).toBe(true);
+    expect(arcadeDriveJoystickOutput(0.3, 0, 21.6).startRequested).toBe(true);
+  });
+
+  it('arcade no solicita arranque ante un gesto hacia abajo', () => {
+    expect(arcadeDriveJoystickOutput(0, 0.2, 14.4).startRequested).toBe(false);
+    expect(arcadeDriveJoystickOutput(0.3, 0.12, 23).startRequested).toBe(false);
+  });
+
+  it('arcade ignora jitter aunque supere el umbral normalizado en landscape', () => {
+    expect(arcadeDriveJoystickOutput(0.13, 0, 5.4).startRequested).toBe(false);
+    expect(arcadeDriveJoystickOutput(0.11, 0, 8).startRequested).toBe(false);
+  });
+
+  it('escala el umbral mínimo con el tamaño del joystick', () => {
+    expect(
+      arcadeDriveJoystickOutput(0.13, -0.03, 8, 54).startRequested,
+    ).toBe(true);
+    expect(
+      arcadeDriveJoystickOutput(0.13, -0.03, 6, 20).startRequested,
+    ).toBe(true);
+    expect(
+      arcadeDriveJoystickOutput(0.13, -0.03, 6, 72).startRequested,
+    ).toBe(false);
   });
 
   it('aplica zonas muertas horizontal y vertical por separado', () => {

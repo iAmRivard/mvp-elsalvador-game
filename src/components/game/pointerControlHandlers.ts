@@ -8,6 +8,7 @@ export function pointerActionHandlers(
   input: InputController,
   action: InputAction,
   releaseDelayMilliseconds = 0,
+  disabled = false,
   onPress?: () => void,
 ) {
   const release = (
@@ -28,6 +29,7 @@ export function pointerActionHandlers(
 
   return {
     onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (disabled) return;
       event.preventDefault();
       event.stopPropagation();
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -35,12 +37,18 @@ export function pointerActionHandlers(
       input.setPointerAction(action, true);
       onPress?.();
     },
-    onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) =>
-      release(event, true),
-    onPointerCancel: (event: ReactPointerEvent<HTMLButtonElement>) =>
-      release(event, false),
-    onLostPointerCapture: (event: ReactPointerEvent<HTMLButtonElement>) =>
-      release(event, false),
+    onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (disabled) return;
+      release(event, true);
+    },
+    onPointerCancel: (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (disabled) return;
+      release(event, false);
+    },
+    onLostPointerCapture: (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (disabled) return;
+      release(event, false);
+    },
     onContextMenu: (event: ReactMouseEvent<HTMLButtonElement>) =>
       event.preventDefault(),
   };

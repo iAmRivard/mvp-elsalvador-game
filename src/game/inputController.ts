@@ -422,13 +422,27 @@ export class InputController {
     this.notify();
   }
 
-  setTargetSpeedJoystick(verticalIntent: number, turn: number): void {
+  setTargetSpeedJoystick(
+    verticalIntent: number,
+    turn: number,
+    arcadeStartRequested = false,
+  ): void {
     const nextIntent = clampAnalogInput(verticalIntent);
     const nextTurn = clampAnalogInput(turn);
+    const shouldExitReverseArmedByArcadeStart =
+      this.mobileCruiseMode === 'arcade' &&
+      this.mobileReverseState === 'reverse-armed' &&
+      arcadeStartRequested &&
+      nextIntent >= 0;
+    if (shouldExitReverseArmedByArcadeStart) {
+      this.mobileReverseState = 'forward';
+      this.reverseIntentMilliseconds = 0;
+    }
     const shouldLatchArcadeTarget =
       this.mobileCruiseMode === 'arcade' &&
       this.mobileReverseState === 'forward' &&
-      nextIntent > mobileCruiseConfig.reverseReleaseDeadZone &&
+      (nextIntent > mobileCruiseConfig.reverseReleaseDeadZone ||
+        (arcadeStartRequested && nextIntent >= 0)) &&
       this.mobileCruiseTarget.targetSpeedKilometersPerHour <= 0.5;
     if (shouldLatchArcadeTarget) {
       const targetSpeedKilometersPerHour =
