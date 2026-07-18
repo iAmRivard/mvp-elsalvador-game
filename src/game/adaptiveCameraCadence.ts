@@ -139,8 +139,8 @@ export function adaptiveCameraCadenceFor(
     const severeAtThirtyHertz =
       state.hertz === 30 &&
       (window.frametimeP95Milliseconds > 40 ||
-        window.framesOver50Milliseconds >= 4 ||
-        window.framesOver100Milliseconds > 0 ||
+        window.framesOver50Milliseconds >= 10 ||
+        window.framesOver100Milliseconds >= 3 ||
         window.cameraP95Milliseconds >= 3.5);
     if (
       consecutiveUnhealthyWindows >= 2 &&

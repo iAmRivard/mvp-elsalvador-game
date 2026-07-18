@@ -326,6 +326,21 @@ try {
       const previous = capture.projections[index];
       return Math.hypot(sample.x - previous.x, sample.y - previous.y);
     });
+  const largestProjectionTransitions = capture.projections
+    .slice(1)
+    .map((sample, index) => {
+      const previous = capture.projections[index];
+      return {
+        distancePixels: Math.hypot(
+          sample.x - previous.x,
+          sample.y - previous.y,
+        ),
+        previous,
+        sample,
+      };
+    })
+    .sort((left, right) => right.distancePixels - left.distancePixels)
+    .slice(0, 5);
   const projectionBySpeed = (minimum, maximum) =>
     capture.projections.filter(
       (sample) =>
@@ -364,6 +379,7 @@ try {
       first: capture.projections.at(0) ?? null,
       last: capture.projections.at(-1) ?? null,
       consecutiveDistancePixels: summarize(projectionDistances),
+      largestTransitions: largestProjectionTransitions,
       distinctRoundedPositions: new Set(
         capture.projections.map(
           (sample) => `${sample.x.toFixed(1)},${sample.y.toFixed(1)}`,
