@@ -193,7 +193,7 @@ try {
       const playerY = hasDirectProjection ? directY : fallbackY;
       if (Number.isFinite(playerX) && Number.isFinite(playerY)) {
         capture.projections.push({
-          elapsedMilliseconds: timestamp - capture.startedAt,
+          elapsedMilliseconds: Math.max(0, timestamp - capture.startedAt),
           x: playerX,
           y: playerY,
           source: hasDirectProjection
@@ -221,6 +221,11 @@ try {
   await page.screenshot({
     path: resolve(outputDirectory, '00-stopped.png'),
   });
+  const observationStartedAt = Date.now();
+  const waitUntilElapsed = async (targetMilliseconds) => {
+    const remaining = targetMilliseconds - (Date.now() - observationStartedAt);
+    if (remaining > 0) await page.waitForTimeout(remaining);
+  };
   const joystick = page.getByLabel(/Joystick de conducción arcade/);
   const box = await joystick.boundingBox();
   if (!box) throw new Error('No se encontró el joystick móvil.');
@@ -241,15 +246,15 @@ try {
       },
     ],
   });
-  await page.waitForTimeout(1_000);
+  await waitUntilElapsed(1_000);
   await page.screenshot({
     path: resolve(outputDirectory, '01-acceleration.png'),
   });
-  await page.waitForTimeout(3_000);
+  await waitUntilElapsed(4_000);
   await page.screenshot({
     path: resolve(outputDirectory, '02-cruise-30-50.png'),
   });
-  await page.waitForTimeout(2_000);
+  await waitUntilElapsed(6_000);
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchMove',
     touchPoints: [
@@ -261,11 +266,11 @@ try {
       },
     ],
   });
-  await page.waitForTimeout(4_000);
+  await waitUntilElapsed(10_000);
   await page.screenshot({
     path: resolve(outputDirectory, '03-fast-70-90.png'),
   });
-  await page.waitForTimeout(1_000);
+  await waitUntilElapsed(11_000);
   const steeringSign = await gameMap.evaluate((element) => {
     const recommended = Number(element.dataset.navigationRecommendedHeading);
     const physical = Number(element.dataset.navigationPhysicalHeading);
@@ -283,9 +288,9 @@ try {
       },
     ],
   });
-  await page.waitForTimeout(2_000);
+  await waitUntilElapsed(13_000);
   await page.screenshot({ path: resolve(outputDirectory, '04-curve.png') });
-  await page.waitForTimeout(2_000);
+  await waitUntilElapsed(observationMilliseconds);
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',
     touchPoints: [],
@@ -298,6 +303,7 @@ try {
     state.observer?.disconnect();
     const map = document.querySelector('[data-testid="game-map"]');
     return {
+      capturedMilliseconds: performance.now() - state.startedAt,
       frameDurations: state.frameDurations,
       cameraDurations: state.cameraDurations,
       cameraApplications: state.cameraApplications,
@@ -336,6 +342,7 @@ try {
       deviceScaleFactor: capture.deviceScaleFactor,
       warmupMilliseconds,
       observationMilliseconds,
+      capturedMilliseconds: capture.capturedMilliseconds,
       diagnosticsEnabled: capture.mapDataset.diagnosticsEnabled === 'true',
       physicalPlaytestRequired: true,
     },
@@ -362,7 +369,8 @@ try {
     camera: {
       appliedUpdates: capture.cameraApplications.length,
       appliedUpdatesPerSecond:
-        capture.cameraApplications.length / (observationMilliseconds / 1_000),
+        capture.cameraApplications.length /
+        (capture.capturedMilliseconds / 1_000),
       updateMilliseconds: summarize(capture.cameraDurations),
       appliedIntervalMilliseconds: summarize(cadenceIntervals),
       finalCadenceHertz: Number(capture.mapDataset.cameraCadenceHertz),
