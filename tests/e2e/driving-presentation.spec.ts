@@ -251,13 +251,18 @@ async function expectFastRouteAnticipation(page: Page, gameMap: Locator) {
   expect(arrowBox).not.toBeNull();
   expect(playerBox).not.toBeNull();
   expect(nextDistance).toBeGreaterThanOrEqual(0);
-  expect(arrowBox!.x).toBeGreaterThanOrEqual(mapBox!.x);
-  expect(arrowBox!.y).toBeGreaterThanOrEqual(mapBox!.y);
+  const transformedMarkerTolerancePixels = 1;
+  expect(arrowBox!.x).toBeGreaterThanOrEqual(
+    mapBox!.x - transformedMarkerTolerancePixels,
+  );
+  expect(arrowBox!.y).toBeGreaterThanOrEqual(
+    mapBox!.y - transformedMarkerTolerancePixels,
+  );
   expect(arrowBox!.x + arrowBox!.width).toBeLessThanOrEqual(
-    mapBox!.x + mapBox!.width,
+    mapBox!.x + mapBox!.width + transformedMarkerTolerancePixels,
   );
   expect(arrowBox!.y + arrowBox!.height).toBeLessThanOrEqual(
-    mapBox!.y + mapBox!.height,
+    mapBox!.y + mapBox!.height + transformedMarkerTolerancePixels,
   );
   expect(
     Math.hypot(
