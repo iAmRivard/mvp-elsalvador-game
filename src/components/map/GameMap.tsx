@@ -411,9 +411,13 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let lastCameraFollowSpringTimestamp = performance.now();
     const cameraFollowTargetPoint = new maplibregl.Point(0, 0);
     const cameraTelemetryIntervalMilliseconds = 250;
-    let lastCameraTelemetryTimestamp = Number.NEGATIVE_INFINITY;
-    const cameraTelemetryDue = (timestampMilliseconds: number) =>
-      timestampMilliseconds - lastCameraTelemetryTimestamp >=
+    let lastCameraStateTelemetryTimestamp = Number.NEGATIVE_INFINITY;
+    let lastProjectionTelemetryTimestamp = Number.NEGATIVE_INFINITY;
+    const cameraStateTelemetryDue = (timestampMilliseconds: number) =>
+      timestampMilliseconds - lastCameraStateTelemetryTimestamp >=
+      cameraTelemetryIntervalMilliseconds;
+    const projectionTelemetryDue = (timestampMilliseconds: number) =>
+      timestampMilliseconds - lastProjectionTelemetryTimestamp >=
       cameraTelemetryIntervalMilliseconds;
     let mobileCameraMode: MobileCameraMode = 'stopped';
     let mobileCameraCandidateMode: MobileCameraMode = 'stopped';
@@ -846,7 +850,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         baseOffset[0] + routeLookahead.offsetXPixels,
         baseOffset[1] + routeLookahead.offsetYPixels,
       ];
-      if (containerRef.current && cameraTelemetryDue(timestampMilliseconds)) {
+      const shouldExposeCameraStateTelemetry = cameraStateTelemetryDue(
+        timestampMilliseconds,
+      );
+      if (containerRef.current && shouldExposeCameraStateTelemetry) {
         containerRef.current.dataset.cameraRouteLookaheadPixels = Math.hypot(
           routeLookahead.offsetXPixels,
           routeLookahead.offsetYPixels,
@@ -879,7 +886,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           projectedPlayer.y - spring.state.offsetYPixels;
         const target = map.unproject(cameraFollowTargetPoint);
         followCenter = [target.lng, target.lat];
-        if (containerRef.current && cameraTelemetryDue(timestampMilliseconds)) {
+        if (containerRef.current && shouldExposeCameraStateTelemetry) {
           containerRef.current.dataset.followZoneOffsetX =
             spring.state.offsetXPixels.toFixed(2);
           containerRef.current.dataset.followZoneOffsetY =
@@ -888,6 +895,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             spring.snapped,
           );
         }
+      }
+      if (shouldExposeCameraStateTelemetry) {
+        lastCameraStateTelemetryTimestamp = timestampMilliseconds;
       }
       return {
         options: {
@@ -985,11 +995,11 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       const container = containerRef.current;
       if (
         !container ||
-        (!force && !cameraTelemetryDue(timestampMilliseconds))
+        (!force && !projectionTelemetryDue(timestampMilliseconds))
       ) {
         return;
       }
-      lastCameraTelemetryTimestamp = timestampMilliseconds;
+      lastProjectionTelemetryTimestamp = timestampMilliseconds;
       const canvas = map.getCanvas();
       const projected = map.project(playerCoordinate);
       container.dataset.cameraAppliedScreenOffsetX = (
@@ -1934,6 +1944,10 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             );
             inputController.markInputVisualFrame(timestamp);
           }
+          exposeAppliedProjection(
+            [player.longitude, player.latitude],
+            timestamp,
+          );
 
           const isFollowing = useGameStore.getState().isFollowingPlayer;
           if (!isFollowing) {
