@@ -42,10 +42,12 @@ describe('cámara de seguimiento', () => {
     expect(drivingCameraProfile('driving', true)).toBe(
       drivingCameraProfiles.mobileDriving,
     );
-    expect(drivingCameraProfiles.mobileDriving.zoom).toBe(15.55);
-    expect(drivingCameraProfiles.mobileDriving.pitch).toBe(58);
-    expect(drivingCameraProfiles.mobileFast.zoom).toBe(15.4);
-    expect(drivingCameraProfiles.mobileFast.pitch).toBe(59.5);
+    expect(drivingCameraProfiles.mobileStopped.zoom).toBe(15.75);
+    expect(drivingCameraProfiles.mobileStopped.pitch).toBe(54);
+    expect(drivingCameraProfiles.mobileDriving.zoom).toBe(15.7);
+    expect(drivingCameraProfiles.mobileDriving.pitch).toBe(57);
+    expect(drivingCameraProfiles.mobileFast.zoom).toBe(15.55);
+    expect(drivingCameraProfiles.mobileFast.pitch).toBe(58.5);
     expect(drivingCameraProfiles.mobileStopped.updateIntervalMilliseconds).toBe(
       33,
     );
