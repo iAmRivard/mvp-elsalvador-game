@@ -199,6 +199,25 @@ hay evidencia confirmada de deadlock de producción, pero sí un P1 de validaci�
 que puede fallar en la suite serial. CI configura retries; por eso el cierre
 exige además una corrida local con un worker y `--retries=0`.
 
+### P1 adicional: escenario visual de ruta rápida
+
+Una corrida completa posterior sobre `50bd674`, un worker y cero retries,
+detectó un chevron `3.107 px` fuera del mapa en landscape: `2.107 px` más allá
+de la tolerancia de 1 px. También agotó el límite externo de 15 minutos antes
+del resumen completo. La causa confirmada fue temporal en el E2E: tras alcanzar
+60 km/h sobre ruta, hacía unas 15 aserciones sin steering y medía cuando ya
+había rebasado la maniobra y salido de la vía.
+
+Tres correcciones de prueba —captura temprana atómica, steering CDP durante la
+espera y snapshot correlacionado— no estabilizaron la ejecución con traza
+pesada. Resultados finales por hipótesis: la primera pasó 15/15 sin traza, pero
+una aserción posterior observó bajo traza un perfil `mobileDriving` legítimo;
+las siguientes pasaron 2/5 y 1/5 con traza. La traza elevó la frecuencia, aunque
+el flake original también apareció sin instrumentación. Se revirtieron todos
+los cambios experimentales según el límite de tres intentos. La tolerancia
+geométrica permanece en 1 px y el runtime no cambió. Este punto requiere un
+controlador E2E vial dedicado antes de repetir la suite completa.
+
 ## Límites
 
 Tiempo preciso de carga/cambio de vehículo, escrituras Zustand, GPU, repaints

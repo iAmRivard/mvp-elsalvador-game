@@ -180,9 +180,37 @@ runtime quede bloqueado. Aun así impide declarar la suite estable. CI usa
 retries y podría ocultarlo; la aceptación final exige una corrida serial con
 cero retries.
 
+### Flake E2E de geometría de navegación rápida
+
+La corrida completa exacta de `50bd674`, un worker y cero retries, encontró
+además un desborde del chevron de ruta en landscape: `395.107 px` frente a un
+borde de mapa de `392 px` más 1 px de tolerancia. La corrida fue interrumpida
+por el límite externo de 15 minutos antes de completar los 127 casos.
+
+La traza confirmó que el runtime estaba alineado al alcanzar 60 km/h. El E2E
+ejecutaba después unas 15 aserciones sin dirección lateral; al medir ya estaba
+fuera de ruta y el marcador geográfico quedaba recortado. No hubo cambios de
+runtime entre `e91558f` y `50bd674`.
+
+Se probaron tres hipótesis reversibles sin ampliar tolerancias ni timeouts:
+
+- mover la captura al estado on-road y leer la geometría atómicamente;
+- sostener dirección con CDP touch mientras esperaba `mobileFast`;
+- devolver una única captura correlacionada de ruta, cámara y safe viewport.
+
+La primera pasó 15/15 sin traza, pero con traza expuso una carrera temporal de
+muestreo del E2E: una aserción posterior observó un perfil `mobileDriving`
+legítimo. Las siguientes no estabilizaron el caso instrumentado: 2/5 y 1/5. La
+traza aumentó la frecuencia, pero el flake original también ocurrió en la suite
+normal. Todos los cambios experimentales se revirtieron. Queda pendiente
+diseñar un controlador E2E de seguimiento vial que mantenga la maniobra real
+bajo carga; no se considera evidencia de regresión del runtime.
+
 ## Riesgos y límites
 
 - Crucero: frames >33 ms aumentan por mediana; medir en teléfono.
+- La suite completa sigue bloqueada por dos escenarios E2E de seguimiento vial:
+  fallback del tutorial y geometría de navegación rápida.
 - Los tres vehículos comparten un GLB provisional.
 - PWA con service worker está automatizada en Desktop Chrome; falta combinar
   SW real con viewport móvil `392×850` contra Docker.
