@@ -99,6 +99,7 @@ class ThreeGameLayer implements CustomLayerInterface {
   private steeringCue = 0;
   private accelerationCue = 0;
   private lastMotionCueTimestamp = performance.now();
+  private lastMotionCueTelemetryTimestamp = Number.NEGATIVE_INFINITY;
   private signal: InteractiveSignalState = { visible: false };
   private disposed = false;
 
@@ -311,7 +312,11 @@ class ThreeGameLayer implements CustomLayerInterface {
       this.steeringCue * 0.035,
       normalizedHeadingRadians(this.player.heading),
     );
-    if (this.map) {
+    if (
+      this.map &&
+      this.lastMotionCueTimestamp - this.lastMotionCueTelemetryTimestamp >= 250
+    ) {
+      this.lastMotionCueTelemetryTimestamp = this.lastMotionCueTimestamp;
       const container = this.map.getContainer();
       container.dataset.threeVehicleSteeringCueDegrees = (
         (this.steeringCue * 0.035 * 180) /

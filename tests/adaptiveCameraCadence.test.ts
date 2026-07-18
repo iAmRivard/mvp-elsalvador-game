@@ -31,6 +31,25 @@ describe('cadencia adaptativa de cámara', () => {
     expect(controller.ensureMinimumHertz(30)).toBe(false);
   });
 
+  it('permite bajar a 20 Hz tras dos ventanas malas y no revierte la protección', () => {
+    const controller = new AdaptiveCameraCadenceController({
+      initialHertz: 30,
+      maximumHertz: 30,
+      windowDurationMilliseconds: 4_000,
+    });
+    controller.recordVisualFrame(0);
+    controller.recordCameraUpdate(4);
+    controller.recordVisualFrame(50);
+    controller.recordVisualFrame(4_000);
+    controller.recordCameraUpdate(4);
+    controller.recordVisualFrame(4_050);
+    controller.recordVisualFrame(8_000);
+
+    expect(controller.state.hertz).toBe(20);
+    expect(controller.ensureMinimumHertz(30)).toBe(false);
+    expect(controller.state.hertz).toBe(20);
+  });
+
   it('conserva el residuo temporal para aproximar 45 aplicaciones por segundo sobre RAF de 60 Hz', () => {
     const interval = cameraCadenceIntervalMilliseconds(45);
     let deadline = 0;

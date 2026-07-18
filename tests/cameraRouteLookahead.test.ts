@@ -26,6 +26,19 @@ describe('anticipación de ruta de la cámara', () => {
     ).toBe(0);
   });
 
+  it('no anticipa la ruta hacia delante durante la reversa', () => {
+    expect(
+      cameraRouteLookahead({
+        playerCoordinates: [-89.2, 13.7],
+        playerHeading: 0,
+        speedKilometersPerHour: -24,
+        activeNavigation: navigation,
+        nextInstruction: null,
+        distanceToNextInstructionMeters: null,
+      }),
+    ).toMatchObject({ strength: 0, offsetXPixels: 0, offsetYPixels: 0 });
+  });
+
   it('revela espacio por delante al circular sobre el corredor', () => {
     const result = cameraRouteLookahead({
       playerCoordinates: [-89.2, 13.7],

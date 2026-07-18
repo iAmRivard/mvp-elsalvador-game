@@ -410,6 +410,11 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let cameraFollowSpringState = { ...initialCameraFollowSpringState };
     let lastCameraFollowSpringTimestamp = performance.now();
     const cameraFollowTargetPoint = new maplibregl.Point(0, 0);
+    const cameraTelemetryIntervalMilliseconds = 250;
+    let lastCameraTelemetryTimestamp = Number.NEGATIVE_INFINITY;
+    const cameraTelemetryDue = (timestampMilliseconds: number) =>
+      timestampMilliseconds - lastCameraTelemetryTimestamp >=
+      cameraTelemetryIntervalMilliseconds;
     let mobileCameraMode: MobileCameraMode = 'stopped';
     let mobileCameraCandidateMode: MobileCameraMode = 'stopped';
     let mobileCameraCandidateSince = performance.now();
@@ -823,7 +828,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         ? cameraRouteLookahead({
             playerCoordinates: playerCoordinate,
             playerHeading: player.heading,
-            speedKilometersPerHour,
+            speedKilometersPerHour: player.speedMetersPerSecond * 3.6,
             activeNavigation: gameState.missionRoute.activeNavigation,
             nextInstruction: gameState.missionRoute.nextInstruction,
             distanceToNextInstructionMeters:
@@ -841,7 +846,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         baseOffset[0] + routeLookahead.offsetXPixels,
         baseOffset[1] + routeLookahead.offsetYPixels,
       ];
-      if (containerRef.current) {
+      if (containerRef.current && cameraTelemetryDue(timestampMilliseconds)) {
         containerRef.current.dataset.cameraRouteLookaheadPixels = Math.hypot(
           routeLookahead.offsetXPixels,
           routeLookahead.offsetYPixels,
@@ -855,14 +860,6 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       let followCenter: [number, number] = playerCoordinate;
       if (deviceProfile.isTouch) {
         const projectedPlayer = map.project(playerCoordinate);
-        if (containerRef.current) {
-          containerRef.current.dataset.playerProjectedX = (
-            safeCanvasRect.x + projectedPlayer.x
-          ).toFixed(2);
-          containerRef.current.dataset.playerProjectedY = (
-            safeCanvasRect.y + projectedPlayer.y
-          ).toFixed(2);
-        }
         const anchorX = canvas.clientWidth / 2 + offset[0];
         const anchorY = canvas.clientHeight / 2 + offset[1];
         const spring = advanceCameraFollowSpring(cameraFollowSpringState, {
@@ -882,7 +879,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           projectedPlayer.y - spring.state.offsetYPixels;
         const target = map.unproject(cameraFollowTargetPoint);
         followCenter = [target.lng, target.lat];
-        if (containerRef.current) {
+        if (containerRef.current && cameraTelemetryDue(timestampMilliseconds)) {
           containerRef.current.dataset.followZoneOffsetX =
             spring.state.offsetXPixels.toFixed(2);
           containerRef.current.dataset.followZoneOffsetY =
@@ -980,9 +977,19 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       cameraWindowAppliedUpdates = 0;
       cameraMetricsStartedAt = timestampMilliseconds;
     };
-    const exposeAppliedProjection = (playerCoordinate: [number, number]) => {
+    const exposeAppliedProjection = (
+      playerCoordinate: [number, number],
+      timestampMilliseconds = performance.now(),
+      force = false,
+    ) => {
       const container = containerRef.current;
-      if (!container) return;
+      if (
+        !container ||
+        (!force && !cameraTelemetryDue(timestampMilliseconds))
+      ) {
+        return;
+      }
+      lastCameraTelemetryTimestamp = timestampMilliseconds;
       const canvas = map.getCanvas();
       const projected = map.project(playerCoordinate);
       container.dataset.cameraAppliedScreenOffsetX = (
@@ -1038,7 +1045,16 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           lastAppliedCameraOptions &&
           lastExposedSafeViewportRevision !== safeViewportRevision
         ) {
-          exposeAppliedProjection(camera.playerCoordinate);
+          exposeAppliedProjection(
+            camera.playerCoordinate,
+            camera.timestampMilliseconds,
+            true,
+          );
+        } else {
+          exposeAppliedProjection(
+            camera.playerCoordinate,
+            camera.timestampMilliseconds,
+          );
         }
         return update;
       }
@@ -1079,16 +1095,25 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       }
       const projectionChanged =
         lastExposedSafeViewportRevision !== safeViewportRevision ||
+        update.changes.bearing ||
         update.changes.offset ||
         update.changes.zoom ||
         update.changes.pitch;
       if (projectionChanged) {
         if (durationMilliseconds > 0) {
           void map.once('moveend', () =>
-            exposeAppliedProjection(camera.playerCoordinate),
+            exposeAppliedProjection(
+              camera.playerCoordinate,
+              performance.now(),
+              true,
+            ),
           );
         } else {
-          exposeAppliedProjection(camera.playerCoordinate);
+          exposeAppliedProjection(
+            camera.playerCoordinate,
+            camera.timestampMilliseconds,
+            lastExposedSafeViewportRevision !== safeViewportRevision,
+          );
         }
       }
 

@@ -273,6 +273,8 @@ export function createMapDeclutterController(
     let visibleLayerCount = 0;
     let visibleSymbolLayerCount = 0;
     let failedLayerCount = 0;
+    const successfulLayersByPriority = new Map<MapLayerPriority, number>();
+    const visibleLayersByPriority = new Map<MapLayerPriority, number>();
 
     for (const layer of inventory) {
       if (!map.getLayer(layer.id)) {
@@ -313,13 +315,21 @@ export function createMapDeclutterController(
             }
           }
         }
-        const originalVisibility = snapshot.presentation.visibility;
-        const profileHidesLayer =
-          profileName !== 'exploration' &&
-          profile.layerVisibility[layer.priority] === false;
-        if (!profileHidesLayer && originalVisibility !== 'none') {
+        const effectiveVisibility = map.getLayoutProperty(
+          layer.id,
+          'visibility',
+        );
+        successfulLayersByPriority.set(
+          layer.priority,
+          (successfulLayersByPriority.get(layer.priority) ?? 0) + 1,
+        );
+        if (effectiveVisibility !== 'none') {
           visibleLayerCount += 1;
           if (layer.type === 'symbol') visibleSymbolLayerCount += 1;
+          visibleLayersByPriority.set(
+            layer.priority,
+            (visibleLayersByPriority.get(layer.priority) ?? 0) + 1,
+          );
         }
       } catch {
         failedLayerCount += 1;
@@ -332,22 +342,19 @@ export function createMapDeclutterController(
     activeProfile = profileName;
     pendingProfile = null;
     const container = map.getContainer();
+    const effectivePriorityVisibility = (priority: MapLayerPriority) => {
+      if (!successfulLayersByPriority.has(priority)) return 'missing';
+      return (visibleLayersByPriority.get(priority) ?? 0) > 0
+        ? 'visible'
+        : 'none';
+    };
     container.dataset.mapDeclutterProfile = profileName;
     container.dataset.mapPoiVisibility =
-      profileName !== 'exploration' &&
-      profile.layerVisibility['poi-secondary'] === false
-        ? 'none'
-        : 'visible';
+      effectivePriorityVisibility('poi-secondary');
     container.dataset.mapLocalPlaceVisibility =
-      profileName !== 'exploration' &&
-      profile.layerVisibility['area-local'] === false
-        ? 'none'
-        : 'visible';
+      effectivePriorityVisibility('area-local');
     container.dataset.mapMajorPlaceVisibility =
-      profileName !== 'exploration' &&
-      profile.layerVisibility['area-major'] === false
-        ? 'none'
-        : 'visible';
+      effectivePriorityVisibility('area-major');
     container.dataset.mapVisibleSymbolLayerCount = String(
       visibleSymbolLayerCount,
     );

@@ -32,5 +32,14 @@ test(
       'data-map-major-place-visibility',
       'visible',
     );
+    await expect(gameMap).toHaveAttribute('data-map-missing-layer-count', '0');
+    await expect(gameMap).toHaveAttribute(
+      'data-mission-route-visual-ready',
+      'true',
+      { timeout: 20_000 },
+    );
+    await expect(gameMap).toHaveAttribute('data-navigation-target-id', /.+/, {
+      timeout: 20_000,
+    });
   },
 );
