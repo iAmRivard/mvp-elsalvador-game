@@ -1027,10 +1027,19 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     .not.toBe(positionBeforeRoadFollow);
   await expect(gameMap).toHaveAttribute('data-drive-enabled', 'true');
   await expect(gameMap).toHaveAttribute('data-runtime-blocked-by', '');
+  await expect
+    .poll(
+      () =>
+        gameMap
+          .getAttribute('data-player-speed-kilometers-per-hour')
+          .then(Number),
+      { timeout: 2_000, intervals: [16, 25, 50] },
+    )
+    .toBeGreaterThanOrEqual(20);
   await drag(
     92,
     joystickCenter.x,
-    joystickCenter.y + joystickCenter.width * 0.15,
+    joystickCenter.y + joystickCenter.width * 0.17,
   );
   await expect
     .poll(() => gameMap.getAttribute('data-input-target-speed').then(Number), {
