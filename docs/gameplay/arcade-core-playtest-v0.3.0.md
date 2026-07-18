@@ -3,10 +3,13 @@
 ## Identidad
 
 - Base: `607a12d6de95359ae95235e7e4034fe7287705a3`.
-- Runtime final medido: `1a8de1021b4547bb848ea4626a873f3876dcd129`.
+- Candidato de rendimiento medido:
+  `db7ca8bf3f495977f7f0ba16fbb885e3ad968db6`.
 - Rama: `codex/v0.3.0-arcade-core`.
-- El commit documental posterior no cambia runtime. Docker y GitHub Actions se
-  validan sobre el SHA final exacto antes del cierre.
+- Los cambios posteriores a `1a8de1021b4547bb848ea4626a873f3876dcd129`
+  endurecen pruebas/capturas y documentación, sin modificar el runtime del
+  juego. El commit documental posterior no cambia runtime. Docker y GitHub
+  Actions se validan sobre el SHA final exacto antes del cierre.
 - La automatización no sustituye un playtest físico.
 
 ## Objetivo y problemas priorizados
@@ -95,9 +98,13 @@ un asset provisional, no tres modelos definitivos. No se cargan tres GLB.
 - Primeros cinco minutos: 3/3 sesiones de 300 s, 33 capturas, cero tiempo
   inmóvil, cero recuperaciones, evento/recompensa en 2012–2190 ms y área útil
   final 72.0–81.2%.
-- Rendimiento comparable 3×3: frametime p95 33.4 ms, 0 frames >50/100 ms,
-  cámara p95 final 1.7 ms y RoadTracker p95 0.1 ms. El promedio y frames
-  > 33 ms empeoran frente a la base; no se afirma una mejora global de fluidez.
+- Rendimiento comparable schema 5, 3×3: frametime p95 33.3 → 33.4 ms
+  (un escalón de 0.1 ms del timer headless), 0 frames >50/100 ms, cámara p95
+  4.0 → 2.4 ms y RoadTracker p95 0.1 → 0.1 ms. Las seis corridas conservaron
+  100% `trunk`, edge `10999`, ruta `idle` y heading `244.8°`; velocidad,
+  objetivo, distancia y trayectoria superaron el comparador estricto. El
+  promedio y frames >33 ms empeoran frente a la mediana base; no se afirma una
+  mejora global de fluidez.
 
 El intento inicial de la tanda movimiento 10× fue inválido porque el proceso
 preview expiró tras una hora: los diez casos recibieron
@@ -133,15 +140,18 @@ Hechos confirmados:
 - **Regression reviewers:** detectaron pausa incorrecta desde garaje, stats
   incompletas, assets PWA/readiness, aviso de migración bloqueante, contrato
   fallback permisivo, identidad de capturas débil y consumo invisible de un
-  consejo oculto. Los P0/P1 fundamentados se corrigieron y probaron.
+  consejo oculto. La revisión final además rechazó el antiguo benchmark por
+  comparar trayectorias distintas; se reemplazó por el contrato dinámico
+  schema 5. Los P0/P1 fundamentados se corrigieron y probaron.
 - **Revisión de CI:** aprobó el perfil determinista 8/8 para el E2E que exige
   Three, la exclusión semántica de ayudas y un worker CI sin reducir cobertura.
 
 ## Riesgos pendientes y validación física
 
-- Frente a la base, throughput baja 1.67%, frametime promedio sube 1.70% y
-  frames >33 ms suben 10.32%, aunque p95/p99 se mantienen y no hay frames
-  > 50/100 ms. Debe medirse en teléfonos reales.
+- Frente a la base comparable, throughput baja 1.75%, frametime promedio sube
+  1.79% y frames >33 ms suben 13.66%. El p95 cambia 0.1 ms con rangos
+  superpuestos, p99 se mantiene y no hay frames >50/100 ms. Debe medirse en
+  teléfonos reales.
 - Los tres vehículos comparten GLB provisional. Un modelo futuro distinto
   requiere reemplazo y disposición imperativa de recursos Three.js.
 - Falta un E2E específico de garaje en hardware 4/4 que confirme la variante

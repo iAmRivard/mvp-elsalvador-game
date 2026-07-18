@@ -27,49 +27,66 @@
 
 ## Escenario de rendimiento comparable
 
-Tres corridas con almacenamiento limpio, partida nueva, narrativa cerrada,
-tutorial omitido, red vial `ready`, ruta `road` y gesto táctil CDP real hasta
-58 km/h. Cada corrida usó 10 segundos de calentamiento y 30 segundos de
-observación con diagnostics y profiling de producción desactivados.
+Tres corridas sobre el build base exacto, con save/settings deterministas,
+red vial `ready`, control avanzado `target-speed-joystick`, ruta `idle`, semilla
+fija y gesto táctil CDP real de 0.28 radios durante 2200 ms. El vehículo parte
+del mismo checkpoint de la troncal `10999`, con heading físico `244.8°`. Cada
+corrida usó 10 segundos de calentamiento y 30 segundos de observación con
+diagnostics y profiling de producción desactivados.
 
-| Métrica | Mediana | Rango min–max |
-|---|---:|---:|
-| FPS throughput | 51.607 | 51.073–51.702 |
-| FPS instantáneo promedio | 55.123 | 54.757–55.185 |
-| Frametime promedio | 19.377 ms | 19.342–19.580 ms |
-| Frametime p50 | 16.7 ms | 16.7–16.7 ms |
-| Frametime p95 | 33.4 ms | 33.4–33.4 ms |
-| Frametime p99 | 33.4 ms | 33.4–33.4 ms |
-| Frames >33 ms | 252 | 249–268 |
-| Frames >50 ms | 0 | 0–0 |
-| Frames >100 ms | 0 | 0–0 |
-| Long tasks | 0 | 0–0 |
-| Cámara aplicada | 28.733/s | 28.633–28.733/s |
-| Cámara promedio | 2.149 ms | 2.147–2.176 ms |
-| Cámara p95 | 3.0 ms | 2.9–3.1 ms |
-| RoadTracker p95 | 0.2 ms | 0.1–0.2 ms |
-| GeoJSON / 30 s | 107 | 100–111 |
-| Three.js jugador / 30 s | 1564 | 1545–1568 |
-| MobileDrivingHud / 30 s | 151 | 150–153 |
-| Heap final expuesto | 54.169 MiB | 42.629–61.035 MiB |
-| Selección de objetivo 58 km/h | 1195 ms | 1133–1198 ms |
+El contrato schema 5 exige al menos 80 muestras dinámicas y rechaza diferencias
+materiales de duración, velocidad, objetivo, distancia, heading, coordenadas,
+superficie, edge vial o modo de ruta. Las tres corridas base conservaron 100%
+de las muestras en superficie `trunk`, edge `10999`, ruta `idle` y heading
+`244.8°`.
+
+| Métrica                        |    Mediana |     Rango min–max |
+| ------------------------------ | ---------: | ----------------: |
+| FPS throughput                 |     53.173 |     50.940–54.469 |
+| FPS instantáneo promedio       |     56.148 |     54.669–56.956 |
+| Frametime promedio             |  18.807 ms |  18.359–19.631 ms |
+| Frametime p50                  |    16.7 ms |      16.7–16.7 ms |
+| Frametime p95                  |    33.3 ms |      33.3–33.4 ms |
+| Frametime p99                  |    33.4 ms |      33.4–33.4 ms |
+| Frames >33 ms                  |        205 |           166–272 |
+| Frames >50 ms                  |          0 |               0–0 |
+| Frames >100 ms                 |          0 |               0–0 |
+| Long tasks                     |          0 |               0–0 |
+| Cámara aplicada                |   29.000/s |   28.767–29.300/s |
+| Cámara promedio                |   2.676 ms |    2.369–3.290 ms |
+| Cámara p95                     |     4.0 ms |        3.5–6.2 ms |
+| RoadTracker p95                |     0.1 ms |        0.1–0.1 ms |
+| GeoJSON / 30 s                 |          0 |               0–0 |
+| Three.js jugador / 30 s        |       1565 |         1545–1599 |
+| MobileDrivingHud / 30 s        |        150 |           150–150 |
+| Heap final expuesto            | 42.629 MiB | 40.150–51.022 MiB |
+| Selección de objetivo ≥58 km/h |    2388 ms |      2376–2403 ms |
+
+| Carga dinámica      |     Mediana |      Rango min–max |
+| ------------------- | ----------: | -----------------: |
+| Muestras            |         121 |            121–121 |
+| Velocidad media     | 63.609 km/h | 63.558–63.623 km/h |
+| Objetivo medio      | 62.300 km/h | 62.300–62.300 km/h |
+| Distancia observada |    2645.5 m |    2642.9–2655.1 m |
+
+Artefactos locales: `test-results/performance-schema5-db7ca8b/baseline/run-1..3`.
 
 ## Movimiento y experiencia
 
-| Métrica | Baseline |
-|---|---:|
-| Touch → input almacenado | n/d en build base |
-| Input almacenado → consumo | n/d en build base |
-| Consumo → primera posición | n/d |
-| Consumo → primer frame visual | n/d |
-| 0 → 10 km/h | ~0.31 s, simulación ideal |
-| 0 → 20 km/h | ~0.62 s, simulación ideal |
-| 0 → 30 km/h | ~0.93 s, simulación ideal |
-| Tiempo inmóvil primeros 60 s | n/d |
-| Primer evento / recompensa | n/d |
-| Ayudas / recuperaciones / falsos offroad | n/d |
-| Vehículo fuera del viewport seguro | n/d; el concepto aún no existía |
-| Área útil de mapa | n/d en el capturador base |
+| Métrica                                  |                        Baseline |
+| ---------------------------------------- | ------------------------------: |
+| Touch → input almacenado                 |               n/d en build base |
+| Touch → input consumido                  |               n/d en build base |
+| Consumo → primera posición               |                             n/d |
+| Consumo → primer frame visual            |                             n/d |
+| 0 → 10 km/h                              |       ~0.31 s, simulación ideal |
+| 0 → 20 km/h                              |       ~0.62 s, simulación ideal |
+| 0 → 30 km/h                              |       ~0.93 s, simulación ideal |
+| Tiempo inmóvil primeros 60 s             |                             n/d |
+| Primer evento / recompensa               |                             n/d |
+| Ayudas / recuperaciones / falsos offroad |                             n/d |
+| Vehículo fuera del viewport seguro       | n/d; el concepto aún no existía |
+| Área útil de mapa                        |       n/d en el capturador base |
 
 Los tiempos a 10/20/30 km/h son una derivación física ideal, no una medición
 visual. No demuestran respuesta en un teléfono.

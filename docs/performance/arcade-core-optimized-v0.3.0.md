@@ -4,63 +4,90 @@
 
 - Fecha: 2026-07-17.
 - Base: `607a12d6de95359ae95235e7e4034fe7287705a3`.
-- Runtime final medido: `1a8de1021b4547bb848ea4626a873f3876dcd129`.
-- El commit documental de cierre es posterior al runtime medido y no cambia
-  código, assets ni configuración de ejecución. Docker y CI se validan sobre el
-  SHA final exacto después de ese commit.
+- Candidato medido: `db7ca8bf3f495977f7f0ba16fbb885e3ad968db6`.
+- Los commits posteriores a `1a8de1021b4547bb848ea4626a873f3876dcd129`
+  solo endurecen pruebas, capturas y documentación; no cambian el runtime del
+  juego. El commit documental de cierre es posterior al candidato medido.
+  Docker y CI se validan sobre el SHA final exacto después de ese commit.
 - Entorno: Windows, Node `v24.18.0`, npm `11.16.0`, Chromium
   `149.0.7827.55` headless, Pixel 7, viewport `392×850`, DPR 2.
-- Contrato schema 4: almacenamiento limpio, partida nueva, narrativa cerrada,
-  tutorial omitido, red vial `ready`, ruta `road`, touch CDP real, objetivo
-  58 km/h, 10 s de warm-up y 30 s de observación.
+- Contrato schema 5: save/settings deterministas, red vial `ready`, ruta
+  `idle`, semilla fija, checkpoint en la troncal `10999`, heading `244.8°`,
+  touch CDP real de 0.28 radios durante 2200 ms, 10 s de warm-up y 30 s de
+  observación.
 - Baseline y final: tres repeticiones limpias por candidato. El capturador
-  rechazó worktree sucio, SHA de build distinto al repositorio y ruta fallback.
+  rechazó worktree sucio, SHA de build distinto al repositorio, ruta fallback,
+  superficie/edge incompatibles y trayectorias o cargas dinámicas divergentes.
 - Diagnostics y profiling de producción: desactivados.
 - Esto no es una medición de teléfono físico.
 
-Artefactos locales del runtime final:
-`artifacts/performance-schema4/head-1a8de10/run1..3`.
+Artefactos locales:
+`test-results/performance-schema5-db7ca8b/{baseline,final}/run-1..3` y
+`test-results/performance-schema5-db7ca8b/comparison.json`.
 
 ## Resultado de frame pacing
 
 | Métrica                  | Base mediana | Final mediana |    Final min–max |  Cambio |
 | ------------------------ | -----------: | ------------: | ---------------: | ------: |
-| FPS throughput           |       51.607 |        50.746 |    50.341–51.007 |  -1.67% |
-| FPS instantáneo promedio |       55.123 |        54.526 |    54.243–54.713 |  -1.08% |
-| Frametime promedio       |    19.377 ms |     19.706 ms | 19.605–19.865 ms |  +1.70% |
+| FPS throughput           |       53.173 |        52.240 |    51.469–52.506 |  -1.75% |
+| FPS instantáneo promedio |       56.148 |        55.541 |    55.027–55.722 |  -1.08% |
+| Frametime promedio       |    18.807 ms |     19.143 ms | 19.045–19.429 ms |  +1.79% |
 | Frametime p50            |      16.7 ms |       16.7 ms |     16.7–16.7 ms |      0% |
-| Frametime p95            |      33.4 ms |       33.4 ms |     33.4–33.4 ms |      0% |
+| Frametime p95            |      33.3 ms |       33.4 ms |     33.3–33.4 ms | +0.1 ms |
 | Frametime p99            |      33.4 ms |       33.4 ms |     33.4–33.4 ms |      0% |
-| Frames >33 ms            |          252 |           278 |          270–290 | +10.32% |
+| Frames >33 ms            |          205 |           233 |          225–256 | +13.66% |
 | Frames >50 ms            |            0 |             0 |              0–0 |       0 |
 | Frames >100 ms           |            0 |             0 |              0–0 |       0 |
 | Long tasks               |            0 |             0 |              0–0 |       0 |
 
-Los gates críticos se conservan: p95/p99 no empeoran, no aparecen frames
-
-> 50 ms o >100 ms y no hay long tasks. Sin embargo, throughput, frametime medio
-> y frames apenas mayores de 33 ms todavía empeoran frente a la base. No se
-> declara una mejora global de frame pacing; la diferencia debe revisarse en
-> teléfonos físicos.
+El p95 cambia 0.1 ms, exactamente un escalón de la resolución expuesta por el
+timer headless, y los rangos base/final se superponen. No aparecen frames
+`>50 ms` o `>100 ms` ni long tasks. Throughput, frametime medio y frames apenas
+mayores de 33 ms todavía empeoran frente a la mediana base. No se declara una
+mejora global de frame pacing; el resultado se considera equivalente en los
+gates críticos y debe contrastarse en teléfonos físicos.
 
 ## Costes del runtime
 
-| Métrica                 | Base mediana | Final mediana |     Final min–max |     Cambio |
-| ----------------------- | -----------: | ------------: | ----------------: | ---------: |
-| Cámara promedio         |     2.149 ms |      1.318 ms |    1.307–1.352 ms |    -38.67% |
-| Cámara p95              |       3.0 ms |        1.7 ms |        1.7–1.8 ms |    -43.33% |
-| Cámara aplicada         |     28.733/s |      30.367/s |   30.300–30.400/s |     +5.69% |
-| RoadTracker p95         |       0.2 ms |        0.1 ms |        0.1–0.1 ms |    -50.00% |
-| GeoJSON / 30 s          |          107 |           109 |           107–111 |     +1.87% |
-| Three jugador / 30 s    |         1564 |          1542 |         1531–1544 |     -1.41% |
-| MobileDrivingHud / 30 s |          151 |           150 |           150–150 |     -0.66% |
-| Heap final expuesto     |   54.169 MiB |    54.169 MiB | 42.629–64.850 MiB | 0% mediana |
-| Área útil de mapa       |          n/d |         75.9% |        75.9–75.9% |        n/d |
+| Métrica                 | Base mediana | Final mediana |     Final min–max |             Cambio |
+| ----------------------- | -----------: | ------------: | ----------------: | -----------------: |
+| Cámara promedio         |     2.676 ms |      1.616 ms |    1.603–1.707 ms |            -39.60% |
+| Cámara p95              |       4.0 ms |        2.4 ms |        2.3–2.5 ms |            -40.00% |
+| Cámara aplicada         |     29.000/s |      30.333/s |   30.333–30.400/s |             +4.60% |
+| RoadTracker p95         |       0.1 ms |        0.1 ms |        0.1–0.1 ms |                 0% |
+| GeoJSON / 30 s          |            0 |             0 |               0–0 |                 0% |
+| Three jugador / 30 s    |         1565 |          1532 |         1513–1538 |             -2.11% |
+| MobileDrivingHud / 30 s |          150 |           150 |           150–150 |                 0% |
+| Heap final expuesto     |   42.629 MiB |    45.204 MiB | 42.629–45.204 MiB | +6.04%; cuantizado |
+| Área útil de mapa       |          n/d |         75.9% |        75.9–75.9% |                n/d |
 
-La cámara cumple p95 <3 ms. No hubo `queryRenderedFeatures` con diagnostics
+La cámara final cumple p95 <3 ms en las tres corridas. No hubo
+`queryRenderedFeatures` con diagnostics
 apagado. Los tres arquetipos comparten un único GLB local provisional y no se
 cargan tres modelos. El heap está cuantizado y su rango no permite inferir una
 mejora de memoria.
+
+## Equivalencia de carga dinámica
+
+| Métrica             |      Base mediana (min–max) |     Final mediana (min–max) |
+| ------------------- | --------------------------: | --------------------------: |
+| Muestras / 30 s     |               121 (121–121) |               121 (121–122) |
+| Velocidad media     | 63.609 (63.558–63.623) km/h | 63.672 (63.141–63.753) km/h |
+| Objetivo medio      | 62.300 (62.300–62.300) km/h | 62.300 (61.800–62.300) km/h |
+| Distancia observada |    2645.5 (2642.9–2655.1) m |    2649.2 (2634.2–2656.8) m |
+| Superficie `trunk`  |                        100% |                        100% |
+| Edge `10999`        |                        100% |                        100% |
+| Ruta `idle`         |                        100% |                        100% |
+| Heading `244.8°`    |                        100% |                        100% |
+
+El comparador aprobó equivalencia interna de cada grupo y cada par
+baseline/final. Antes de obtener este lote se descartaron, sin usarlos como
+evidencia, cuatro diseños o tandas: una ruta automática que entraba en
+`fallback`, un corredor demasiado corto, un release dependiente de polling que
+producía objetivos distintos y el gesto fuerte fijo de 1 s cuya tanda base
+terminó en 58.7/59.7/60.6 km/h. El último fue rechazado automáticamente por el
+contrato. El gesto v3 conserva interacción física CDP y reduce el salto máximo
+por frame sin tocar el store ni relajar umbrales.
 
 ## Movimiento inmediato y reversa
 
@@ -81,10 +108,12 @@ conservaron el adjunto JSON de telemetría para calcular estos valores:
 | 30 km/h                            | 1104 ms |   1081 |   1199 |        <3 s |
 
 Las mismas 10 repeticiones validaron crucero al soltar, frenado y la secuencia
-segura detener → soltar → segundo gesto para reversa. Las tres capturas de
-rendimiento midieron touch → almacenado en 49.5 ms (46.0–51.3), touch →
-consumo en 52.1 ms (48.4–54.1) y selección del objetivo 58 km/h en 762 ms
-(756–790).
+segura detener → soltar → segundo gesto para reversa. Las tres capturas schema
+5 midieron touch → almacenado en 38.7 ms (35.0–39.7), touch → consumo en
+39.3 ms (35.6–40.2) y selección del objetivo ≥58 km/h en 2379 ms
+(2361–2395). Este último tiempo incluye deliberadamente el gesto suave de
+2200 ms usado para estabilizar la carga comparativa; no representa el tiempo de
+arranque del modo arcade.
 
 Un primer intento de la tanda 10× fue inválido: el preview había terminado por
 su límite de una hora y los diez casos fallaron en `page.goto` con
@@ -95,7 +124,8 @@ no se cuenta como fallo de gameplay ni se oculta.
 ## Primeros cinco minutos
 
 Tres sesiones completas de 300 s se capturaron sobre
-`1a8de1021b4547bb848ea4626a873f3876dcd129`:
+`1a8de1021b4547bb848ea4626a873f3876dcd129`. Los commits hasta el candidato
+schema 5 no cambian el runtime de producción usado por ese runner:
 
 - 3/3 terminaron con red vial `ready`, ruta `road`, cero overlays y Torogoz.
 - 0 ms inmóvil y cero recuperaciones registradas en las tres sesiones.
@@ -125,8 +155,9 @@ Tres sesiones completas de 300 s se capturaron sobre
 ## Límites
 
 Tiempo preciso de carga del modelo y de cambio de vehículo: n/d. Escrituras
-Zustand, GPU, repaints MapLibre, batería, temperatura, audio real, haptics y
-diversión: n/d. El timer headless muestra cuantización alrededor de
+Zustand, GPU, repaints MapLibre, latencia de presentación/primer frame visual
+del contrato schema 5, batería, temperatura, audio real, haptics y diversión:
+n/d. El timer headless muestra cuantización alrededor de
 16.7/33.4 ms. Heap es una lectura de Chromium, no memoria total del proceso o
 GPU. Ninguna cifra demuestra diversión, comodidad, ausencia de mareo o
 sostenibilidad térmica.
