@@ -51,19 +51,19 @@ async function steerTowardRoute(
   touchId: number,
 ): Promise<void> {
   const gameMap = page.getByTestId('game-map');
-  const recommended = Number(
-    await gameMap.getAttribute('data-navigation-recommended-heading'),
-  );
-  const physical = Number(
-    await gameMap.getAttribute('data-navigation-physical-heading'),
-  );
-  const shortestHeadingDelta = ((recommended - physical + 540) % 360) - 180;
-  const headingDelta =
-    Math.abs(shortestHeadingDelta) >= 170
-      ? Math.abs(shortestHeadingDelta)
-      : shortestHeadingDelta;
-  if (!Number.isFinite(headingDelta) || Math.abs(headingDelta) <= 4) {
-    await page.waitForTimeout(180);
+  const headingDelta = async () => {
+    const [recommended, physical] = await Promise.all([
+      gameMap
+        .getAttribute('data-navigation-recommended-heading')
+        .then(Number),
+      gameMap.getAttribute('data-navigation-physical-heading').then(Number),
+    ]);
+    const shortest = ((recommended - physical + 540) % 360) - 180;
+    return Math.abs(shortest) >= 170 ? Math.abs(shortest) : shortest;
+  };
+  const initialDelta = await headingDelta();
+  if (!Number.isFinite(initialDelta) || Math.abs(initialDelta) <= 4) {
+    await page.waitForTimeout(80);
     return;
   }
   await session.send('Input.dispatchTouchEvent', {
@@ -72,25 +72,30 @@ async function steerTowardRoute(
       { id: touchId, x: joystickCenter.x, y: joystickCenter.y, force: 1 },
     ],
   });
-  await session.send('Input.dispatchTouchEvent', {
-    type: 'touchMove',
-    touchPoints: [
-      {
-        id: touchId,
-        x:
-          joystickCenter.x +
-          (headingDelta >= 0 ? 1 : -1) * joystickCenter.width * 0.48,
-        y: joystickCenter.y,
-        force: 1,
-      },
-    ],
-  });
-  await page.waitForTimeout(220);
+  const steeringDeadline = Date.now() + 650;
+  while (Date.now() < steeringDeadline) {
+    const delta = await headingDelta();
+    if (!Number.isFinite(delta) || Math.abs(delta) <= 6) break;
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [
+        {
+          id: touchId,
+          x:
+            joystickCenter.x +
+            (delta >= 0 ? 1 : -1) * joystickCenter.width * 0.48,
+          y: joystickCenter.y,
+          force: 1,
+        },
+      ],
+    });
+    await page.waitForTimeout(60);
+  }
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',
     touchPoints: [],
   });
-  await page.waitForTimeout(70);
+  await page.waitForTimeout(30);
 }
 
 async function openPauseSettings(page: Page) {
@@ -119,6 +124,7 @@ test('Arcade convierte un gesto corto visible en movimiento real', async ({
     (element) =>
       `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
   );
+  const shortGestureStartedAt = Date.now();
 
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchStart',
@@ -155,6 +161,17 @@ test('Arcade convierte un gesto corto visible en movimiento real', async ({
       { timeout: 1_000, intervals: [16, 25, 50] },
     )
     .not.toBe(initialPosition);
+  const shortGestureVisibleMovementMilliseconds =
+    Date.now() - shortGestureStartedAt;
+  expect(shortGestureVisibleMovementMilliseconds).toBeLessThan(1_000);
+  await testInfo.attach('arcade-short-gesture-metrics.json', {
+    body: JSON.stringify(
+      { visibleMovementMilliseconds: shortGestureVisibleMovementMilliseconds },
+      null,
+      2,
+    ),
+    contentType: 'application/json',
+  });
 
   await page.keyboard.press('Escape');
   const pauseMenu = page.getByRole('dialog', { name: 'Partida en pausa' });
@@ -222,6 +239,33 @@ test('Arcade arranca de inmediato, mantiene crucero y usa reversa segura', async
     (element) =>
       `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
   );
+  await gameMap.evaluate((element) => {
+    for (const threshold of [10, 20, 30]) {
+      element.removeAttribute(`data-test-speed-${String(threshold)}-ms`);
+    }
+    const startedAt = performance.now();
+    const recordMilestones = () => {
+      const speed = Number(
+        element.dataset.playerSpeedKilometersPerHour ?? '0',
+      );
+      for (const threshold of [10, 20, 30]) {
+        const attribute = `data-test-speed-${String(threshold)}-ms`;
+        if (speed >= threshold && !element.hasAttribute(attribute)) {
+          element.setAttribute(
+            attribute,
+            (performance.now() - startedAt).toFixed(1),
+          );
+        }
+      }
+      if (element.hasAttribute('data-test-speed-30-ms')) observer.disconnect();
+    };
+    const observer = new MutationObserver(recordMilestones);
+    observer.observe(element, {
+      attributes: true,
+      attributeFilter: ['data-player-speed-kilometers-per-hour'],
+    });
+    recordMilestones();
+  });
   const movementStartedAt = Date.now();
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchStart',
@@ -293,27 +337,26 @@ test('Arcade arranca de inmediato, mantiene crucero y usa reversa segura', async
   await expect(gameMap).toHaveAttribute('data-drive-enabled', 'true');
   await expect(gameMap).toHaveAttribute('data-runtime-blocked-by', '');
 
-  const speedMilestones: Record<'10' | '20' | '30', number> = {
-    '10': 0,
-    '20': 0,
-    '30': 0,
-  };
-  for (const threshold of [10, 20, 30] as const) {
-    await expect
-      .poll(
-        async () =>
-          Number(
-            await gameMap.getAttribute('data-player-speed-kilometers-per-hour'),
+  await expect(gameMap).toHaveAttribute(
+    'data-test-speed-30-ms',
+    /^\d+(?:\.\d+)?$/,
+    { timeout: 3_000 },
+  );
+  const speedMilestonesBrowserPerformanceV2 = Object.fromEntries(
+    await Promise.all(
+      ([10, 20, 30] as const).map(async (threshold) => [
+        String(threshold),
+        Number(
+          await gameMap.getAttribute(
+            `data-test-speed-${String(threshold)}-ms`,
           ),
-        { timeout: 3_000, intervals: [16, 25, 50] },
-      )
-      .toBeGreaterThanOrEqual(threshold);
-    speedMilestones[String(threshold) as '10' | '20' | '30'] =
-      Date.now() - movementStartedAt;
-  }
-  expect(speedMilestones['10']).toBeLessThan(1_000);
-  expect(speedMilestones['20']).toBeLessThan(2_000);
-  expect(speedMilestones['30']).toBeLessThan(3_000);
+        ),
+      ]),
+    ),
+  ) as Record<'10' | '20' | '30', number>;
+  expect(speedMilestonesBrowserPerformanceV2['10']).toBeLessThan(1_000);
+  expect(speedMilestonesBrowserPerformanceV2['20']).toBeLessThan(2_000);
+  expect(speedMilestonesBrowserPerformanceV2['30']).toBeLessThan(3_000);
   await testInfo.attach('arcade-movement-metrics.json', {
     body: JSON.stringify(
       {
@@ -322,7 +365,16 @@ test('Arcade arranca de inmediato, mantiene crucero y usa reversa segura', async
         wallClockFirstPositionMilliseconds,
         visibleMovementMilliseconds,
         inputPipeline,
-        speedMilestones,
+        measurementSchemaVersion: 2,
+        speedMilestones: 'n/d',
+        speedMilestonesComparableToLegacy: false,
+        speedMilestonesUnavailableReason:
+          'El polling historico del runner no preservaba el instante de cada umbral.',
+        speedMilestonesBrowserPerformanceV2,
+        speedMilestoneClocks: {
+          speedMilestonesBrowserPerformanceV2:
+            'browser performance.now; MutationObserver from before input',
+        },
       },
       null,
       2,
@@ -754,59 +806,65 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     ).toBeVisible();
     await expect(gameMap).toHaveAttribute('data-drive-enabled', 'true');
     await expect(gameMap).toHaveAttribute('data-runtime-blocked-by', '');
-    await session.detach();
-    return;
   }
-  await drag(
-    90,
-    joystickCenter.x,
-    joystickCenter.y - joystickCenter.width * 0.24,
+  const positionBeforePromotion = await gameMap.evaluate(
+    (element) =>
+      `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
   );
+  await drag(89, joystickCenter.x, joystickCenter.y);
   await expect(gameMap).toHaveAttribute('data-input-pointer-active', 'true');
   const targetBeforePromotion = Number(
     await gameMap.getAttribute('data-input-target-speed'),
   );
+  expect(targetBeforePromotion).toBeGreaterThanOrEqual(15);
+  await expect
+    .poll(() =>
+      gameMap
+        .getAttribute('data-player-speed-kilometers-per-hour')
+        .then(Number),
+    )
+    .toBeGreaterThanOrEqual(5);
   releaseRoadRequest();
   await expect(gameMap).toHaveAttribute('data-road-network-status', 'ready', {
     timeout: 20_000,
   });
-  await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road', {
-    timeout: 20_000,
-  });
-  await expect(
-    page.getByRole('heading', { name: 'Sigue la línea cian' }),
-  ).toBeVisible();
+  await expect(gameMap).toHaveAttribute(
+    'data-road-promotion-assist-ramp',
+    'active',
+  );
   const promotionObservation = await gameMap.evaluate(async (element) => {
     const positionFor = () =>
       `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`;
-    const positionAtPromotion = positionFor();
+    const initialPosition = positionFor();
     const observationStartedAt = performance.now();
     while (
-      positionFor() === positionAtPromotion &&
+      positionFor() === initialPosition &&
       performance.now() - observationStartedAt < 250
     ) {
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => resolve()),
       );
     }
+    const finalPosition = positionFor();
     return {
       promoted: element.dataset.roadNetworkPromotedFromFallback,
       assistRamp: element.dataset.roadPromotionAssistRamp,
       pointerActive: element.dataset.inputPointerActive,
       targetSpeed: Number(element.dataset.inputTargetSpeed),
-      positionChanged: positionFor() !== positionAtPromotion,
+      position: finalPosition,
+      positionChangedAfterPromotion: finalPosition !== initialPosition,
     };
   });
   expect(promotionObservation).toMatchObject({
     promoted: 'true',
     assistRamp: 'active',
     pointerActive: 'true',
-    positionChanged: true,
+    positionChangedAfterPromotion: true,
   });
+  expect(promotionObservation.position).not.toBe(positionBeforePromotion);
   expect(promotionObservation.targetSpeed).toBeGreaterThanOrEqual(
     targetBeforePromotion,
   );
-  await release();
 
   if (testInfo.project.name === 'chromium-mobile') {
     await page.getByRole('button', { name: 'Pausar partida' }).click();
@@ -814,7 +872,7 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
       name: 'Reanudar partida',
     });
     await expect(resumeButton).toBeVisible();
-    await page.waitForTimeout(1_600);
+    await release();
     await expect(gameMap).toHaveAttribute(
       'data-road-promotion-assist-ramp',
       'active',
@@ -825,6 +883,18 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
       ),
     );
     expect(pausedAssistElapsedMilliseconds).toBeGreaterThanOrEqual(0);
+    await page.waitForTimeout(1_600);
+    await expect(gameMap).toHaveAttribute(
+      'data-road-promotion-assist-ramp',
+      'active',
+    );
+    expect(
+      Number(
+        await gameMap.getAttribute(
+          'data-road-promotion-assist-paused-elapsed-ms',
+        ),
+      ),
+    ).toBe(pausedAssistElapsedMilliseconds);
     await resumeButton.click();
     await expect(gameMap).toHaveAttribute(
       'data-road-promotion-assist-resumed-elapsed-ms',
@@ -847,7 +917,41 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
       'complete',
       { timeout: 4_000 },
     );
+  } else {
+    await release();
   }
+
+  await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road', {
+    timeout: 20_000,
+  });
+  if (testInfo.project.name === 'chromium-mobile') {
+    await expect(
+      page.getByRole('heading', { name: 'Sigue la línea cian' }),
+    ).toBeVisible();
+  }
+
+  await drag(
+    90,
+    joystickCenter.x,
+    joystickCenter.y + joystickCenter.width * 0.44,
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-input-cruise-reverse-state',
+    'awaiting-release',
+    { timeout: 6_000 },
+  );
+  await release();
+  await expect(gameMap).toHaveAttribute(
+    'data-input-cruise-reverse-state',
+    'reverse-armed',
+  );
+  await expect
+    .poll(() =>
+      gameMap
+        .getAttribute('data-player-speed-kilometers-per-hour')
+        .then(Number),
+    )
+    .toBeLessThan(1);
 
   await expect(gameMap).toHaveAttribute(
     'data-road-promotion-first-active-assist-multiplier',
@@ -902,7 +1006,7 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   await drag(
     91,
     joystickCenter.x,
-    joystickCenter.y - joystickCenter.width * 0.24,
+    joystickCenter.y - joystickCenter.width * 0.44,
   );
   await expect
     .poll(() => gameMap.getAttribute('data-input-target-speed').then(Number), {
@@ -923,8 +1027,45 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     .not.toBe(positionBeforeRoadFollow);
   await expect(gameMap).toHaveAttribute('data-drive-enabled', 'true');
   await expect(gameMap).toHaveAttribute('data-runtime-blocked-by', '');
-  const roadFollowIsInvalid = async () => {
-    const [offRoute, requiresRejoin, surface, recommended, physical] =
+  await drag(
+    92,
+    joystickCenter.x,
+    joystickCenter.y + joystickCenter.width * 0.15,
+  );
+  await expect
+    .poll(() => gameMap.getAttribute('data-input-target-speed').then(Number), {
+      timeout: 2_000,
+      intervals: [25, 50],
+    })
+    .toBeLessThanOrEqual(18);
+  await release();
+  await expect(gameMap).toHaveAttribute(
+    'data-input-cruise-reverse-state',
+    'forward',
+  );
+  await expect
+    .poll(
+      () =>
+        gameMap
+          .getAttribute('data-player-speed-kilometers-per-hour')
+          .then(Number),
+      { timeout: 4_000 },
+    )
+    .toBeLessThanOrEqual(20);
+  const readRoadFollowState = async () => {
+    const [
+      offRoute,
+      requiresRejoin,
+      surface,
+      recommended,
+      physical,
+      speed,
+      reversing,
+      distanceToRoute,
+      routeMode,
+      roadNetworkStatus,
+      routeCoordinateCount,
+    ] =
       await Promise.all([
         gameMap.getAttribute('data-navigation-off-route'),
         gameMap.getAttribute('data-navigation-requires-rejoin'),
@@ -933,35 +1074,90 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
           .getAttribute('data-navigation-recommended-heading')
           .then(Number),
         gameMap.getAttribute('data-navigation-physical-heading').then(Number),
+        gameMap
+          .getAttribute('data-player-speed-kilometers-per-hour')
+          .then(Number),
+        gameMap.getAttribute('data-navigation-reversing'),
+        gameMap.getAttribute('data-navigation-distance-to-route').then(Number),
+        gameMap.getAttribute('data-mission-route-mode'),
+        gameMap.getAttribute('data-road-network-status'),
+        gameMap.getAttribute('data-mission-route-coordinate-count').then(Number),
       ]);
     const headingDifference = Math.abs(
       ((recommended - physical + 540) % 360) - 180,
     );
-    return (
-      offRoute === 'true' ||
-      requiresRejoin === 'true' ||
-      surface === 'offroad' ||
-      !Number.isFinite(headingDifference) ||
-      headingDifference > 18
-    );
+    return {
+      offRoute,
+      requiresRejoin,
+      surface,
+      speed,
+      reversing,
+      distanceToRoute,
+      routeMode,
+      roadNetworkStatus,
+      routeCoordinateCount,
+      headingDifference,
+    };
   };
-  let roadSteeringTouchId = 92;
-  const roadFollowDeadline = Date.now() + 5_000;
-  while ((await roadFollowIsInvalid()) && Date.now() < roadFollowDeadline) {
-    await steerTowardRoute(page, session, joystickCenter, roadSteeringTouchId);
-    roadSteeringTouchId += 1;
+  const roadFollowIsInvalid = (
+    state: Awaited<ReturnType<typeof readRoadFollowState>>,
+  ) =>
+    (
+      state.offRoute === 'true' ||
+      state.requiresRejoin === 'true' ||
+      state.surface === 'offroad' ||
+      state.speed < 5 ||
+      state.reversing === 'true' ||
+      !Number.isFinite(state.distanceToRoute) ||
+      state.distanceToRoute > 24 ||
+      state.routeMode !== 'road' ||
+      state.roadNetworkStatus !== 'ready' ||
+      !Number.isFinite(state.routeCoordinateCount) ||
+      state.routeCoordinateCount < 2 ||
+      !Number.isFinite(state.headingDifference) ||
+      state.headingDifference > 18
+    );
+  let roadSteeringTouchId = 93;
+  const roadFollowDeadline = Date.now() + 8_000;
+  let completedRoadFollowState: Awaited<
+    ReturnType<typeof readRoadFollowState>
+  > | null = null;
+  while (Date.now() < roadFollowDeadline) {
+    if ((await tutorialCard.count()) === 0) {
+      completedRoadFollowState = await readRoadFollowState();
+      break;
+    }
+    const roadFollowState = await readRoadFollowState();
+    if (roadFollowIsInvalid(roadFollowState)) {
+      await steerTowardRoute(
+        page,
+        session,
+        joystickCenter,
+        roadSteeringTouchId,
+      );
+      roadSteeringTouchId += 1;
+    } else {
+      await page.waitForTimeout(100);
+    }
   }
-  await expect(gameMap).toHaveAttribute('data-navigation-off-route', 'false');
-  await expect(gameMap).toHaveAttribute(
-    'data-navigation-requires-rejoin',
-    'false',
-  );
-  await expect(gameMap).not.toHaveAttribute(
-    'data-road-contact-surface',
-    'offroad',
-  );
-  await expect.poll(roadFollowIsInvalid).toBe(false);
-  await expect(tutorialCard).toHaveCount(0, { timeout: 3_000 });
+  await expect(tutorialCard).toHaveCount(0);
+  if (testInfo.project.name === 'chromium-mobile') {
+    completedRoadFollowState ??= await readRoadFollowState();
+    expect(completedRoadFollowState).toMatchObject({
+      offRoute: 'false',
+      requiresRejoin: 'false',
+      reversing: 'false',
+      routeMode: 'road',
+      roadNetworkStatus: 'ready',
+    });
+    expect(completedRoadFollowState.surface).not.toBe('offroad');
+    expect(completedRoadFollowState.speed).toBeGreaterThanOrEqual(5);
+    expect(completedRoadFollowState.distanceToRoute).toBeLessThanOrEqual(24);
+    expect(completedRoadFollowState.routeCoordinateCount).toBeGreaterThanOrEqual(
+      2,
+    );
+    expect(completedRoadFollowState.headingDifference).toBeLessThanOrEqual(18);
+  }
   await expect(page.getByTestId('mobile-driving-hud')).toBeVisible();
   await session.detach();
 });
