@@ -41,6 +41,11 @@ async function loadGroup(directory, label) {
     const { path, metrics } = capture;
     const metadata = metrics.captureMetadata ?? {};
     const { measuredSha, repositorySha, buildSha, capturedAt } = metadata;
+    if (metadata.traceCapture != null) {
+      throw new Error(
+        `${label}: una traza diagnóstica no puede participar en el gate oficial.`,
+      );
+    }
     if (
       typeof repositorySha !== 'string' ||
       typeof buildSha !== 'string' ||

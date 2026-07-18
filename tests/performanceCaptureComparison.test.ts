@@ -162,6 +162,27 @@ describe('contrato de capturas arcade', () => {
     expect(comparison.performanceGate.status).toBe('passed');
   });
 
+  it('rechaza capturas con tracing en el gate oficial', () => {
+    const baseline = fixtureDirectory('baseline', capture('a'.repeat(40)));
+    const traced = capture('b'.repeat(40));
+    (
+      traced.captureMetadata as typeof traced.captureMetadata & {
+        traceCapture: Record<string, unknown>;
+      }
+    ).traceCapture = {
+      bytesWritten: 1_024,
+      format: 'json+gzip',
+    };
+    const final = fixtureDirectory('final', traced);
+
+    const result = spawnSync(process.execPath, [comparator, baseline, final], {
+      encoding: 'utf8',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('traza diagnóstica');
+  });
+
   it('rechaza un preview obsoleto aunque measuredSha coincida con el build', () => {
     const baseline = fixtureDirectory(
       'baseline',

@@ -2,11 +2,18 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium, devices } from '@playwright/test';
+import {
+  startArcadeTrace,
+  stopArcadeTrace,
+} from '../performance/cdp-trace-stream.mjs';
 
 const baseUrl = process.argv[2] ?? 'http://127.0.0.1:5173';
 const outputDirectory = resolve(
   process.argv[3] ?? 'test-results/arcade-core-v0.3.0',
 );
+const traceOutputPath = process.env.ARCADE_TRACE_PATH
+  ? resolve(process.env.ARCADE_TRACE_PATH)
+  : null;
 const observationMilliseconds = 30_000;
 const warmupMilliseconds = 10_000;
 const targetSelectionHoldMilliseconds = 2_200;
@@ -154,6 +161,8 @@ function summarize(values) {
 }
 
 const browser = await chromium.launch({ headless: true });
+let traceSession = null;
+let traceStarted = false;
 try {
   const context = await browser.newContext({
     ...devices['Pixel 7'],
@@ -314,9 +323,14 @@ try {
   });
 
   await page.waitForTimeout(warmupMilliseconds);
+  if (traceOutputPath) {
+    await startArcadeTrace(session);
+    traceSession = session;
+    traceStarted = true;
+  }
 
   const initial = await page.evaluate(
-    ({ fallbackHeadingDegrees, initialDistanceMeters }) => {
+    ({ fallbackHeadingDegrees, initialDistanceMeters, traceEnabled }) => {
       const count = (selector, key = 'renderCount') => {
         const element = document.querySelector(selector);
         return element instanceof HTMLElement
@@ -458,6 +472,7 @@ try {
         });
         window.__v0251MapObserver = observer;
       }
+      if (traceEnabled) performance.mark('arcade-observation-start');
       return {
         mobileDrivingHud: count('.mobile-driving-hud'),
         playerHud: count('.player-hud'),
@@ -505,12 +520,14 @@ try {
     {
       fallbackHeadingDegrees: deterministicCheckpoint.headingDegrees,
       initialDistanceMeters: 1_250,
+      traceEnabled: Boolean(traceOutputPath),
     },
   );
 
   await page.waitForTimeout(observationMilliseconds);
 
-  const metrics = await page.evaluate(() => {
+  const metrics = await page.evaluate((traceEnabled) => {
+    if (traceEnabled) performance.mark('arcade-observation-end');
     const box = (selector) => {
       const rectangle = document
         .querySelector(selector)
@@ -614,7 +631,12 @@ try {
         ),
       },
     };
-  });
+  }, Boolean(traceOutputPath));
+  let traceResult = null;
+  if (traceOutputPath) {
+    traceStarted = false;
+    traceResult = await stopArcadeTrace(session, traceOutputPath);
+  }
   metrics.renderDeltas = Object.fromEntries(
     [
       'mobileDrivingHud',
@@ -785,16 +807,23 @@ try {
     performanceProfilingEnabled:
       metrics.mapDataset.performanceProfilingEnabled === 'true',
     diagnosticsEnabled: metrics.mapDataset.diagnosticsEnabled === 'true',
+    traceCapture: traceResult
+      ? {
+          bytesWritten: traceResult.bytesWritten,
+          format: 'json+gzip',
+          startMark: 'arcade-observation-start',
+          endMark: 'arcade-observation-end',
+        }
+      : null,
     scenario: {
-        id: 'arcade-core-trunk-cruise-v3',
+      id: 'arcade-core-trunk-cruise-v3',
       viewport: referenceViewport,
       deviceScaleFactor: referenceDeviceScaleFactor,
       warmupMilliseconds,
       observationMilliseconds,
       touchGesture: {
         source: 'cdp-touch',
-        verticalTravelJoystickRatio:
-          targetSelectionVerticalTravelJoystickRatio,
+        verticalTravelJoystickRatio: targetSelectionVerticalTravelJoystickRatio,
         holdMilliseconds: targetSelectionHoldMilliseconds,
         releaseThresholdKilometersPerHour: 58,
       },
@@ -840,6 +869,14 @@ try {
   await session.detach();
   await context.close();
 } finally {
+  if (traceStarted && traceSession && traceOutputPath) {
+    traceStarted = false;
+    try {
+      await stopArcadeTrace(traceSession, traceOutputPath);
+    } catch (error) {
+      console.warn('No se pudo cerrar la traza arcade parcial.', error);
+    }
+  }
   await browser.close();
 }
 
