@@ -256,9 +256,9 @@ describe('cámara de seguimiento', () => {
     expect(significant.appliedOptions?.bearing).toBe(1);
   });
 
-  it('mantiene driving ante picos cortos y entra a fast con velocidad sostenida', () => {
+  it('mantiene driving ante picos de crucero y entra a fast con velocidad sostenida', () => {
     const base = {
-      speedKilometersPerHour: 60,
+      speedKilometersPerHour: 64,
       previousMode: 'driving' as const,
       hasAlert: false,
       hasInteraction: false,
@@ -273,6 +273,7 @@ describe('cámara de seguimiento', () => {
     expect(
       mobileCameraModeForSpeed({
         ...base,
+        speedKilometersPerHour: 70,
         timeInStateMilliseconds:
           mobileCameraHysteresis.fastEnterDelayMilliseconds,
       }),
@@ -282,7 +283,7 @@ describe('cámara de seguimiento', () => {
   it('usa histéresis al volver de fast y no deja que alertas alteren el zoom', () => {
     expect(
       mobileCameraModeForSpeed({
-        speedKilometersPerHour: 54,
+        speedKilometersPerHour: 66,
         previousMode: 'fast',
         timeInStateMilliseconds: 10_000,
         hasAlert: true,
@@ -291,7 +292,7 @@ describe('cámara de seguimiento', () => {
     ).toBe('fast');
     expect(
       mobileCameraModeForSpeed({
-        speedKilometersPerHour: 51,
+        speedKilometersPerHour: 63,
         previousMode: 'fast',
         timeInStateMilliseconds:
           mobileCameraHysteresis.fastExitDelayMilliseconds - 1,
@@ -301,7 +302,7 @@ describe('cámara de seguimiento', () => {
     ).toBe('fast');
     expect(
       mobileCameraModeForSpeed({
-        speedKilometersPerHour: 51,
+        speedKilometersPerHour: 63,
         previousMode: 'fast',
         timeInStateMilliseconds:
           mobileCameraHysteresis.fastExitDelayMilliseconds,
@@ -311,11 +312,13 @@ describe('cámara de seguimiento', () => {
     ).toBe('driving');
   });
 
-  it('mantiene el perfil r\u00e1pido alineado con la presentaci\u00f3n arcade', () => {
-    expect(mobileCameraHysteresis.fastEnterKilometersPerHour).toBe(
+  it('reserva el encuadre amplio para velocidades superiores al efecto visual r\u00e1pido', () => {
+    expect(mobileCameraHysteresis.fastEnterKilometersPerHour).toBe(70);
+    expect(mobileCameraHysteresis.fastExitKilometersPerHour).toBe(64);
+    expect(mobileCameraHysteresis.fastEnterKilometersPerHour).toBeGreaterThan(
       drivingPresentationThresholds.fastEnterKilometersPerHour,
     );
-    expect(mobileCameraHysteresis.fastExitKilometersPerHour).toBe(
+    expect(mobileCameraHysteresis.fastExitKilometersPerHour).toBeGreaterThan(
       drivingPresentationThresholds.fastExitKilometersPerHour,
     );
   });
