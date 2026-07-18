@@ -36,7 +36,10 @@ import { useGameStore } from '../store/gameStore';
 import type { RoadCoordinates } from '../types/roads';
 import type { RouteNavigationInstruction } from '../types/navigation';
 import { createTrailingUpdateScheduler } from './trailingUpdateScheduler';
-import { createNavigationGuidanceElement } from './navigationGuidanceMarker';
+import {
+  createNavigationGuidanceElement,
+  navigationGuidanceOffsetForPlayerSeparation,
+} from './navigationGuidanceMarker';
 import {
   boundedRetryDelayMilliseconds,
   initialBoundedRetryState,
@@ -691,9 +694,13 @@ export function addMissionRoute(
       container.dataset.navigationArrowLatitude = '';
       container.dataset.navigationArrowFallback = '';
     } else {
+      const guidanceOffset = navigationGuidanceOffsetForPlayerSeparation(
+        map.project(position),
+        map.project(arrowPosition),
+      );
       maneuverMarker
         .setLngLat(arrowPosition)
-        .setOffset([0, 0])
+        .setOffset(guidanceOffset)
         .setRotation(progress.activeNavigation.recommendedHeading);
       maneuverMarkerElement.hidden = false;
       const container = map.getContainer();
