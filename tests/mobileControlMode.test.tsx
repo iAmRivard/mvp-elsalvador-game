@@ -29,10 +29,7 @@ describe('modos móviles de conducción', () => {
     });
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-    cleanup();
-  });
+  afterEach(cleanup);
 
   it('deja joystick, Turbo y utilidades sin pedales ni AUTO', () => {
     useSettingsStore.setState({ controlMode: 'single-drive-joystick' });
@@ -79,55 +76,7 @@ describe('modos móviles de conducción', () => {
     expect(
       screen.getByRole('button', { name: 'Cambiar a conducción arcade' }),
     ).toBeTruthy();
-  });
-
-  it('omite la elegibilidad de reincorporación mientras avanza', async () => {
-    vi.useFakeTimers();
-    const state = useGameStore.getState();
-    const getRouteRejoinEligibility = vi.fn(() => ({
-      eligible: false as const,
-      blockedBy: 'not-offroad' as const,
-      candidate: null,
-    }));
-    useGameStore.setState({
-      telemetry: {
-        ...state.telemetry,
-        speedKilometersPerHour: 63,
-      },
-      getRouteRejoinEligibility,
-    });
-    render(<StuckVehicleAssist input={new InputController()} enabled />);
-
-    await act(() => vi.advanceTimersByTimeAsync(1_000));
-
-    expect(getRouteRejoinEligibility).not.toHaveBeenCalled();
-  });
-
-  it('arma la ayuda sin demora adicional al volver a detenerse', async () => {
-    vi.useFakeTimers();
-    const initial = useGameStore.getState();
-    useGameStore.setState({
-      telemetry: {
-        ...initial.telemetry,
-        speedKilometersPerHour: 63,
-      },
-    });
-    const input = new InputController();
-    input.setDriveJoystick(1, 0);
-    render(<StuckVehicleAssist input={input} enabled />);
-    await act(() => vi.advanceTimersByTimeAsync(1_000));
-
-    act(() => {
-      const state = useGameStore.getState();
-      useGameStore.setState({
-        telemetry: { ...state.telemetry, speedKilometersPerHour: 0 },
-      });
-    });
-    await act(() => vi.advanceTimersByTimeAsync(1_749));
-    expect(screen.queryByText('Tu vehículo no está avanzando')).toBeNull();
-
-    await act(() => vi.advanceTimersByTimeAsync(1));
-    expect(screen.getByText('Tu vehículo no está avanzando')).toBeTruthy();
+    vi.useRealTimers();
   });
 
   it('muestra Arcade como modo recomendado y engancha 25 km/h', () => {

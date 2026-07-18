@@ -87,24 +87,13 @@ export function StuckVehicleAssist({
     const update = () => {
       const now = performance.now();
       const state = useGameStore.getState();
-      const speedKilometersPerHour = state.telemetry.speedKilometersPerHour;
-      const distance = state.telemetry.totalDistanceMeters;
-      if (
-        Math.abs(speedKilometersPerHour) >
-        stuckVehicleConfig.maximumStoppedSpeedKilometersPerHour
-      ) {
-        requestStartedAt.current = now;
-        sessionStartedAt.current = now;
-        lastDistance.current = distance;
-        if (visibleRef.current) setAssistView(EMPTY_VIEW);
-        return;
-      }
       const diagnostics = input.getDiagnostics();
       const target = diagnostics.mobileCruise.targetSpeedKilometersPerHour;
       const forwardIntent =
         diagnostics.mobileCruiseVerticalIntent > 0.12 ||
         diagnostics.throttle > 0.12;
       const hasForwardRequest = target > 10 || forwardIntent;
+      const distance = state.telemetry.totalDistanceMeters;
       requestStartedAt.current ??= now;
       sessionStartedAt.current ??= now;
       lastDistance.current ??= distance;
@@ -132,7 +121,7 @@ export function StuckVehicleAssist({
         blockingOverlay,
         fuel: state.vehicle.fuel,
         condition: state.vehicle.condition,
-        speedKilometersPerHour,
+        speedKilometersPerHour: state.telemetry.speedKilometersPerHour,
         targetSpeedKilometersPerHour: target,
         forwardIntent,
         stationaryMilliseconds: now - requestStartedAt.current,
@@ -169,7 +158,7 @@ export function StuckVehicleAssist({
         controlMode === 'arcade-driving' &&
         !blockingOverlay &&
         target <= 0.5 &&
-        Math.abs(speedKilometersPerHour) < 1 &&
+        Math.abs(state.telemetry.speedKilometersPerHour) < 1 &&
         now - sessionStartedAt.current >= 1_500;
       const nextView: AssistView = showStartHint
         ? {
