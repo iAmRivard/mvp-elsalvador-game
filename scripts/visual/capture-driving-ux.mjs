@@ -9,6 +9,7 @@ const outputDirectory = resolve(
 );
 const observationMilliseconds = 30_000;
 const warmupMilliseconds = 10_000;
+const targetSelectionHoldMilliseconds = 1_000;
 const captureSchemaVersion = 5;
 const referenceViewport = { width: 392, height: 850 };
 const referenceDeviceScaleFactor = 2;
@@ -291,6 +292,11 @@ try {
       },
     ],
   });
+  await page.waitForTimeout(targetSelectionHoldMilliseconds);
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
   await page.waitForFunction(() => {
     const map = document.querySelector('[data-testid="game-map"]');
     return (
@@ -299,10 +305,6 @@ try {
     );
   });
   const timeToSelect58KphTargetMilliseconds = Date.now() - inputStartedAt;
-  await session.send('Input.dispatchTouchEvent', {
-    type: 'touchEnd',
-    touchPoints: [],
-  });
   await page.getByTestId('game-map').waitFor({ state: 'visible' });
   await page.screenshot({
     path: resolve(outputDirectory, 'arcade-core-mobile-after.png'),
@@ -789,6 +791,7 @@ try {
       touchGesture: {
         source: 'cdp-touch',
         verticalTravelJoystickRatio: 0.44,
+        holdMilliseconds: targetSelectionHoldMilliseconds,
         releaseThresholdKilometersPerHour: 58,
       },
       storage: {
