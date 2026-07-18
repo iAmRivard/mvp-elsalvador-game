@@ -229,12 +229,31 @@ try {
   await page.waitForFunction(() => {
     const map = document.querySelector('[data-testid="game-map"]');
     return (
-      map instanceof HTMLElement &&
-      map.dataset.roadNetworkStatus === 'ready' &&
-      map.dataset.missionRouteMode === 'idle' &&
-      map.dataset.roadContactSurface === 'trunk'
+      map instanceof HTMLElement && map.dataset.roadNetworkStatus === 'ready'
     );
   });
+  await page.waitForTimeout(1_000);
+  const preparedRoadState = await page.evaluate(() => {
+    const map = document.querySelector('[data-testid="game-map"]');
+    return map instanceof HTMLElement
+      ? {
+          missionRouteMode: map.dataset.missionRouteMode,
+          surface: map.dataset.roadContactSurface,
+          edgeId: map.dataset.roadSelectedEdge,
+          longitude: map.dataset.playerLongitude,
+          latitude: map.dataset.playerLatitude,
+          headingDegrees: map.dataset.navigationPhysicalHeading,
+        }
+      : null;
+  });
+  if (
+    preparedRoadState?.missionRouteMode !== 'idle' ||
+    preparedRoadState.surface !== deterministicCheckpoint.expectedSurface
+  ) {
+    throw new Error(
+      `No se preparó el corredor determinista: ${JSON.stringify(preparedRoadState)}.`,
+    );
+  }
   const keepCurrentControls = page.getByRole('button', {
     name: 'Mantener controles actuales',
   });
