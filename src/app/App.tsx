@@ -31,6 +31,8 @@ const GameMap = lazy(async () => {
 
 export function App() {
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [stuckVehicleAssistVisible, setStuckVehicleAssistVisible] =
+    useState(false);
   const [inputController] = useState(() => new InputController());
   const hasSavedGame = useGameStore((state) => state.hasSavedGame);
   const isPaused = useGameStore((state) => state.isPaused);
@@ -151,6 +153,7 @@ export function App() {
           showContextualAdvice={
             onboardingState === 'completed' || onboardingState === 'skipped'
           }
+          suppressContextualAdvice={stuckVehicleAssistVisible}
           allowDiscovery={!showTutorial}
           allowStory
           onTutorialComplete={() => setPaused(false)}
@@ -159,6 +162,7 @@ export function App() {
         <StuckVehicleAssist
           input={inputController}
           enabled={!showTutorial && onboardingState !== 'introducing'}
+          onVisibilityChange={setStuckVehicleAssistVisible}
         />
         <LevelUpToast />
         {diagnosticsEnabled && <DiagnosticsPanel input={inputController} />}

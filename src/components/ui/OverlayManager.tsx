@@ -27,6 +27,7 @@ interface OverlayManagerProps {
   input?: InputController;
   showTutorial?: boolean;
   showContextualAdvice?: boolean;
+  suppressContextualAdvice?: boolean;
   onTutorialComplete?: () => void;
   onTutorialSkip?: () => void;
 }
@@ -42,6 +43,7 @@ export function OverlayManager({
   input,
   showTutorial = false,
   showContextualAdvice = false,
+  suppressContextualAdvice = false,
   onTutorialComplete = () => undefined,
   onTutorialSkip = () => undefined,
 }: OverlayManagerProps) {
@@ -170,6 +172,7 @@ export function OverlayManager({
   const adviceController = useContextualAdviceController({
     enabled:
       showContextualAdvice &&
+      !suppressContextualAdvice &&
       !hasLargeBlocker &&
       !isJournalOpen &&
       Boolean(input),
@@ -256,6 +259,9 @@ export function OverlayManager({
       }
       data-radio-expansion-blocked={
         radioExpansionBlocked ? 'true' : 'false'
+      }
+      data-contextual-advice-suppressed={
+        suppressContextualAdvice ? 'true' : 'false'
       }
     >
       {renderLargeOverlay(activeKind)}

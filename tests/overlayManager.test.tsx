@@ -201,6 +201,70 @@ describe('overlay manager', () => {
     ).toBeNull();
   });
 
+  it('pauses contextual advice while driving assistance owns the compact slot', () => {
+    vi.useFakeTimers();
+    useGameStore.getState().setTelemetry({
+      longitude: -89.3175451,
+      latitude: 13.6820687,
+      heading: 0,
+      speedMetersPerSecond: 0,
+      fuel: 75,
+      totalDistanceMeters: 0,
+    });
+    useGameStore.setState({
+      activeMissionId: 'la-transmision',
+      activeMissionCompletedObjectiveIds: ['sintonizar-transmision'],
+    });
+    const input = new InputController();
+    const { container, rerender } = render(
+      <OverlayManager input={input} showContextualAdvice />,
+    );
+
+    expect(
+      container.querySelector('[data-contextual-advice="objective"]'),
+    ).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(3_000);
+    });
+
+    rerender(
+      <OverlayManager
+        input={input}
+        showContextualAdvice
+        suppressContextualAdvice
+      />,
+    );
+    expect(
+      container.querySelector('[data-contextual-advice="objective"]'),
+    ).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+
+    rerender(
+      <OverlayManager
+        input={input}
+        showContextualAdvice
+        suppressContextualAdvice={false}
+      />,
+    );
+    expect(
+      container.querySelector('[data-contextual-advice="objective"]'),
+    ).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(4_499);
+    });
+    expect(
+      container.querySelector('[data-contextual-advice="objective"]'),
+    ).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(
+      container.querySelector('[data-contextual-advice="objective"]'),
+    ).toBeNull();
+  });
+
   it('keeps interaction advice ahead of objective and journal with compact radio', () => {
     vi.useFakeTimers();
     setMobileViewport(true);

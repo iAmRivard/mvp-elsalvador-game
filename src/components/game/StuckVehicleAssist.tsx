@@ -14,6 +14,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 interface StuckVehicleAssistProps {
   input: InputController;
   enabled: boolean;
+  onVisibilityChange?: (visible: boolean) => void;
 }
 
 interface AssistView {
@@ -55,6 +56,7 @@ const blockedMessages: Readonly<Record<string, string>> = {
 export function StuckVehicleAssist({
   input,
   enabled,
+  onVisibilityChange,
 }: StuckVehicleAssistProps) {
   const [view, setView] = useState<AssistView>(EMPTY_VIEW);
   const controlMode = useSettingsStore((state) => state.controlMode);
@@ -168,7 +170,18 @@ export function StuckVehicleAssist({
     };
   }, [controlMode, enabled, input]);
 
-  if (!enabled || view.kind === 'none') return null;
+  const visible = enabled && view.kind !== 'none';
+  useEffect(() => {
+    onVisibilityChange?.(visible);
+  }, [onVisibilityChange, visible]);
+  useEffect(
+    () => () => {
+      onVisibilityChange?.(false);
+    },
+    [onVisibilityChange],
+  );
+
+  if (!visible) return null;
 
   const close = () => {
     dismissedUntil.current = performance.now() + 10_000;

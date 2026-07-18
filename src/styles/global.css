@@ -7180,6 +7180,11 @@ html[data-reduced-motion='true'] *::after {
   pointer-events: none;
 }
 
+/* Evita un frame de solapamiento mientras React comunica la prioridad al manager. */
+.game-shell:has(.stuck-vehicle-assist) .contextual-advice {
+  display: none;
+}
+
 .contextual-advice > div {
   display: grid;
   min-width: 0;

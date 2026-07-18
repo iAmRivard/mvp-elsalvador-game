@@ -409,7 +409,10 @@ test('recalcula y aplica el offset al cambiar el viewport', async ({
   await enterExpedition(page);
 
   const gameMap = page.getByTestId('game-map');
-  await expectAppliedSafeCamera(gameMap, 'mobileInteraction');
+  await expect(page.locator('.stuck-vehicle-assist')).toBeVisible({
+    timeout: 3_000,
+  });
+  await expect(page.locator('.contextual-advice')).toBeHidden();
   const previousSafeHeight = Number(
     await gameMap.getAttribute('data-safe-viewport-height'),
   );
@@ -419,7 +422,23 @@ test('recalcula y aplica el offset al cambiar el viewport', async ({
       gameMap.getAttribute('data-safe-viewport-height').then(Number),
     )
     .not.toBe(previousSafeHeight);
+  await expect(page.locator('.stuck-vehicle-assist')).toBeVisible();
+  await expect(page.locator('.contextual-advice')).toBeHidden();
+  await expect(page.locator('.overlay-manager')).toHaveAttribute(
+    'data-contextual-advice-suppressed',
+    'true',
+  );
   await expectAppliedSafeCamera(gameMap, 'mobileInteraction');
+
+  await page
+    .getByRole('button', { name: /^Cerrar ayuda de conducci/ })
+    .click();
+  await expect(page.locator('.stuck-vehicle-assist')).toBeHidden();
+  await expect(page.locator('.overlay-manager')).toHaveAttribute(
+    'data-contextual-advice-suppressed',
+    'false',
+  );
+  await expect(page.locator('.contextual-advice')).toBeVisible();
 });
 
 for (const viewport of [
