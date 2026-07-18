@@ -1389,6 +1389,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
                 '';
               containerRef.current.dataset.roadPromotionAssistResumedElapsedMs =
                 '';
+              containerRef.current.dataset.roadPromotionAssistResumedRamp = '';
               containerRef.current.dataset.roadPromotionRuntimeDisplacementMeters =
                 promotionRuntimeDisplacementMeters.toFixed(3);
               containerRef.current.dataset.roadPromotionRuntimeHeadingDelta =
@@ -1659,6 +1660,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
               if (containerRef.current) {
                 containerRef.current.dataset.roadPromotionAssistResumedElapsedMs =
                   lateRoadPromotionAssistElapsedMilliseconds.toFixed(3);
+                containerRef.current.dataset.roadPromotionAssistResumedRamp =
+                  latePromotionAssistMultiplier < 1 ? 'active' : 'complete';
               }
             }
             if (lateRoadPromotionAssistFirstActiveSamplePending) {

@@ -263,6 +263,12 @@ describe('tutorial obligatorio', () => {
 
     render(<TutorialHarness input={input} onComplete={finish} />);
 
+    expect(screen.getByText('Esperando la línea cian')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'La guía directa no completa este paso. Espera la línea cian o toca Omitir.',
+      ),
+    ).toBeTruthy();
     await act(() => vi.advanceTimersByTimeAsync(900));
     await act(() => vi.advanceTimersByTimeAsync(420));
 

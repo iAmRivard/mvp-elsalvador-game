@@ -30,6 +30,7 @@ interface TutorialStep {
   description: string;
   completed: boolean;
   available: boolean;
+  actionHint?: string;
 }
 
 const STEP_ADVANCE_DELAY_MILLISECONDS = 420;
@@ -232,10 +233,13 @@ export function TutorialOverlay({
           ? 'Esperando la línea cian'
           : 'Sigue la línea cian',
         description: fallbackRoute
-          ? 'La guía directa mantiene la navegación mientras preparamos una ruta vial. Este paso solo se completa sobre la línea cian; también puedes omitir el tutorial.'
+          ? 'La guía directa mantiene la navegación mientras preparamos la ruta vial.'
           : 'Conduce sobre el tramo brillante de la ruta.',
         completed: routeFollowCompleted && routeFollowingValid,
         available: routeVisible,
+        actionHint: fallbackRoute
+          ? 'La guía directa no completa este paso. Espera la línea cian o toca Omitir.'
+          : undefined,
       },
     ];
   }, [
@@ -311,6 +315,12 @@ export function TutorialOverlay({
         title={current.title}
         description={current.description}
         available={current.available}
+        actionHint={
+          current.actionHint ??
+          (current.available
+            ? 'Realiza la acción para continuar'
+            : 'Continúa la misión para habilitar esta acción')
+        }
         onSkip={skip}
       />
     );
@@ -335,9 +345,10 @@ export function TutorialOverlay({
       <h2 id="tutorial-title">{current.title}</h2>
       <p>{current.description}</p>
       <small className="tutorial-coach__action-hint">
-        {current.available
-          ? 'Realiza la acción para continuar'
-          : 'Continúa la misión para habilitar esta acción'}
+        {current.actionHint ??
+          (current.available
+            ? 'Realiza la acción para continuar'
+            : 'Continúa la misión para habilitar esta acción')}
       </small>
     </aside>
   );

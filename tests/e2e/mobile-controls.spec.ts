@@ -421,8 +421,7 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
           typeof message.requestId === 'string'
         ) {
           this.returnedNullRoute = true;
-          document.documentElement.dataset.firstRoadRouteNullInjected =
-            'true';
+          document.documentElement.dataset.firstRoadRouteNullInjected = 'true';
           const requestId = message.requestId;
           queueMicrotask(() => {
             this.dispatchEvent(
@@ -494,9 +493,7 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   await expect(gameMap).toHaveAttribute('data-navigation-route-segment', '0');
   await expect
     .poll(() =>
-      gameMap
-        .getAttribute('data-navigation-distance-to-route')
-        .then(Number),
+      gameMap.getAttribute('data-navigation-distance-to-route').then(Number),
     )
     .toBeLessThanOrEqual(24);
   await expect(gameMap).toHaveAttribute('data-drive-enabled', 'true');
@@ -579,6 +576,11 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   await expect(
     page.getByRole('heading', { name: 'Esperando la línea cian' }),
   ).toBeVisible();
+  await expect(
+    page.getByText(
+      'La guía directa no completa este paso. Espera la línea cian o toca Omitir.',
+    ),
+  ).toBeVisible();
   await release();
   await expect(gameMap).toHaveAttribute(
     'data-input-cruise-reverse-state',
@@ -595,11 +597,10 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     joystickCenter.y - joystickCenter.width * 0.24,
   );
   await expect
-    .poll(
-      () =>
-        gameMap.getAttribute('data-input-target-speed').then(Number),
-      { timeout: 1_000, intervals: [16, 25, 50] },
-    )
+    .poll(() => gameMap.getAttribute('data-input-target-speed').then(Number), {
+      timeout: 1_000,
+      intervals: [16, 25, 50],
+    })
     .toBeGreaterThanOrEqual(15);
   await expect(gameMap).toHaveAttribute(
     'data-input-cruise-reverse-state',
@@ -630,6 +631,43 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     'data-tutorial-target',
     'route',
   );
+  if (testInfo.project.name === 'chromium-mobile-landscape') {
+    const actionHint = page.locator('.mobile-tutorial-card__action-hint');
+    const [cardBox, actionHintBox] = await Promise.all([
+      tutorialCard.boundingBox(),
+      actionHint.boundingBox(),
+    ]);
+    expect(cardBox).not.toBeNull();
+    expect(actionHintBox).not.toBeNull();
+    expect(actionHintBox!.y).toBeGreaterThanOrEqual(cardBox!.y);
+    expect(actionHintBox!.y + actionHintBox!.height).toBeLessThanOrEqual(
+      cardBox!.y + cardBox!.height + 0.5,
+    );
+    await page.getByRole('button', { name: 'Omitir' }).click();
+    await expect(tutorialCard).toHaveCount(0);
+    await expect(page.locator('html')).not.toHaveAttribute(
+      'data-tutorial-target',
+      /.+/,
+    );
+    await expect(gameMap).toHaveAttribute(
+      'data-mission-route-mode',
+      'fallback',
+    );
+    const activeMissionButton = page.getByRole('button', {
+      name: 'Abrir bitácora de la misión',
+    });
+    await expect(activeMissionButton).toBeVisible();
+    await expect(activeMissionButton).toContainText(
+      'Acércate al marcador y escucha la señal',
+    );
+    await expect(
+      page.getByRole('button', { name: 'Pausar partida' }),
+    ).toBeVisible();
+    await expect(gameMap).toHaveAttribute('data-drive-enabled', 'true');
+    await expect(gameMap).toHaveAttribute('data-runtime-blocked-by', '');
+    await session.detach();
+    return;
+  }
   await drag(
     90,
     joystickCenter.x,
@@ -711,6 +749,15 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     expect(resumedAssistElapsedMilliseconds).toBe(
       pausedAssistElapsedMilliseconds,
     );
+    await expect(gameMap).toHaveAttribute(
+      'data-road-promotion-assist-resumed-ramp',
+      'active',
+    );
+    await expect(gameMap).toHaveAttribute(
+      'data-road-promotion-assist-ramp',
+      'complete',
+      { timeout: 4_000 },
+    );
   }
 
   await expect(gameMap).toHaveAttribute(
@@ -769,11 +816,10 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     joystickCenter.y - joystickCenter.width * 0.24,
   );
   await expect
-    .poll(
-      () =>
-        gameMap.getAttribute('data-input-target-speed').then(Number),
-      { timeout: 1_000, intervals: [16, 25, 50] },
-    )
+    .poll(() => gameMap.getAttribute('data-input-target-speed').then(Number), {
+      timeout: 1_000,
+      intervals: [16, 25, 50],
+    })
     .toBeGreaterThanOrEqual(25);
   await release();
   await expect
@@ -813,12 +859,7 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   let roadSteeringTouchId = 92;
   const roadFollowDeadline = Date.now() + 5_000;
   while ((await roadFollowIsInvalid()) && Date.now() < roadFollowDeadline) {
-    await steerTowardRoute(
-      page,
-      session,
-      joystickCenter,
-      roadSteeringTouchId,
-    );
+    await steerTowardRoute(page, session, joystickCenter, roadSteeringTouchId);
     roadSteeringTouchId += 1;
   }
   await expect(gameMap).toHaveAttribute('data-navigation-off-route', 'false');

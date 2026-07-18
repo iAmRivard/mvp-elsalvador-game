@@ -5510,7 +5510,7 @@ html[data-fullscreen='true'] .game-shell {
     bottom: max(8px, env(safe-area-inset-bottom));
     left: max(142px, calc(env(safe-area-inset-left) + 136px));
     width: min(320px, 38vw);
-    max-height: 15dvh;
+    max-height: min(132px, calc(100dvh - 16px));
   }
 }
 
@@ -7068,7 +7068,7 @@ html[data-reduced-motion='true'] *::after {
     top: max(54px, calc(env(safe-area-inset-top) + 48px));
     left: max(8px, env(safe-area-inset-left));
     width: min(320px, 38vw);
-    max-height: 15dvh;
+    max-height: min(132px, calc(100dvh - 16px));
     transform: none;
   }
 }
@@ -7459,7 +7459,7 @@ html[data-reduced-motion='true'] *::after {
     bottom: max(8px, env(safe-area-inset-bottom));
     left: max(142px, calc(env(safe-area-inset-left) + 136px));
     width: min(320px, 38vw);
-    max-height: 15dvh;
+    max-height: min(132px, calc(100dvh - 16px));
   }
 }
 

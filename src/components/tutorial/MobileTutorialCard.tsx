@@ -6,6 +6,7 @@ interface MobileTutorialCardProps {
   title: string;
   description: string;
   available: boolean;
+  actionHint: string;
   onSkip: () => void;
 }
 
@@ -31,6 +32,7 @@ export function MobileTutorialCard({
   title,
   description,
   available,
+  actionHint,
   onSkip,
 }: MobileTutorialCardProps) {
   const cardRef = useRef<HTMLElement>(null);
@@ -103,11 +105,7 @@ export function MobileTutorialCard({
       </header>
       <h2 id="mobile-tutorial-title">{title}</h2>
       <p>{description}</p>
-      <small className="mobile-tutorial-card__action-hint">
-        {available
-          ? 'Realiza la acción para continuar'
-          : 'Continúa la misión para habilitar esta acción'}
-      </small>
+      <small className="mobile-tutorial-card__action-hint">{actionHint}</small>
     </aside>
   );
 }
