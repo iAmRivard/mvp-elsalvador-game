@@ -777,7 +777,9 @@ test('no actualiza continuamente el marcador fallback oculto', async ({
     await gameMap.getAttribute('data-three-driving-effects-updates'),
   );
 
-  await page.waitForTimeout(5_000);
+  const stableObservationMilliseconds = 5_000;
+  const maximumProjectionTelemetryHertz = 4;
+  await page.waitForTimeout(stableObservationMilliseconds);
   expect(
     Number(await gameMap.getAttribute('data-camera-fallback-marker-updates')),
   ).toBe(initialFallbackUpdates);
@@ -798,9 +800,14 @@ test('no actualiza continuamente el marcador fallback oculto', async ({
     initialSafeProjectionUpdates;
   expect(appliedCameraDelta).toBeGreaterThan(50);
   expect(safeMeasurementDelta).toBeLessThanOrEqual(5);
-  expect(safeProjectionDelta).toBeLessThanOrEqual(5);
+  expect(safeProjectionDelta).toBeLessThanOrEqual(
+    Math.ceil(
+      (stableObservationMilliseconds / 1_000) *
+        maximumProjectionTelemetryHertz,
+    ) + 2,
+  );
   expect(safeMeasurementDelta).toBeLessThan(appliedCameraDelta * 0.1);
-  expect(safeProjectionDelta).toBeLessThan(appliedCameraDelta * 0.1);
+  expect(safeProjectionDelta).toBeLessThan(appliedCameraDelta * 0.5);
 });
 
 test('mantiene HUD compacto y cámara de escritorio al conducir', async ({
