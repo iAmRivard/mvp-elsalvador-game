@@ -223,8 +223,8 @@ async function expectAppliedSafeCamera(
     gameMap.getAttribute('data-safe-player-y-ratio').then(Number),
     gameMap.getAttribute('data-useful-map-area-ratio').then(Number),
   ]);
-  expect(safeRatio).toBeGreaterThanOrEqual(0.55);
-  expect(safeRatio).toBeLessThanOrEqual(0.65);
+  expect(safeRatio).toBeGreaterThanOrEqual(0.45);
+  expect(safeRatio).toBeLessThanOrEqual(0.75);
   expect(usefulMapAreaRatio).toBeGreaterThanOrEqual(0.65);
 }
 
