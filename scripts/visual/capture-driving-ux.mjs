@@ -9,7 +9,8 @@ const outputDirectory = resolve(
 );
 const observationMilliseconds = 30_000;
 const warmupMilliseconds = 10_000;
-const targetSelectionHoldMilliseconds = 1_000;
+const targetSelectionHoldMilliseconds = 2_200;
+const targetSelectionVerticalTravelJoystickRatio = 0.28;
 const captureSchemaVersion = 5;
 const referenceViewport = { width: 392, height: 850 };
 const referenceDeviceScaleFactor = 2;
@@ -287,7 +288,9 @@ try {
       {
         id: 1,
         x: centerX,
-        y: centerY - joystickBox.width * 0.44,
+        y:
+          centerY -
+          joystickBox.width * targetSelectionVerticalTravelJoystickRatio,
         force: 1,
       },
     ],
@@ -783,14 +786,15 @@ try {
       metrics.mapDataset.performanceProfilingEnabled === 'true',
     diagnosticsEnabled: metrics.mapDataset.diagnosticsEnabled === 'true',
     scenario: {
-      id: 'arcade-core-trunk-cruise-v2',
+        id: 'arcade-core-trunk-cruise-v3',
       viewport: referenceViewport,
       deviceScaleFactor: referenceDeviceScaleFactor,
       warmupMilliseconds,
       observationMilliseconds,
       touchGesture: {
         source: 'cdp-touch',
-        verticalTravelJoystickRatio: 0.44,
+        verticalTravelJoystickRatio:
+          targetSelectionVerticalTravelJoystickRatio,
         holdMilliseconds: targetSelectionHoldMilliseconds,
         releaseThresholdKilometersPerHour: 58,
       },
