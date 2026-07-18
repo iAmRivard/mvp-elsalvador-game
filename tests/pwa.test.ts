@@ -10,6 +10,13 @@ import {
 } from '../src/game/fullscreen';
 
 describe('experiencia PWA', () => {
+  it('sirve el manifest con un MIME instalable en Nginx', () => {
+    const nginx = readFileSync(resolve('nginx/default.conf'), 'utf8');
+    expect(nginx).toMatch(
+      /location = \/manifest\.webmanifest \{[\s\S]*?default_type application\/manifest\+json;[\s\S]*?\}/,
+    );
+  });
+
   it('declara manifest instalable, icono local y service worker local', () => {
     const manifest = JSON.parse(
       readFileSync(resolve('public/manifest.webmanifest'), 'utf8'),
