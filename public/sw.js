@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'rutas-perdidas-';
-const RELEASE_VERSION = 'v0.3.0';
+const RELEASE_VERSION = 'v0.3.1';
 const BUILD_VERSION = '__BUILD_SHA__';
 const CACHE_VERSION = `${RELEASE_VERSION}-${BUILD_VERSION}`;
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${CACHE_VERSION}`;

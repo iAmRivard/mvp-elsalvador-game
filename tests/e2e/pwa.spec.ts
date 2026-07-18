@@ -97,7 +97,7 @@ test('precachea shell y red vial y valida el alcance real del mapa', async ({
       response.json(),
     )) as { buildIdentity: string; assets: string[] };
     const staticCacheName = (await caches.keys()).find((key) =>
-      key.includes('static-v0.3.0'),
+      key.includes('static-v0.3.1'),
     );
     if (!staticCacheName) return null;
     const cache = await caches.open(staticCacheName);
@@ -319,7 +319,7 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
 
   await page.evaluate(async () => {
     const cacheName = (await caches.keys()).find((key) =>
-      key.includes('shell-v0.3.0'),
+      key.includes('shell-v0.3.1'),
     );
     if (!cacheName) throw new Error('No se encontró el shell cache.');
     const cache = await caches.open(cacheName);
@@ -374,7 +374,7 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
   const cacheFirstResult = await page.evaluate(async (assetUrl) => {
     if (!assetUrl) throw new Error('No se encontró un asset con hash.');
     const cacheName = (await caches.keys()).find((key) =>
-      key.includes('static-v0.3.0'),
+      key.includes('static-v0.3.1'),
     );
     if (!cacheName) throw new Error('No se encontró el static cache.');
     const cache = await caches.open(cacheName);
@@ -400,7 +400,7 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
     .poll(() =>
       page.evaluate(async () => {
         const cacheName = (await caches.keys()).find((key) =>
-          key.includes('static-v0.3.0'),
+          key.includes('static-v0.3.1'),
         );
         if (!cacheName) return false;
         const cache = await caches.open(cacheName);
