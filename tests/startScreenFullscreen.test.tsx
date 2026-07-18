@@ -66,7 +66,7 @@ describe('inicio opcional en pantalla completa', () => {
     );
 
     const identity = screen.getByTestId('build-identity');
-    expect(identity.textContent).toMatch(/^v0\.3\.0 · /);
+    expect(identity.textContent).toMatch(/^v0\.3\.1 · /);
     expect(identity.getAttribute('data-build-sha')).toMatch(
       /^(?:local|[0-9a-f]{7,40})$/,
     );
