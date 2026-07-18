@@ -467,7 +467,7 @@ export function addMissionRoute(
     element: maneuverMarkerElement,
     anchor: 'center',
     rotationAlignment: 'map',
-    pitchAlignment: 'map',
+    pitchAlignment: 'viewport',
   })
     .setLngLat(map.getCenter())
     .addTo(map);
