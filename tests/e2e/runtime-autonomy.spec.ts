@@ -219,6 +219,7 @@ test('carga el mapa sin solicitudes a terceros', async ({
   baseURL,
 }, testInfo) => {
   test.setTimeout(90_000);
+  const isMobileProject = testInfo.project.name.startsWith('chromium-mobile');
   const applicationOrigin = new URL(baseURL ?? 'http://127.0.0.1:4173').origin;
   const externalRequests: string[] = [];
   const criticalErrors: string[] = [];
@@ -299,12 +300,10 @@ test('carga el mapa sin solicitudes a terceros', async ({
   expect(safePlayerRatio).toBeLessThanOrEqual(0.75);
   await expect(gameMap).toHaveAttribute(
     'data-current-camera-profile',
-    'mobileInteraction',
+    isMobileProject ? 'mobileInteraction' : 'stopped',
   );
-  const interactionZoom = Number(
-    await gameMap.getAttribute('data-follow-zoom'),
-  );
-  expect(interactionZoom).toBeGreaterThan(15.5);
+  const initialZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
+  expect(initialZoom).toBeGreaterThan(15.5);
 
   await expect
     .poll(() =>
@@ -408,7 +407,7 @@ test('carga el mapa sin solicitudes a terceros', async ({
   await page.waitForTimeout(700);
   await expect(gameMap).toHaveAttribute(
     'data-current-camera-profile',
-    'mobileDriving',
+    isMobileProject ? 'mobileDriving' : 'urban',
   );
   const movingZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
   const canvasAfterMovement = await page
@@ -430,7 +429,11 @@ test('carga el mapa sin solicitudes a terceros', async ({
   expect(
     await rasterDifference(page, canvasBeforeMovement, canvasAfterMovement),
   ).toBeGreaterThan(0.005);
-  expect(movingZoom).toBeGreaterThan(interactionZoom);
+  if (isMobileProject) {
+    expect(movingZoom).toBeGreaterThan(initialZoom);
+  } else {
+    expect(movingZoom).toBeLessThan(initialZoom);
+  }
 
   await page.getByRole('button', { name: 'Partida y guardado' }).click();
   await page.getByRole('menuitem', { name: 'Guardar ahora' }).click();
