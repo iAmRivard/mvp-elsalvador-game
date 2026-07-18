@@ -208,6 +208,63 @@ async function expectAppliedSafeCamera(
   expect(usefulMapAreaRatio).toBeGreaterThanOrEqual(0.65);
 }
 
+async function expectFastRouteAnticipation(page: Page, gameMap: Locator) {
+  await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road', {
+    timeout: 20_000,
+  });
+  await expect
+    .poll(() =>
+      gameMap.getAttribute('data-mission-route-coordinate-count').then(Number),
+    )
+    .toBeGreaterThanOrEqual(2);
+  await expect(gameMap).toHaveAttribute(
+    'data-navigation-next-type',
+    /^(continue|turn-left|turn-right|slight-left|slight-right|u-turn|arrive)$/,
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-navigation-arrow-fallback',
+    'false',
+  );
+  await expect(gameMap).toHaveAttribute(
+    'data-mission-route-road-color',
+    /^#[0-9a-f]{6}$/i,
+  );
+
+  const routeArrow = page.locator('.mission-route-arrow');
+  const playerMarker = page.locator('.player-marker');
+  const instruction = page.locator('.mobile-driving-hud__copy strong');
+  await expect(routeArrow).toBeVisible();
+  await expect(instruction).toBeVisible();
+  await expect(instruction).not.toHaveText('Sigue la ruta hacia el objetivo');
+
+  const [mapBox, arrowBox, playerBox, nextDistance] = await Promise.all([
+    gameMap.boundingBox(),
+    routeArrow.boundingBox(),
+    playerMarker.boundingBox(),
+    gameMap.getAttribute('data-navigation-next-distance').then(Number),
+  ]);
+  expect(mapBox).not.toBeNull();
+  expect(arrowBox).not.toBeNull();
+  expect(playerBox).not.toBeNull();
+  expect(nextDistance).toBeGreaterThanOrEqual(0);
+  expect(arrowBox!.x).toBeGreaterThanOrEqual(mapBox!.x);
+  expect(arrowBox!.y).toBeGreaterThanOrEqual(mapBox!.y);
+  expect(arrowBox!.x + arrowBox!.width).toBeLessThanOrEqual(
+    mapBox!.x + mapBox!.width,
+  );
+  expect(arrowBox!.y + arrowBox!.height).toBeLessThanOrEqual(
+    mapBox!.y + mapBox!.height,
+  );
+  expect(
+    Math.hypot(
+      arrowBox!.x + arrowBox!.width / 2 - (playerBox!.x + playerBox!.width / 2),
+      arrowBox!.y +
+        arrowBox!.height / 2 -
+        (playerBox!.y + playerBox!.height / 2),
+    ),
+  ).toBeGreaterThan(12);
+}
+
 async function stopMobileTarget(context: BrowserContext, page: Page) {
   const joystick = page.getByLabel('Joystick de conducción arcade');
   await expect(joystick).toBeVisible();
@@ -313,7 +370,7 @@ for (const viewport of viewports) {
 
     await expect(page.locator('.player-hud')).toBeHidden();
     await expect(page.getByTestId('mobile-mini-navigator')).toBeHidden();
-    await expect(page.locator('.mission-route-arrow')).toBeVisible();
+    await expectFastRouteAnticipation(page, gameMap);
 
     const [hudBox, joystickBox, actionsBox] = await Promise.all([
       drivingHud.boundingBox(),
