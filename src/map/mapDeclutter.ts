@@ -1,6 +1,5 @@
 import type { LayerSpecification, Map as MapLibreMap } from 'maplibre-gl';
-import type { DrivingPresentationMode } from '../game/drivingPresentation';
-import { drivingDeclutterMode } from '../game/drivingPresentation';
+import type { MapDetailMode } from '../game/mapDetailMode';
 
 export type MapLayerPriority =
   | 'navigation'
@@ -20,9 +19,9 @@ export interface MapDeclutterProfile {
 }
 
 export const mapDeclutterProfiles: Readonly<
-  Record<'stopped' | 'driving' | 'fast', MapDeclutterProfile>
+  Record<MapDetailMode, MapDeclutterProfile>
 > = {
-  stopped: {
+  exploration: {
     // Reference values remain useful for diagnostics; the controller restores
     // the captured style instead of applying these generic values.
     labelOpacity: {
@@ -39,7 +38,7 @@ export const mapDeclutterProfiles: Readonly<
     },
     layerVisibility: {},
   },
-  driving: {
+  'arcade-driving': {
     labelOpacity: {
       'road-primary': 1,
       'road-secondary': 0.18,
@@ -54,7 +53,7 @@ export const mapDeclutterProfiles: Readonly<
       building: false,
     },
   },
-  fast: {
+  'arcade-fast': {
     labelOpacity: {
       'road-primary': 1,
       'area-major': 0.48,
@@ -195,7 +194,7 @@ function restorePaintProperty(
 }
 
 export interface MapDeclutterController {
-  apply: (mode: DrivingPresentationMode, immediate?: boolean) => void;
+  apply: (mode: MapDetailMode, immediate?: boolean) => void;
   refresh: (immediate?: boolean) => void;
   dispose: () => void;
   readonly inventory: readonly MapLayerInventoryEntry[];
@@ -208,8 +207,8 @@ export function createMapDeclutterController(
   let inventory = mapLayerInventory(map.getStyle().layers ?? []);
   const snapshots = new Map<string, LayerSnapshot>();
   const knownLayerIds = new Set(inventory.map((layer) => layer.id));
-  let activeProfile: 'stopped' | 'driving' | 'fast' | null = null;
-  let pendingProfile: 'stopped' | 'driving' | 'fast' | null = null;
+  let activeProfile: MapDetailMode | null = null;
+  let pendingProfile: MapDetailMode | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let inventorySignature = inventory
     .map((layer) => `${layer.id}:${layer.type}:${layer.priority}`)
@@ -258,7 +257,7 @@ export function createMapDeclutterController(
     }
   };
 
-  const commit = (profileName: 'stopped' | 'driving' | 'fast') => {
+  const commit = (profileName: MapDetailMode) => {
     if (disposed) return;
     const startedAt = performance.now();
     const inventoryChanged = inventoryDirty ? refreshInventory() : false;
@@ -282,7 +281,7 @@ export function createMapDeclutterController(
       }
       try {
         const snapshot = snapshotFor(layer);
-        if (profileName === 'stopped') {
+        if (profileName === 'exploration') {
           restoreLayer(layer, snapshot);
         } else {
           const visible = profile.layerVisibility[layer.priority] !== false;
@@ -316,7 +315,7 @@ export function createMapDeclutterController(
         }
         const originalVisibility = snapshot.presentation.visibility;
         const profileHidesLayer =
-          profileName !== 'stopped' &&
+          profileName !== 'exploration' &&
           profile.layerVisibility[layer.priority] === false;
         if (!profileHidesLayer && originalVisibility !== 'none') {
           visibleLayerCount += 1;
@@ -334,6 +333,21 @@ export function createMapDeclutterController(
     pendingProfile = null;
     const container = map.getContainer();
     container.dataset.mapDeclutterProfile = profileName;
+    container.dataset.mapPoiVisibility =
+      profileName !== 'exploration' &&
+      profile.layerVisibility['poi-secondary'] === false
+        ? 'none'
+        : 'visible';
+    container.dataset.mapLocalPlaceVisibility =
+      profileName !== 'exploration' &&
+      profile.layerVisibility['area-local'] === false
+        ? 'none'
+        : 'visible';
+    container.dataset.mapMajorPlaceVisibility =
+      profileName !== 'exploration' &&
+      profile.layerVisibility['area-major'] === false
+        ? 'none'
+        : 'visible';
     container.dataset.mapVisibleSymbolLayerCount = String(
       visibleSymbolLayerCount,
     );
@@ -348,10 +362,7 @@ export function createMapDeclutterController(
     ).toFixed(2);
   };
 
-  const schedule = (
-    profile: 'stopped' | 'driving' | 'fast',
-    immediate: boolean,
-  ) => {
+  const schedule = (profile: MapDetailMode, immediate: boolean) => {
     pendingProfile = profile;
     if (timer) clearTimeout(timer);
     timer = null;
@@ -385,7 +396,7 @@ export function createMapDeclutterController(
     },
     apply(mode, immediate = false) {
       if (disposed) return;
-      const profile = drivingDeclutterMode(mode);
+      const profile = mode;
       if (
         !inventoryDirty &&
         (profile === activeProfile || profile === pendingProfile)

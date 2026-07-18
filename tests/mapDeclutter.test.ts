@@ -5,7 +5,6 @@ import {
   mapDeclutterProfiles,
   mapLayerInventory,
 } from '../src/map/mapDeclutter';
-import { drivingDeclutterMode } from '../src/game/drivingPresentation';
 
 describe('declutter dinámico del mapa', () => {
   it('clasifica capas base y de navegación', () => {
@@ -32,30 +31,26 @@ describe('declutter dinámico del mapa', () => {
   });
 
   it('mantiene navegación y oculta POI y lugares locales al conducir', () => {
-    expect(mapDeclutterProfiles.fast.layerVisibility.navigation).not.toBe(
-      false,
-    );
-    expect(mapDeclutterProfiles.driving.layerVisibility['poi-secondary']).toBe(
-      false,
-    );
-    expect(mapDeclutterProfiles.driving.layerVisibility['area-local']).toBe(
-      false,
-    );
-    expect(mapDeclutterProfiles.driving.layerVisibility['area-major']).not.toBe(
-      false,
-    );
-    expect(mapDeclutterProfiles.fast.layerVisibility['poi-secondary']).toBe(
-      false,
-    );
-    expect(mapDeclutterProfiles.fast.layerVisibility['road-secondary']).toBe(
-      false,
-    );
     expect(
-      mapDeclutterProfiles.driving.labelOpacity.navigation,
+      mapDeclutterProfiles['arcade-fast'].layerVisibility.navigation,
+    ).not.toBe(false);
+    expect(
+      mapDeclutterProfiles['arcade-driving'].layerVisibility['poi-secondary'],
+    ).toBe(false);
+    expect(
+      mapDeclutterProfiles['arcade-driving'].layerVisibility['area-local'],
+    ).toBe(false);
+    expect(
+      mapDeclutterProfiles['arcade-driving'].layerVisibility['area-major'],
+    ).not.toBe(false);
+    expect(
+      mapDeclutterProfiles['arcade-fast'].layerVisibility['poi-secondary'],
+    ).toBe(false);
+    expect(
+      mapDeclutterProfiles['arcade-fast'].layerVisibility['road-secondary'],
+    ).toBe(false);
+    expect(
+      mapDeclutterProfiles['arcade-driving'].labelOpacity.navigation,
     ).toBeUndefined();
-  });
-
-  it('conserva declutter de conducción durante una alerta', () => {
-    expect(drivingDeclutterMode('alert')).toBe('driving');
   });
 });

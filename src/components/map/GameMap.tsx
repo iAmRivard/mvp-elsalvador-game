@@ -46,6 +46,7 @@ import {
   type MobileCameraMode,
 } from '../../game/followCamera';
 import { runtimeGateFor } from '../../game/runtimeGate';
+import { deriveMapDetailMode } from '../../game/mapDetailMode';
 import {
   advanceRoadAssistActiveElapsedMilliseconds,
   roadAssistMultiplierForLatePromotion,
@@ -1485,14 +1486,32 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         deviceProfile.reducedMotion,
       );
       mapDeclutter = createMapDeclutterController(map);
+      const initialDetailState = useGameStore.getState();
+      const initialDetailMode = deriveMapDetailMode({
+        isFollowingPlayer: initialDetailState.isFollowingPlayer,
+        presentationMode: initialDetailState.presentationMode,
+        activeMissionId: initialDetailState.activeMissionId,
+      });
       map.getContainer().dataset.presentationMode =
-        useGameStore.getState().presentationMode;
-      mapDeclutter.apply(useGameStore.getState().presentationMode, true);
+        initialDetailState.presentationMode;
+      map.getContainer().dataset.mapDetailMode = initialDetailMode;
+      mapDeclutter.apply(initialDetailMode, true);
       unsubscribePresentation = useGameStore.subscribe(
         (state, previousState) => {
-          if (state.presentationMode === previousState.presentationMode) return;
+          if (
+            state.presentationMode === previousState.presentationMode &&
+            state.isFollowingPlayer === previousState.isFollowingPlayer &&
+            state.activeMissionId === previousState.activeMissionId
+          )
+            return;
           map.getContainer().dataset.presentationMode = state.presentationMode;
-          mapDeclutter?.apply(state.presentationMode);
+          const detailMode = deriveMapDetailMode({
+            isFollowingPlayer: state.isFollowingPlayer,
+            presentationMode: state.presentationMode,
+            activeMissionId: state.activeMissionId,
+          });
+          map.getContainer().dataset.mapDetailMode = detailMode;
+          mapDeclutter?.apply(detailMode);
         },
       );
       void addRoadDebugLayer(map)
@@ -2336,6 +2355,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     );
 
     map.on('load', handleLoad);
+    map.on('mousedown', handleManualCameraStart);
+    map.on('touchstart', handleManualCameraStart);
     map.on('dragstart', handleManualCameraStart);
     map.on('zoomstart', handleManualCameraStart);
     map.on('rotatestart', handleManualCameraStart);
@@ -2375,6 +2396,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         window.clearTimeout(roadNetworkStartupDeadline);
       }
       map.off('load', handleLoad);
+      map.off('mousedown', handleManualCameraStart);
+      map.off('touchstart', handleManualCameraStart);
       map.off('dragstart', handleManualCameraStart);
       map.off('zoomstart', handleManualCameraStart);
       map.off('rotatestart', handleManualCameraStart);

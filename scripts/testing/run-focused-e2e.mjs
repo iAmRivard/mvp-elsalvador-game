@@ -2,6 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 const profile = process.argv[2];
+const fileFilters = process.argv.slice(3);
 const profileArguments = {
   smoke: ['--grep', '@smoke'],
   camera: ['--grep', '@camera'],
@@ -84,6 +85,7 @@ try {
         '--workers=1',
         '--retries=0',
         '--max-failures=1',
+        ...fileFilters,
         ...profileArguments[profile],
       ],
       {
