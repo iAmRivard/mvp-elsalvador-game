@@ -18,6 +18,7 @@ const viewports: ViewportCase[] = [
   { name: 'landscape', width: 850, height: 392 },
   { name: 'tablet', width: 768, height: 1_024 },
   { name: 'small', width: 360, height: 800 },
+  { name: 'compact-portrait', width: 360, height: 640 },
 ];
 
 async function enterExpedition(page: Page) {
@@ -227,15 +228,18 @@ async function expectFastRouteAnticipation(page: Page, gameMap: Locator) {
   );
   await expect(gameMap).toHaveAttribute(
     'data-mission-route-road-color',
-    /^#[0-9a-f]{6}$/i,
+    '#28D7F5',
   );
 
   const routeArrow = page.locator('.mission-route-arrow');
   const playerMarker = page.locator('.player-marker');
   const instruction = page.locator('.mobile-driving-hud__copy strong');
+  const objectiveAndDistance = page.locator('.mobile-driving-hud__copy small');
   await expect(routeArrow).toBeVisible();
   await expect(instruction).toBeVisible();
   await expect(instruction).not.toHaveText('Sigue la ruta hacia el objetivo');
+  await expect(objectiveAndDistance).toBeVisible();
+  await expect(objectiveAndDistance).toHaveText(/.+ · \d+(?:\.\d+)? (?:m|km)$/);
 
   const [mapBox, arrowBox, playerBox, nextDistance] = await Promise.all([
     gameMap.boundingBox(),
