@@ -475,6 +475,16 @@ test('recalcula y aplica el offset al cambiar el viewport', async ({
     'false',
   );
   await expect(page.locator('.contextual-advice')).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __overlayOverlapState?: { overlapObserved: boolean };
+          }
+        ).__overlayOverlapState?.overlapObserved ?? false,
+    ),
+  ).toBe(false);
 });
 
 for (const viewport of [
