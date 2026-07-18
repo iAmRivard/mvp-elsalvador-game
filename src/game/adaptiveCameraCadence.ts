@@ -136,16 +136,7 @@ export function adaptiveCameraCadenceFor(
 
   if (unhealthy) {
     const consecutiveUnhealthyWindows = state.consecutiveUnhealthyWindows + 1;
-    const severeAtThirtyHertz =
-      state.hertz === 30 &&
-      (window.frametimeP95Milliseconds > 40 ||
-        window.framesOver50Milliseconds >= 10 ||
-        window.framesOver100Milliseconds >= 3 ||
-        window.cameraP95Milliseconds >= 3.5);
-    if (
-      consecutiveUnhealthyWindows >= 2 &&
-      (state.hertz > 30 || severeAtThirtyHertz)
-    ) {
+    if (consecutiveUnhealthyWindows >= 2 && state.hertz > 30) {
       return {
         hertz: nextLowerCadence(state.hertz),
         consecutiveHealthyWindows: 0,

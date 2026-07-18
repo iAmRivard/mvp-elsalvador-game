@@ -31,7 +31,7 @@ describe('cadencia adaptativa de cámara', () => {
     expect(controller.ensureMinimumHertz(30)).toBe(false);
   });
 
-  it('permite bajar a 20 Hz tras dos ventanas malas y no revierte la protección', () => {
+  it('nunca baja de 30 Hz durante conducción aunque las ventanas sean malas', () => {
     const controller = new AdaptiveCameraCadenceController({
       initialHertz: 30,
       maximumHertz: 30,
@@ -45,9 +45,8 @@ describe('cadencia adaptativa de cámara', () => {
     controller.recordVisualFrame(4_050);
     controller.recordVisualFrame(8_000);
 
-    expect(controller.state.hertz).toBe(20);
+    expect(controller.state.hertz).toBe(30);
     expect(controller.ensureMinimumHertz(30)).toBe(false);
-    expect(controller.state.hertz).toBe(20);
   });
 
   it('conserva el residuo temporal para aproximar 45 aplicaciones por segundo sobre RAF de 60 Hz', () => {

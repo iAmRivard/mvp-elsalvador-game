@@ -7,6 +7,7 @@ interface ClassicTouchControlsProps {
   input: InputController;
   interactionLabel: string | null;
   isPaused: boolean;
+  isFollowingPlayer: boolean;
   onCenter: () => void;
   onTogglePause: () => void;
   hapticsEnabled: boolean;
@@ -17,6 +18,7 @@ export function ClassicTouchControls({
   input,
   interactionLabel,
   isPaused,
+  isFollowingPlayer,
   onCenter,
   onTogglePause,
   hapticsEnabled,
@@ -29,12 +31,8 @@ export function ClassicTouchControls({
           type="button"
           className="touch-button touch-button--up"
           aria-label="Avanzar"
-          {...pointerActionHandlers(
-            input,
-            'forward',
-            0,
-            controlsDisabled,
-            () => triggerHaptic('button', hapticsEnabled),
+          {...pointerActionHandlers(input, 'forward', 0, controlsDisabled, () =>
+            triggerHaptic('button', hapticsEnabled),
           )}
         >
           <span aria-hidden="true">▲</span>
@@ -43,12 +41,8 @@ export function ClassicTouchControls({
           type="button"
           className="touch-button touch-button--left"
           aria-label="Girar a la izquierda"
-          {...pointerActionHandlers(
-            input,
-            'left',
-            0,
-            controlsDisabled,
-            () => triggerHaptic('button', hapticsEnabled),
+          {...pointerActionHandlers(input, 'left', 0, controlsDisabled, () =>
+            triggerHaptic('button', hapticsEnabled),
           )}
         >
           <span aria-hidden="true">◀</span>
@@ -57,12 +51,8 @@ export function ClassicTouchControls({
           type="button"
           className="touch-button touch-button--right"
           aria-label="Girar a la derecha"
-          {...pointerActionHandlers(
-            input,
-            'right',
-            0,
-            controlsDisabled,
-            () => triggerHaptic('button', hapticsEnabled),
+          {...pointerActionHandlers(input, 'right', 0, controlsDisabled, () =>
+            triggerHaptic('button', hapticsEnabled),
           )}
         >
           <span aria-hidden="true">▶</span>
@@ -87,6 +77,7 @@ export function ClassicTouchControls({
           input={input}
           interactionLabel={interactionLabel}
           isPaused={isPaused}
+          isFollowingPlayer={isFollowingPlayer}
           onCenter={onCenter}
           onTogglePause={onTogglePause}
           hapticsEnabled={hapticsEnabled}

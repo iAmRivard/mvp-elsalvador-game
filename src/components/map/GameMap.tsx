@@ -837,12 +837,18 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             nextInstruction: gameState.missionRoute.nextInstruction,
             distanceToNextInstructionMeters:
               gameState.missionRoute.distanceToNextInstructionMeters,
+            contextScale:
+              presentationMode === 'interaction' ||
+              profileOverride === 'recovery'
+                ? 0.45
+                : 1,
             reducedMotion: deviceProfile.reducedMotion,
           })
         : {
             offsetXPixels: 0,
             offsetYPixels: 0,
             strength: 0,
+            lookaheadMeters: 0,
             targetHeading: null,
             anticipatesTurn: false,
           };
@@ -858,6 +864,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           routeLookahead.offsetXPixels,
           routeLookahead.offsetYPixels,
         ).toFixed(2);
+        containerRef.current.dataset.cameraRouteLookaheadMeters =
+          routeLookahead.lookaheadMeters.toFixed(1);
         containerRef.current.dataset.cameraRouteLookaheadHeading =
           routeLookahead.targetHeading?.toFixed(1) ?? '';
         containerRef.current.dataset.cameraRouteLookaheadTurn = String(

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { cameraRouteLookahead } from '../src/game/cameraRouteLookahead';
+import {
+  cameraRouteLookahead,
+  routeLookaheadMetersForSpeed,
+} from '../src/game/cameraRouteLookahead';
 import type { ActiveNavigationState } from '../src/types/navigation';
 
 const navigation: ActiveNavigationState = {
@@ -52,6 +55,29 @@ describe('anticipación de ruta de la cámara', () => {
     expect(result.offsetXPixels).toBeCloseTo(0);
     expect(result.offsetYPixels).toBeGreaterThan(0);
     expect(result.anticipatesTurn).toBe(false);
+  });
+
+  it('usa heading como fallback cuando no existe ruta', () => {
+    const result = cameraRouteLookahead({
+      playerCoordinates: [-89.2, 13.7],
+      playerHeading: 90,
+      speedKilometersPerHour: 48,
+      activeNavigation: null,
+      nextInstruction: null,
+      distanceToNextInstructionMeters: null,
+    });
+
+    expect(result.targetHeading).toBe(90);
+    expect(result.offsetYPixels).toBeGreaterThan(0);
+    expect(result.lookaheadMeters).toBeGreaterThan(20);
+  });
+
+  it('escala el lookahead medido hasta el máximo de boost', () => {
+    expect(routeLookaheadMetersForSpeed(30)).toBe(15);
+    expect(routeLookaheadMetersForSpeed(60)).toBe(30);
+    expect(routeLookaheadMetersForSpeed(90)).toBe(45);
+    expect(routeLookaheadMetersForSpeed(120)).toBe(55);
+    expect(routeLookaheadMetersForSpeed(180)).toBe(55);
   });
 
   it('desplaza el vehículo al lado opuesto del siguiente giro relevante', () => {
