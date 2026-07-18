@@ -74,7 +74,7 @@ describe('declutter dinámico del mapa', () => {
         if (id === 'poi-labels' && value === 'none') {
           throw new Error('fallo MapLibre simulado');
         }
-        visibility.set(id, value === null ? 'visible' : String(value));
+        visibility.set(id, typeof value === 'string' ? value : 'visible');
       },
       on: () => undefined,
       off: () => undefined,

@@ -315,7 +315,7 @@ export function createMapDeclutterController(
             }
           }
         }
-        const effectiveVisibility = map.getLayoutProperty(
+        const effectiveVisibility: unknown = map.getLayoutProperty(
           layer.id,
           'visibility',
         );

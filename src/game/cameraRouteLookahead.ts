@@ -90,7 +90,7 @@ export function cameraRouteLookahead(
     instructionDistance >= 0 &&
     instructionDistance <= RELEVANT_TURN_DISTANCE_METERS;
   const turnProximity = anticipatesTurn
-    ? 1 - clamp01(instructionDistance! / RELEVANT_TURN_DISTANCE_METERS)
+    ? 1 - clamp01(instructionDistance / RELEVANT_TURN_DISTANCE_METERS)
     : 0;
   const turnStrength = anticipatesTurn ? 0.65 + turnProximity * 0.35 : 1;
   const contextScale = clamp01(input.contextScale ?? 1);
