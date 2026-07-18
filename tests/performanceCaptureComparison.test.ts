@@ -81,6 +81,7 @@ function capture(
     mapDataset: {
       playerOutsideSafeViewport: 'false',
       safePlayerYRatio: '0.620',
+      usefulMapAreaRatio: '0.759',
     },
     dynamicLoad: {
       samples: Array.from({ length: 120 }, (_, index) => ({
@@ -440,12 +441,14 @@ describe('contrato de capturas arcade', () => {
   });
 
   it.each([
-    ['instrumentación ausente', undefined, undefined],
-    ['vehículo fuera', 'true', '0.620'],
-    ['ancla fuera de banda', 'false', '0.700'],
+    ['instrumentación ausente', undefined, undefined, undefined],
+    ['vehículo fuera', 'true', '0.620', '0.759'],
+    ['ancla fuera de banda', 'false', '0.700', '0.759'],
+    ['área de mapa ausente', 'false', '0.620', undefined],
+    ['área de mapa insuficiente', 'false', '0.620', '0.640'],
   ])(
     'rechaza el viewport seguro final con %s',
-    (_label, outside, safePlayerYRatio) => {
+    (_label, outside, safePlayerYRatio, usefulMapAreaRatio) => {
       const baseline = fixtureDirectory(
         'baseline',
         performanceCapture('a'.repeat(40)),
@@ -457,6 +460,9 @@ describe('contrato de capturas arcade', () => {
       }
       if (safePlayerYRatio !== undefined) {
         invalidMapDataset.safePlayerYRatio = safePlayerYRatio;
+      }
+      if (usefulMapAreaRatio !== undefined) {
+        invalidMapDataset.usefulMapAreaRatio = usefulMapAreaRatio;
       }
       invalidFinal.mapDataset =
         invalidMapDataset as typeof invalidFinal.mapDataset;

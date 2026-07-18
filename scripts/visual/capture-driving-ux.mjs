@@ -328,10 +328,17 @@ try {
   await page.waitForTimeout(warmupMilliseconds);
   await page.waitForFunction((expectedCameraProfile) => {
     const map = document.querySelector('[data-testid="game-map"]');
+    const safePlayerYRatio = Number(map?.dataset.safePlayerYRatio);
+    const usefulMapAreaRatio = Number(map?.dataset.usefulMapAreaRatio);
     return (
       map instanceof HTMLElement &&
       map.dataset.currentCameraProfile === expectedCameraProfile &&
-      map.dataset.playerOutsideSafeViewport !== 'true'
+      map.dataset.playerOutsideSafeViewport === 'false' &&
+      Number.isFinite(safePlayerYRatio) &&
+      safePlayerYRatio >= 0.55 &&
+      safePlayerYRatio <= 0.65 &&
+      Number.isFinite(usefulMapAreaRatio) &&
+      usefulMapAreaRatio >= 0.65
     );
   }, captureScenario.expectedCameraProfile);
   if (traceOutputPath) {
@@ -803,7 +810,12 @@ try {
       deterministicCheckpoint.expectedSurface ||
     metrics.mapDataset.currentCameraProfile !==
       captureScenario.expectedCameraProfile ||
-    metrics.mapDataset.playerOutsideSafeViewport === 'true'
+    metrics.mapDataset.playerOutsideSafeViewport !== 'false' ||
+    !Number.isFinite(Number(metrics.mapDataset.safePlayerYRatio)) ||
+    Number(metrics.mapDataset.safePlayerYRatio) < 0.55 ||
+    Number(metrics.mapDataset.safePlayerYRatio) > 0.65 ||
+    !Number.isFinite(Number(metrics.mapDataset.usefulMapAreaRatio)) ||
+    Number(metrics.mapDataset.usefulMapAreaRatio) < 0.65
   ) {
     throw new Error(
       'El escenario vial cambió de red o ruta durante la captura.',

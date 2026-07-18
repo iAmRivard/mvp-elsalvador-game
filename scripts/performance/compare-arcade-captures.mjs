@@ -175,14 +175,17 @@ function assertPerformanceInputs(group, label) {
     if (label === 'final') {
       const outsideSafeViewport = metrics.mapDataset?.playerOutsideSafeViewport;
       const safePlayerYRatio = Number(metrics.mapDataset?.safePlayerYRatio);
+      const usefulMapAreaRatio = Number(metrics.mapDataset?.usefulMapAreaRatio);
       if (
         outsideSafeViewport !== 'false' ||
         !Number.isFinite(safePlayerYRatio) ||
         safePlayerYRatio < 0.55 ||
-        safePlayerYRatio > 0.65
+        safePlayerYRatio > 0.65 ||
+        !Number.isFinite(usefulMapAreaRatio) ||
+        usefulMapAreaRatio < 0.65
       ) {
         throw new Error(
-          `final: viewport seguro inválido en ${path}; outside=${String(outsideSafeViewport)}, ratio=${String(metrics.mapDataset?.safePlayerYRatio)}.`,
+          `final: viewport seguro inválido en ${path}; outside=${String(outsideSafeViewport)}, ratio=${String(metrics.mapDataset?.safePlayerYRatio)}, mapArea=${String(metrics.mapDataset?.usefulMapAreaRatio)}.`,
         );
       }
     }
