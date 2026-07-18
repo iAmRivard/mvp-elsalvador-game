@@ -6,6 +6,8 @@ interface FollowSample {
   offsetX: number;
   offsetY: number;
   lookahead: number;
+  steeringCueDegrees: number;
+  accelerationCueDegrees: number;
 }
 
 async function readFollowSample(gameMap: Locator): Promise<FollowSample> {
@@ -15,6 +17,10 @@ async function readFollowSample(gameMap: Locator): Promise<FollowSample> {
     offsetX: Number(element.dataset.followZoneOffsetX),
     offsetY: Number(element.dataset.followZoneOffsetY),
     lookahead: Number(element.dataset.cameraRouteLookaheadPixels),
+    steeringCueDegrees: Number(element.dataset.threeVehicleSteeringCueDegrees),
+    accelerationCueDegrees: Number(
+      element.dataset.threeVehicleAccelerationCueDegrees,
+    ),
   }));
 }
 
@@ -49,6 +55,11 @@ test.describe(
         await expect(
           page.getByRole('img', { name: 'Vehículo del jugador' }),
         ).toBeVisible({ timeout: 20_000 });
+        await expect(gameMap.locator('..')).toHaveAttribute(
+          'data-player-renderer',
+          'ready',
+          { timeout: 20_000 },
+        );
 
         const joystick = page.getByLabel('Joystick de conducción arcade');
         const box = await joystick.boundingBox();
@@ -145,6 +156,20 @@ test.describe(
         expect(
           Math.max(...finiteSamples.map(({ lookahead }) => lookahead)),
         ).toBeLessThanOrEqual(14.1);
+        expect(
+          Math.max(
+            ...finiteSamples.map(({ steeringCueDegrees }) =>
+              Math.abs(steeringCueDegrees),
+            ),
+          ),
+        ).toBeGreaterThan(0.01);
+        expect(
+          Math.max(
+            ...finiteSamples.map(({ accelerationCueDegrees }) =>
+              Math.abs(accelerationCueDegrees),
+            ),
+          ),
+        ).toBeGreaterThan(0.01);
         await expect(gameMap).toHaveAttribute(
           'data-player-outside-safe-viewport',
           'false',

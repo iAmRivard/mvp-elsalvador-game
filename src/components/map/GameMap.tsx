@@ -1627,7 +1627,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             try {
               threeLayer = addThreeGameLayer(map, {
                 quality: deviceProfile.quality,
-                mobile: deviceProfile.isCompact,
+                mobile: deviceProfile.isTouch,
                 reducedMotion: deviceProfile.reducedMotion,
                 playerModelUrl: activeVehicleDefinition.modelUrl,
                 playerModelScale: activeVehicleDefinition.modelScale,

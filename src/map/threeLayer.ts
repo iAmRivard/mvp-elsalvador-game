@@ -15,6 +15,11 @@ import {
   threePlayerTargetPixels,
   threeSignalTargetPixels,
 } from './threeTransforms';
+import {
+  smoothVehicleMotionCue,
+  vehicleAccelerationCueTarget,
+  vehicleSteeringCueTarget,
+} from './threeVehicleMotion';
 
 const PLAYER_MODEL_LENGTH = 4.7;
 const SIGNAL_MODEL_HEIGHT = 6.5;
@@ -91,6 +96,9 @@ class ThreeGameLayer implements CustomLayerInterface {
   private player: PlayerRuntime | null = null;
   private playerBodyColor: number;
   private playerModelScale: number;
+  private steeringCue = 0;
+  private accelerationCue = 0;
+  private lastMotionCueTimestamp = performance.now();
   private signal: InteractiveSignalState = { visible: false };
   private disposed = false;
 
@@ -157,6 +165,35 @@ class ThreeGameLayer implements CustomLayerInterface {
   }
 
   updatePlayer(player: PlayerRuntime): void {
+    const timestamp = performance.now();
+    const elapsedMilliseconds = timestamp - this.lastMotionCueTimestamp;
+    this.lastMotionCueTimestamp = timestamp;
+    const previousSteeringCue = this.steeringCue;
+    const previousAccelerationCue = this.accelerationCue;
+    if (this.player && this.options.mobile && !this.options.reducedMotion) {
+      this.steeringCue = smoothVehicleMotionCue(
+        this.steeringCue,
+        vehicleSteeringCueTarget(
+          this.player.heading,
+          player.heading,
+          player.speedMetersPerSecond,
+          elapsedMilliseconds,
+        ),
+        elapsedMilliseconds,
+      );
+      this.accelerationCue = smoothVehicleMotionCue(
+        this.accelerationCue,
+        vehicleAccelerationCueTarget(
+          this.player.speedMetersPerSecond,
+          player.speedMetersPerSecond,
+          elapsedMilliseconds,
+        ),
+        elapsedMilliseconds,
+      );
+    } else {
+      this.steeringCue = 0;
+      this.accelerationCue = 0;
+    }
     if (
       this.player &&
       Math.abs(this.player.speedMetersPerSecond) -
@@ -169,7 +206,9 @@ class ThreeGameLayer implements CustomLayerInterface {
       !this.player ||
       this.player.longitude !== player.longitude ||
       this.player.latitude !== player.latitude ||
-      this.player.heading !== player.heading;
+      this.player.heading !== player.heading ||
+      Math.abs(previousSteeringCue - this.steeringCue) >= 0.001 ||
+      Math.abs(previousAccelerationCue - this.accelerationCue) >= 0.001;
     this.player = player;
     if (!changed) return;
     this.applyPlayerTransform();
@@ -268,10 +307,21 @@ class ThreeGameLayer implements CustomLayerInterface {
     );
     this.playerModel.position.set(coordinate.x, coordinate.y, coordinate.z);
     this.playerModel.rotation.set(
-      0,
-      0,
+      this.accelerationCue * -0.025,
+      this.steeringCue * 0.035,
       normalizedHeadingRadians(this.player.heading),
     );
+    if (this.map) {
+      const container = this.map.getContainer();
+      container.dataset.threeVehicleSteeringCueDegrees = (
+        (this.steeringCue * 0.035 * 180) /
+        Math.PI
+      ).toFixed(2);
+      container.dataset.threeVehicleAccelerationCueDegrees = (
+        (this.accelerationCue * -0.025 * 180) /
+        Math.PI
+      ).toFixed(2);
+    }
     this.applyScreenScales();
   }
 
