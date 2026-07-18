@@ -3,19 +3,24 @@ import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 
 const serviceWorkerSource = readFileSync(resolve('public/sw.js'), 'utf8');
-const precacheManifest = JSON.parse(
-  readFileSync(resolve('dist/precache-manifest.json'), 'utf8'),
-) as { buildIdentity: string; assets: string[] };
-const builtServiceWorkerSource = serviceWorkerSource.replaceAll(
-  '__BUILD_SHA__',
-  precacheManifest.buildIdentity.replace(/[^a-z0-9._-]/gi, '-'),
-);
+
+interface PrecacheManifest {
+  buildIdentity: string;
+  assets: string[];
+}
+
+async function fetchPrecacheManifest(page: Page): Promise<PrecacheManifest> {
+  const response = await page.request.get('/precache-manifest.json');
+  expect(response.ok()).toBe(true);
+  return response.json() as Promise<PrecacheManifest>;
+}
 
 test('precachea el shell y prepara la red vial offline desde la primera instalaciÃ³n', async ({
   context,
   page,
 }) => {
   test.setTimeout(90_000);
+  const precacheManifest = await fetchPrecacheManifest(page);
   const browserFailures: string[] = [];
   page.on('requestfailed', (request) => {
     browserFailures.push(
@@ -151,6 +156,11 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
   page,
 }) => {
   test.setTimeout(60_000);
+  const precacheManifest = await fetchPrecacheManifest(page);
+  const builtServiceWorkerSource = serviceWorkerSource.replaceAll(
+    '__BUILD_SHA__',
+    precacheManifest.buildIdentity.replace(/[^a-z0-9._-]/gi, '-'),
+  );
   await page.route('**/sw.js?candidate=*', async (route) => {
     const url = new URL(route.request().url());
     await route.fulfill({
