@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { gameConfig } from '../../config/game.config';
 import { chapterOneMissionIds } from '../../data/chapter1';
 import { locations } from '../../data/locations';
 import { progressCounter } from '../../game/progressCounters';
+import { probeMapSourceAvailability } from '../../game/mapSourceAvailability';
 import { loadRoadNetwork, retryRoadNetworkLoad } from '../../roads/roadNetwork';
 import { preloadRoadWorker } from '../../roads/roadWorkerClient';
 import {
@@ -25,6 +26,7 @@ interface StartScreenProps {
 
 type PreparationStage =
   'map' | 'roads' | 'routes' | 'ready' | 'fallback' | 'error';
+type MapArchiveAvailability = 'checking' | 'available' | 'unavailable';
 
 export const START_PREPARATION_DEADLINE_MILLISECONDS =
   ROAD_NETWORK_STARTUP_DEADLINE_MILLISECONDS;
@@ -58,6 +60,11 @@ export function StartScreen({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [garageOpen, setGarageOpen] = useState(false);
   const [confirmingNewGame, setConfirmingNewGame] = useState(false);
+  const [newGameProbePending, setNewGameProbePending] = useState(false);
+  const newGameProbe = useRef<AbortController | null>(null);
+  const [mapArchiveAvailability, setMapArchiveAvailability] =
+    useState<MapArchiveAvailability>('checking');
+  const [mapProbeAttempt, setMapProbeAttempt] = useState(0);
   const [preparationStage, setPreparationStage] =
     useState<PreparationStage>('map');
   const [preparationAttempt, setPreparationAttempt] = useState(0);
@@ -84,6 +91,45 @@ export function StartScreen({
   const distance = useGameStore((state) => state.telemetry.totalDistanceMeters);
   const preparationReady =
     preparationStage === 'ready' || preparationStage === 'fallback';
+  const canLaunch = preparationReady && mapArchiveAvailability === 'available';
+
+  useEffect(() => {
+    let active = true;
+    let activeProbe: AbortController | null = null;
+    const probeMap = () => {
+      activeProbe?.abort();
+      const controller = new AbortController();
+      activeProbe = controller;
+      setMapArchiveAvailability('checking');
+      void probeMapSourceAvailability(controller.signal)
+        .then((available) => {
+          if (!active || activeProbe !== controller) return;
+          setMapArchiveAvailability(available ? 'available' : 'unavailable');
+        })
+        .catch(() => {
+          if (!active || controller.signal.aborted) return;
+          setMapArchiveAvailability('unavailable');
+        });
+    };
+    probeMap();
+    window.addEventListener('online', probeMap);
+    window.addEventListener('offline', probeMap);
+    window.addEventListener('focus', probeMap);
+    return () => {
+      active = false;
+      activeProbe?.abort();
+      window.removeEventListener('online', probeMap);
+      window.removeEventListener('offline', probeMap);
+      window.removeEventListener('focus', probeMap);
+    };
+  }, [mapProbeAttempt]);
+
+  useEffect(
+    () => () => {
+      newGameProbe.current?.abort();
+    },
+    [],
+  );
 
   useEffect(() => {
     let active = true;
@@ -128,6 +174,35 @@ export function StartScreen({
       window.clearTimeout(deadline);
     };
   }, [preparationAttempt]);
+
+  const closeNewGameConfirmation = () => {
+    newGameProbe.current?.abort();
+    newGameProbe.current = null;
+    setNewGameProbePending(false);
+    setConfirmingNewGame(false);
+  };
+  const confirmNewGame = () => {
+    if (newGameProbe.current) return;
+    const controller = new AbortController();
+    newGameProbe.current = controller;
+    setNewGameProbePending(true);
+    void probeMapSourceAvailability(controller.signal)
+      .then((available) => {
+        if (newGameProbe.current !== controller) return;
+        newGameProbe.current = null;
+        setNewGameProbePending(false);
+        setMapArchiveAvailability(available ? 'available' : 'unavailable');
+        if (available) onNewGame();
+      })
+      .catch(() => {
+        if (newGameProbe.current !== controller || controller.signal.aborted) {
+          return;
+        }
+        newGameProbe.current = null;
+        setNewGameProbePending(false);
+        setMapArchiveAvailability('unavailable');
+      });
+  };
 
   return (
     <section className="start-screen" aria-labelledby="start-title">
@@ -180,7 +255,7 @@ export function StartScreen({
             type="button"
             className="start-button start-button--primary"
             onClick={onContinue}
-            disabled={!preparationReady}
+            disabled={!canLaunch}
           >
             {hasSavedGame ? 'Continuar expedición' : 'Comenzar expedición'}
           </button>
@@ -189,7 +264,7 @@ export function StartScreen({
               type="button"
               className="start-button"
               onClick={onContinueFullscreen}
-              disabled={!preparationReady}
+              disabled={!canLaunch}
             >
               {hasSavedGame
                 ? 'Continuar en pantalla completa'
@@ -209,7 +284,7 @@ export function StartScreen({
                 type="button"
                 className="start-button"
                 onClick={() => setConfirmingNewGame(true)}
-                disabled={!preparationReady}
+                disabled={!canLaunch}
               >
                 Nueva partida
               </button>
@@ -230,13 +305,21 @@ export function StartScreen({
           className={`start-preparation start-preparation--${preparationStage}`}
           role="status"
           data-preparation-stage={preparationStage}
+          data-map-availability={mapArchiveAvailability}
         >
-          {preparationStage !== 'ready' &&
+          {((preparationStage !== 'ready' &&
             preparationStage !== 'fallback' &&
-            preparationStage !== 'error' && (
-              <span className="start-preparation__spinner" aria-hidden="true" />
-            )}
-          <span>{preparationLabels[preparationStage]}</span>
+            preparationStage !== 'error') ||
+            (preparationReady && mapArchiveAvailability === 'checking')) && (
+            <span className="start-preparation__spinner" aria-hidden="true" />
+          )}
+          <span>
+            {preparationReady && mapArchiveAvailability === 'checking'
+              ? 'Comprobando archivo del mapa…'
+              : preparationReady && mapArchiveAvailability === 'unavailable'
+                ? 'Red vial lista · mapa no disponible'
+                : preparationLabels[preparationStage]}
+          </span>
           {preparationStage === 'error' && (
             <button
               type="button"
@@ -245,10 +328,22 @@ export function StartScreen({
               Reintentar
             </button>
           )}
+          {preparationReady && mapArchiveAvailability === 'unavailable' && (
+            <button
+              type="button"
+              onClick={() => setMapProbeAttempt((attempt) => attempt + 1)}
+            >
+              Reintentar mapa
+            </button>
+          )}
         </div>
 
         <small className="start-screen__offline">
-          Mapa y progreso disponibles sin servicios externos
+          {mapArchiveAvailability === 'available'
+            ? 'Mapa y progreso locales, sin servicios externos.'
+            : mapArchiveAvailability === 'checking'
+              ? 'Comprobando el mapa local antes de conducir.'
+              : 'Inicio, red vial y progreso disponibles. El mapa no está accesible; reintenta cuando vuelva la conexión con este servidor.'}
         </small>
         <BuildIdentity />
       </div>
@@ -263,17 +358,24 @@ export function StartScreen({
           >
             <span className="confirm-dialog__eyebrow">Reemplazar progreso</span>
             <h2 id="new-game-title">¿Comenzar una nueva expedición?</h2>
-            <p>La partida guardada actual se eliminará de este dispositivo.</p>
+            <p>
+              {mapArchiveAvailability === 'unavailable'
+                ? 'El mapa no está disponible. Tu partida guardada no se modificó.'
+                : newGameProbePending
+                  ? 'Verificando el mapa antes de reemplazar tu progreso…'
+                  : 'La partida guardada actual se eliminará de este dispositivo.'}
+            </p>
             <div>
-              <button type="button" onClick={() => setConfirmingNewGame(false)}>
+              <button type="button" onClick={closeNewGameConfirmation}>
                 Cancelar
               </button>
               <button
                 type="button"
                 className="confirm-dialog__danger"
-                onClick={onNewGame}
+                onClick={confirmNewGame}
+                disabled={!canLaunch || newGameProbePending}
               >
-                Nueva partida
+                {newGameProbePending ? 'Verificando mapa…' : 'Nueva partida'}
               </button>
             </div>
           </section>

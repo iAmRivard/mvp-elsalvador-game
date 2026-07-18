@@ -111,7 +111,7 @@ import {
 } from '../../map/pmtilesProtocol';
 import { addRoadDebugLayer } from '../../map/roadDebugLayer';
 import { addPlayableRoadSurfaceLayer } from '../../map/roadSurfaceLayer';
-import { createStyleResourceTransform } from '../../map/styleResources';
+import { createConfiguredStyleResourceTransform } from '../../map/styleResources';
 import {
   createMapDeclutterController,
   type MapDeclutterController,
@@ -2344,7 +2344,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     map.on('error', handleError);
     map.on('webglcontextlost', handleWebglContextLost);
     map.setStyle(mapSourceConfig.styleUrl, {
-      transformStyle: createStyleResourceTransform(window.location.href),
+      transformStyle: createConfiguredStyleResourceTransform(
+        window.location.href,
+      ),
     });
 
     return () => {

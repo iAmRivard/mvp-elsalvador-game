@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 
 const serviceWorkerSource = readFileSync(resolve('public/sw.js'), 'utf8');
+const saveKey = 'el-salvador-rutas-perdidas:save';
 
 interface PrecacheManifest {
   buildIdentity: string;
@@ -15,7 +16,50 @@ async function fetchPrecacheManifest(page: Page): Promise<PrecacheManifest> {
   return response.json() as Promise<PrecacheManifest>;
 }
 
-test('precachea el shell y prepara la red vial offline desde la primera instalaciÃ³n', async ({
+function installSavedExpedition(gameSaveKey: string): void {
+  window.localStorage.clear();
+  window.localStorage.setItem(
+    gameSaveKey,
+    JSON.stringify({
+      version: 5,
+      savedAt: '2026-07-17T00:00:00.000Z',
+      game: {
+        onboardingState: 'completed',
+        player: {
+          longitude: -89.1908911,
+          latitude: 13.6962937,
+          heading: 0,
+          speedMetersPerSecond: 0,
+          fuel: 75,
+          totalDistanceMeters: 1_250,
+        },
+        energy: 100,
+        maxEnergy: 100,
+        experience: 150,
+        activeMissionId: null,
+        activeMissionCompletedObjectiveIds: [],
+        activeMissionObjectiveProgress: {},
+        missionChoiceSelections: {},
+        storyLogEntries: [],
+        completedMissionIds: ['la-transmision'],
+        discoveredLocationIds: ['san-salvador'],
+        unlockedLocationIds: ['san-salvador'],
+        specialItemIds: [],
+        unlockedStoryIds: [],
+        inventory: [],
+        vehicle: { condition: 100, fuel: 75, maximumFuel: 100 },
+        currentChapterId: 'chapter-1',
+        completedChapterIds: [],
+        navigationTarget: null,
+        roadNetworkVersion: 2,
+        isPaused: false,
+        isFollowingPlayer: true,
+      },
+    }),
+  );
+}
+
+test('precachea shell y red vial y valida el alcance real del mapa', async ({
   context,
   page,
 }) => {
@@ -34,6 +78,12 @@ test('precachea el shell y prepara la red vial offline desde la primera instalac
     if (message.type() === 'error') {
       browserFailures.push(`console:${message.text()}`);
     }
+  });
+  await page.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, 'onLine', {
+      configurable: true,
+      get: () => false,
+    });
   });
   await page.goto('/');
   await expect
@@ -77,6 +127,11 @@ test('precachea el shell y prepara la red vial offline desde la primera instalac
     hasSignalModel: true,
     hasMapArchive: false,
   });
+  await expect(
+    page.locator('[data-map-availability="available"]'),
+  ).toBeVisible();
+  expect(await page.evaluate(() => navigator.onLine)).toBe(false);
+  await expect(page.locator('.start-button--primary')).toBeEnabled();
 
   await context.setOffline(true);
   try {
@@ -110,13 +165,92 @@ test('precachea el shell y prepara la red vial offline desde la primera instalac
     await expect(page.locator('[data-preparation-stage="ready"]')).toBeVisible({
       timeout: 25_000,
     });
+    await expect(
+      page.locator('[data-map-availability="unavailable"]'),
+    ).toBeVisible();
 
     const launchButton = page.locator('.start-button--primary');
     await expect(launchButton).toHaveCount(1);
-    await expect(launchButton).toBeEnabled();
+    await expect(launchButton).toBeDisabled();
+    await expect(
+      page.getByText(
+        'Inicio, red vial y progreso disponibles. El mapa no está accesible; reintenta cuando vuelva la conexión con este servidor.',
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Reintentar mapa' }),
+    ).toBeEnabled();
+    await expect(
+      page.getByRole('button', { name: 'Configuración' }),
+    ).toBeEnabled();
   } finally {
     await context.setOffline(false);
   }
+});
+
+test('revalida el mapa antes de reemplazar una partida guardada', async ({
+  page,
+}) => {
+  await page.addInitScript(installSavedExpedition, saveKey);
+  let mapAvailable = true;
+  await page.route('**/maps/el-salvador.pmtiles*', async (route) => {
+    if (mapAvailable) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 503,
+      contentType: 'text/plain; charset=utf-8',
+      body: 'Mapa temporalmente no disponible',
+    });
+  });
+  await page.goto('/');
+
+  expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+  await expect(
+    page.locator('[data-map-availability="available"]'),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Continuar expedición' }),
+  ).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Garaje' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Nueva partida' }).click();
+  const confirmation = page.getByRole('alertdialog', {
+    name: '¿Comenzar una nueva expedición?',
+  });
+  await expect(confirmation).toBeVisible();
+
+  const savedBeforeConfirmation = await page.evaluate(
+    (key) => window.localStorage.getItem(key),
+    saveKey,
+  );
+  expect(savedBeforeConfirmation).not.toBeNull();
+  mapAvailable = false;
+  const verificationResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/maps/el-salvador.pmtiles' &&
+      response.status() === 503,
+  );
+  await Promise.all([
+    verificationResponse,
+    confirmation.getByRole('button', { name: 'Nueva partida' }).click(),
+  ]);
+  await expect(
+    confirmation.getByText(
+      'El mapa no está disponible. Tu partida guardada no se modificó.',
+    ),
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-map-availability="unavailable"]'),
+  ).toBeVisible();
+  await expect(
+    confirmation.getByRole('button', { name: 'Nueva partida' }),
+  ).toBeDisabled();
+  const savedAfterConfirmation = await page.evaluate(
+    (key) => window.localStorage.getItem(key),
+    saveKey,
+  );
+  expect(savedAfterConfirmation).toBe(savedBeforeConfirmation);
 });
 
 async function installUpdateCandidate(
@@ -275,7 +409,14 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
     )
     .toBe(true);
 
-  const rangeResult = await page.evaluate(async () => {
+  const rangeResponsePromise = page.waitForResponse((response) => {
+    const request = response.request();
+    return (
+      new URL(response.url()).pathname === '/maps/el-salvador.pmtiles' &&
+      request.headers()['range'] === 'bytes=0-1023'
+    );
+  });
+  const rangeResultPromise = page.evaluate(async () => {
     const request = new Request('/maps/el-salvador.pmtiles', {
       headers: { Range: 'bytes=0-1023' },
     });
@@ -287,6 +428,11 @@ test('valida el ciclo PWA real y difiere actualizaciones durante una misión', a
       cached: Boolean(await caches.match(request)),
     };
   });
+  const [rangeResponse, rangeResult] = await Promise.all([
+    rangeResponsePromise,
+    rangeResultPromise,
+  ]);
+  expect(rangeResponse.fromServiceWorker()).toBe(false);
   expect(rangeResult).toEqual({ status: 206, bytes: 1_024, cached: false });
 
   await page.getByRole('button', { name: 'Comenzar expedición' }).click();
