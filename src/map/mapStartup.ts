@@ -183,7 +183,12 @@ export function classifyMapRuntimeError(
     );
   }
 
-  return result('fatal', 'unknown', 'unknown-during-startup', details);
+  return result(
+    context.persistent === true ? 'fatal' : 'degraded',
+    'unknown',
+    'unknown-during-startup',
+    details,
+  );
 }
 
 export function mapRuntimeErrorStopsGameplay(
