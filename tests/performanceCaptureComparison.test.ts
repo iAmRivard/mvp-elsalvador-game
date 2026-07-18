@@ -78,6 +78,10 @@ function capture(
       p95: 2.4,
       ...performanceOverrides.cameraMilliseconds,
     },
+    mapDataset: {
+      playerOutsideSafeViewport: 'false',
+      safePlayerYRatio: '0.620',
+    },
     dynamicLoad: {
       samples: Array.from({ length: 120 }, (_, index) => ({
         elapsedMilliseconds: index * 250,
@@ -434,6 +438,42 @@ describe('contrato de capturas arcade', () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('camera p95');
   });
+
+  it.each([
+    ['instrumentación ausente', undefined, undefined],
+    ['vehículo fuera', 'true', '0.620'],
+    ['ancla fuera de banda', 'false', '0.700'],
+  ])(
+    'rechaza el viewport seguro final con %s',
+    (_label, outside, safePlayerYRatio) => {
+      const baseline = fixtureDirectory(
+        'baseline',
+        performanceCapture('a'.repeat(40)),
+      );
+      const invalidFinal = performanceCapture('b'.repeat(40));
+      const invalidMapDataset: Record<string, string> = {};
+      if (outside !== undefined) {
+        invalidMapDataset.playerOutsideSafeViewport = outside;
+      }
+      if (safePlayerYRatio !== undefined) {
+        invalidMapDataset.safePlayerYRatio = safePlayerYRatio;
+      }
+      invalidFinal.mapDataset =
+        invalidMapDataset as typeof invalidFinal.mapDataset;
+      const final = fixtureDirectory('final', invalidFinal);
+
+      const result = spawnSync(
+        process.execPath,
+        [comparator, baseline, final],
+        {
+          encoding: 'utf8',
+        },
+      );
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('viewport seguro');
+    },
+  );
 
   it('informa el aumento de frames >33 ms sin rechazar la comparacion', () => {
     const baseline = fixtureDirectory(
