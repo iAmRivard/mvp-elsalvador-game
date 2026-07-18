@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { InputController } from '../../game/inputController';
 import type {
   RouteRejoinBlockReason,
@@ -64,9 +64,26 @@ export function StuckVehicleAssist({
   const sessionStartedAt = useRef<number | null>(null);
   const lastDistance = useRef<number | null>(null);
   const dismissedUntil = useRef(0);
+  const visibleRef = useRef(false);
+  const setAssistView = useCallback(
+    (nextView: AssistView) => {
+      const nextVisible = enabled && nextView.kind !== 'none';
+      if (visibleRef.current !== nextVisible) {
+        visibleRef.current = nextVisible;
+        onVisibilityChange?.(nextVisible);
+      }
+      setView((current) =>
+        sameAssistView(current, nextView) ? current : nextView,
+      );
+    },
+    [enabled, onVisibilityChange],
+  );
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      const resetView = window.setTimeout(() => setAssistView(EMPTY_VIEW), 0);
+      return () => window.clearTimeout(resetView);
+    }
     const update = () => {
       const now = performance.now();
       const state = useGameStore.getState();
@@ -88,16 +105,14 @@ export function StuckVehicleAssist({
       }
       const blockingOverlay = Boolean(
         state.isPaused ||
-          state.isJournalOpen ||
-          state.recoveryReason ||
-          state.activeNarrativeEventId ||
-          state.activeMissionChoiceObjectiveId,
+        state.isJournalOpen ||
+        state.recoveryReason ||
+        state.activeNarrativeEventId ||
+        state.activeMissionChoiceObjectiveId,
       );
       const rejoinEligibility = state.getRouteRejoinEligibility();
       if (now < dismissedUntil.current) {
-        setView((current) =>
-          sameAssistView(current, EMPTY_VIEW) ? current : EMPTY_VIEW,
-        );
+        setAssistView(EMPTY_VIEW);
         return;
       }
       const help = stuckVehicleHelpFor({
@@ -125,9 +140,7 @@ export function StuckVehicleAssist({
             : null,
           rejoinBlockedBy: rejoinEligibility.blockedBy,
         };
-        setView((current) =>
-          sameAssistView(current, nextView) ? current : nextView,
-        );
+        setAssistView(nextView);
         return;
       }
       if (rejoinEligibility.eligible) {
@@ -138,9 +151,7 @@ export function StuckVehicleAssist({
           rejoinCandidate: rejoinEligibility.candidate,
           rejoinBlockedBy: null,
         };
-        setView((current) =>
-          sameAssistView(current, nextView) ? current : nextView,
-        );
+        setAssistView(nextView);
         return;
       }
       const showStartHint =
@@ -150,17 +161,15 @@ export function StuckVehicleAssist({
         Math.abs(state.telemetry.speedKilometersPerHour) < 1 &&
         now - sessionStartedAt.current >= 1_500;
       const nextView: AssistView = showStartHint
-          ? {
-              kind: 'start-hint',
-              cause: null,
-              canRetryAcceleration: false,
-              rejoinCandidate: null,
-              rejoinBlockedBy: rejoinEligibility.blockedBy,
-            }
-          : EMPTY_VIEW;
-      setView((current) =>
-        sameAssistView(current, nextView) ? current : nextView,
-      );
+        ? {
+            kind: 'start-hint',
+            cause: null,
+            canRetryAcceleration: false,
+            rejoinCandidate: null,
+            rejoinBlockedBy: rejoinEligibility.blockedBy,
+          }
+        : EMPTY_VIEW;
+      setAssistView(nextView);
     };
     const initialUpdate = window.setTimeout(update, 0);
     const interval = window.setInterval(update, 250);
@@ -168,14 +177,13 @@ export function StuckVehicleAssist({
       window.clearTimeout(initialUpdate);
       window.clearInterval(interval);
     };
-  }, [controlMode, enabled, input]);
+  }, [controlMode, enabled, input, setAssistView]);
 
   const visible = enabled && view.kind !== 'none';
-  useEffect(() => {
-    onVisibilityChange?.(visible);
-  }, [onVisibilityChange, visible]);
   useEffect(
     () => () => {
+      if (!visibleRef.current) return;
+      visibleRef.current = false;
       onVisibilityChange?.(false);
     },
     [onVisibilityChange],
@@ -185,7 +193,7 @@ export function StuckVehicleAssist({
 
   const close = () => {
     dismissedUntil.current = performance.now() + 10_000;
-    setView(EMPTY_VIEW);
+    setAssistView(EMPTY_VIEW);
   };
   return (
     <aside
@@ -200,7 +208,7 @@ export function StuckVehicleAssist({
             ? 'Listo para conducir'
             : view.kind === 'rejoin'
               ? 'Fuera de carretera'
-            : 'Tu vehículo no está avanzando'}
+              : 'Tu vehículo no está avanzando'}
         </strong>
         <span>
           {view.cause
@@ -211,9 +219,9 @@ export function StuckVehicleAssist({
                 ? `Hay una vía segura a ${String(
                     Math.round(view.rejoinCandidate.distanceMeters),
                   )} m.`
-              : `No hubo movimiento durante ${String(
-                  stuckVehicleConfig.stationaryDelayMilliseconds / 1_000,
-                )} s.`}
+                : `No hubo movimiento durante ${String(
+                    stuckVehicleConfig.stationaryDelayMilliseconds / 1_000,
+                  )} s.`}
         </span>
       </div>
       {view.canRetryAcceleration && (
@@ -233,7 +241,7 @@ export function StuckVehicleAssist({
               input.clearAllInput();
               input.resetMobileBoostCompletely();
               dismissedUntil.current = performance.now() + 1_200;
-              setView(EMPTY_VIEW);
+              setAssistView(EMPTY_VIEW);
             }
           }}
         >
@@ -244,9 +252,7 @@ export function StuckVehicleAssist({
         <button
           type="button"
           onClick={() =>
-            useSettingsStore
-              .getState()
-              .setMobileControlMode('arcade-driving')
+            useSettingsStore.getState().setMobileControlMode('arcade-driving')
           }
         >
           Cambiar a conducción arcade

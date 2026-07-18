@@ -177,10 +177,7 @@ async function expectAppliedSafeCamera(
       expectedProfile,
     );
   }
-  await expect(gameMap).toHaveAttribute(
-    'data-follow-offset-y',
-    /^-?\d+$/,
-  );
+  await expect(gameMap).toHaveAttribute('data-follow-offset-y', /^-?\d+$/);
   await expect(gameMap).toHaveAttribute(
     'data-camera-last-applied-offset-y',
     /^-?\d+$/,
@@ -405,34 +402,73 @@ test('recalcula y aplica el offset al cambiar el viewport', async ({
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-mobile');
   await page.setViewportSize({ width: 392, height: 850 });
-  await page.addInitScript(() => window.localStorage.clear());
+  await page.addInitScript(() => {
+    window.localStorage.clear();
+    const state = {
+      advicePresent: false,
+      assistPresent: false,
+      overlapObserved: false,
+    };
+    const contains = (node: Node, selector: string) =>
+      node instanceof Element &&
+      (node.matches(selector) || Boolean(node.querySelector(selector)));
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.removedNodes) {
+          if (contains(node, '.contextual-advice')) {
+            state.advicePresent = false;
+          }
+          if (contains(node, '.stuck-vehicle-assist')) {
+            state.assistPresent = false;
+          }
+        }
+        for (const node of record.addedNodes) {
+          if (contains(node, '.contextual-advice')) {
+            state.advicePresent = true;
+          }
+          if (contains(node, '.stuck-vehicle-assist')) {
+            state.assistPresent = true;
+          }
+        }
+        state.overlapObserved ||= state.advicePresent && state.assistPresent;
+      }
+    });
+    observer.observe(document, { childList: true, subtree: true });
+    Object.assign(window, { __overlayOverlapState: state });
+  });
   await enterExpedition(page);
 
   const gameMap = page.getByTestId('game-map');
   await expect(page.locator('.stuck-vehicle-assist')).toBeVisible({
     timeout: 3_000,
   });
-  await expect(page.locator('.contextual-advice')).toBeHidden();
+  await expect(page.locator('.contextual-advice')).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as typeof window & {
+            __overlayOverlapState?: { overlapObserved: boolean };
+          }
+        ).__overlayOverlapState?.overlapObserved ?? false,
+    ),
+  ).toBe(false);
   const previousSafeHeight = Number(
     await gameMap.getAttribute('data-safe-viewport-height'),
   );
   await page.setViewportSize({ width: 392, height: 700 });
   await expect
-    .poll(() =>
-      gameMap.getAttribute('data-safe-viewport-height').then(Number),
-    )
+    .poll(() => gameMap.getAttribute('data-safe-viewport-height').then(Number))
     .not.toBe(previousSafeHeight);
   await expect(page.locator('.stuck-vehicle-assist')).toBeVisible();
-  await expect(page.locator('.contextual-advice')).toBeHidden();
+  await expect(page.locator('.contextual-advice')).toHaveCount(0);
   await expect(page.locator('.overlay-manager')).toHaveAttribute(
     'data-contextual-advice-suppressed',
     'true',
   );
   await expectAppliedSafeCamera(gameMap, 'mobileInteraction');
 
-  await page
-    .getByRole('button', { name: /^Cerrar ayuda de conducci/ })
-    .click();
+  await page.getByRole('button', { name: /^Cerrar ayuda de conducci/ }).click();
   await expect(page.locator('.stuck-vehicle-assist')).toBeHidden();
   await expect(page.locator('.overlay-manager')).toHaveAttribute(
     'data-contextual-advice-suppressed',
@@ -544,13 +580,11 @@ test('no actualiza continuamente el marcador fallback oculto', async ({
     Number(await gameMap.getAttribute('data-camera-applied-updates')) -
     initialAppliedCameraUpdates;
   const safeMeasurementDelta =
-    Number(
-      await gameMap.getAttribute('data-safe-viewport-measurement-count'),
-    ) - initialSafeViewportMeasurements;
+    Number(await gameMap.getAttribute('data-safe-viewport-measurement-count')) -
+    initialSafeViewportMeasurements;
   const safeProjectionDelta =
-    Number(
-      await gameMap.getAttribute('data-camera-safe-projection-updates'),
-    ) - initialSafeProjectionUpdates;
+    Number(await gameMap.getAttribute('data-camera-safe-projection-updates')) -
+    initialSafeProjectionUpdates;
   expect(appliedCameraDelta).toBeGreaterThan(50);
   expect(safeMeasurementDelta).toBeLessThanOrEqual(5);
   expect(safeProjectionDelta).toBeLessThanOrEqual(5);
