@@ -50,6 +50,7 @@ import {
   advanceCameraFollowSpring,
   initialCameraFollowSpringState,
 } from '../../game/cameraFollowSpring';
+import { cameraRouteLookahead } from '../../game/cameraRouteLookahead';
 import { runtimeGateFor } from '../../game/runtimeGate';
 import { deriveMapDetailMode } from '../../game/mapDetailMode';
 import {
@@ -765,7 +766,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       settleMobileModeImmediately = false,
       snapFollowState = false,
     ) => {
-      const presentationMode = useGameStore.getState().presentationMode;
+      const gameState = useGameStore.getState();
+      const presentationMode = gameState.presentationMode;
       const speedKilometersPerHour =
         Math.abs(player.speedMetersPerSecond) * 3.6;
       const cameraMode: DrivingPresentationMode = deviceProfile.isTouch
@@ -801,7 +803,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         profileOverride,
       );
       const canvas = map.getCanvas();
-      const offset = deviceProfile.isTouch
+      const baseOffset = deviceProfile.isTouch
         ? followCameraOffsetForSafeViewport(
             safeCanvasRect,
             safeGameplayViewport,
@@ -816,6 +818,39 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         player.longitude,
         player.latitude,
       ];
+      const routeLookahead = deviceProfile.isTouch
+        ? cameraRouteLookahead({
+            playerCoordinates: playerCoordinate,
+            playerHeading: player.heading,
+            speedKilometersPerHour,
+            activeNavigation: gameState.missionRoute.activeNavigation,
+            nextInstruction: gameState.missionRoute.nextInstruction,
+            distanceToNextInstructionMeters:
+              gameState.missionRoute.distanceToNextInstructionMeters,
+            reducedMotion: deviceProfile.reducedMotion,
+          })
+        : {
+            offsetXPixels: 0,
+            offsetYPixels: 0,
+            strength: 0,
+            targetHeading: null,
+            anticipatesTurn: false,
+          };
+      const offset: [number, number] = [
+        baseOffset[0] + routeLookahead.offsetXPixels,
+        baseOffset[1] + routeLookahead.offsetYPixels,
+      ];
+      if (containerRef.current) {
+        containerRef.current.dataset.cameraRouteLookaheadPixels = Math.hypot(
+          routeLookahead.offsetXPixels,
+          routeLookahead.offsetYPixels,
+        ).toFixed(2);
+        containerRef.current.dataset.cameraRouteLookaheadHeading =
+          routeLookahead.targetHeading?.toFixed(1) ?? '';
+        containerRef.current.dataset.cameraRouteLookaheadTurn = String(
+          routeLookahead.anticipatesTurn,
+        );
+      }
       let followCenter: [number, number] = playerCoordinate;
       if (deviceProfile.isTouch) {
         const projectedPlayer = map.project(playerCoordinate);

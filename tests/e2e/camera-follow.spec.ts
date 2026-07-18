@@ -5,6 +5,7 @@ interface FollowSample {
   playerY: number;
   offsetX: number;
   offsetY: number;
+  lookahead: number;
 }
 
 async function readFollowSample(gameMap: Locator): Promise<FollowSample> {
@@ -13,6 +14,7 @@ async function readFollowSample(gameMap: Locator): Promise<FollowSample> {
     playerY: Number(element.dataset.playerProjectedY),
     offsetX: Number(element.dataset.followZoneOffsetX),
     offsetY: Number(element.dataset.followZoneOffsetY),
+    lookahead: Number(element.dataset.cameraRouteLookaheadPixels),
   }));
 }
 
@@ -137,6 +139,12 @@ test.describe(
         expect(
           Math.max(...finiteSamples.map(({ offsetY }) => Math.abs(offsetY))),
         ).toBeLessThanOrEqual(19.1);
+        expect(
+          Math.max(...finiteSamples.map(({ lookahead }) => lookahead)),
+        ).toBeGreaterThan(0);
+        expect(
+          Math.max(...finiteSamples.map(({ lookahead }) => lookahead)),
+        ).toBeLessThanOrEqual(14.1);
         await expect(gameMap).toHaveAttribute(
           'data-player-outside-safe-viewport',
           'false',
