@@ -780,53 +780,44 @@ test('no actualiza continuamente el marcador fallback oculto', async ({
   // Deja terminar los overlays de descubrimiento/ayuda; después el layout es
   // estable y mover MapLibre no debe provocar nuevas lecturas del DOM.
   await page.waitForTimeout(3_500);
-  const initialSafeViewportMeasurements = Number(
-    await gameMap.getAttribute('data-safe-viewport-measurement-count'),
-  );
-  const initialSafeProjectionUpdates = Number(
-    await gameMap.getAttribute('data-camera-safe-projection-updates'),
-  );
-  const initialAppliedCameraUpdates = Number(
-    await gameMap.getAttribute('data-camera-applied-updates'),
-  );
-  const initialFallbackUpdates = Number(
-    await gameMap.getAttribute('data-camera-fallback-marker-updates'),
-  );
-  const initialThreeUpdates = Number(
-    await gameMap.getAttribute('data-camera-three-player-updates'),
-  );
-  const initialEffectsUpdates = Number(
-    await gameMap.getAttribute('data-three-driving-effects-updates'),
-  );
+  const readUpdateSnapshot = () =>
+    gameMap.evaluate((element) => ({
+      timestampMilliseconds: performance.now(),
+      safeViewportMeasurements: Number(
+        element.dataset.safeViewportMeasurementCount,
+      ),
+      safeProjectionUpdates: Number(
+        element.dataset.cameraSafeProjectionUpdates,
+      ),
+      appliedCameraUpdates: Number(element.dataset.cameraAppliedUpdates),
+      fallbackUpdates: Number(element.dataset.cameraFallbackMarkerUpdates),
+      threeUpdates: Number(element.dataset.cameraThreePlayerUpdates),
+      effectsUpdates: Number(element.dataset.threeDrivingEffectsUpdates),
+    }));
+  const initialUpdates = await readUpdateSnapshot();
 
   const stableObservationMilliseconds = 5_000;
-  const maximumProjectionTelemetryHertz = 4;
+  const projectionTelemetryIntervalMilliseconds = 250;
   await page.waitForTimeout(stableObservationMilliseconds);
-  expect(
-    Number(await gameMap.getAttribute('data-camera-fallback-marker-updates')),
-  ).toBe(initialFallbackUpdates);
-  expect(
-    Number(await gameMap.getAttribute('data-camera-three-player-updates')),
-  ).toBeGreaterThan(initialThreeUpdates);
-  expect(
-    Number(await gameMap.getAttribute('data-three-driving-effects-updates')),
-  ).toBe(initialEffectsUpdates);
+  const finalUpdates = await readUpdateSnapshot();
+  expect(finalUpdates.fallbackUpdates).toBe(initialUpdates.fallbackUpdates);
+  expect(finalUpdates.threeUpdates).toBeGreaterThan(initialUpdates.threeUpdates);
+  expect(finalUpdates.effectsUpdates).toBe(initialUpdates.effectsUpdates);
   const appliedCameraDelta =
-    Number(await gameMap.getAttribute('data-camera-applied-updates')) -
-    initialAppliedCameraUpdates;
+    finalUpdates.appliedCameraUpdates - initialUpdates.appliedCameraUpdates;
   const safeMeasurementDelta =
-    Number(await gameMap.getAttribute('data-safe-viewport-measurement-count')) -
-    initialSafeViewportMeasurements;
+    finalUpdates.safeViewportMeasurements -
+    initialUpdates.safeViewportMeasurements;
   const safeProjectionDelta =
-    Number(await gameMap.getAttribute('data-camera-safe-projection-updates')) -
-    initialSafeProjectionUpdates;
+    finalUpdates.safeProjectionUpdates - initialUpdates.safeProjectionUpdates;
+  const observationDurationMilliseconds =
+    finalUpdates.timestampMilliseconds - initialUpdates.timestampMilliseconds;
   expect(appliedCameraDelta).toBeGreaterThan(50);
   expect(safeMeasurementDelta).toBeLessThanOrEqual(5);
   expect(safeProjectionDelta).toBeLessThanOrEqual(
     Math.ceil(
-      (stableObservationMilliseconds / 1_000) *
-        maximumProjectionTelemetryHertz,
-    ) + 2,
+      observationDurationMilliseconds / projectionTelemetryIntervalMilliseconds,
+    ) + 1,
   );
   expect(safeMeasurementDelta).toBeLessThan(appliedCameraDelta * 0.1);
   expect(safeProjectionDelta).toBeLessThan(appliedCameraDelta * 0.5);
