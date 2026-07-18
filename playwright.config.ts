@@ -25,7 +25,10 @@ export default defineConfig({
   webServer: externalBaseUrl
     ? undefined
     : {
-        command: 'npm run preview -- --host 127.0.0.1',
+        // Lanzar Vite directamente evita que el wrapper de npm deje un hijo
+        // activo en Windows cuando Playwright cierra el servidor enfocado.
+        command:
+          'node ./node_modules/vite/bin/vite.js preview --host 127.0.0.1',
         port: 4173,
         reuseExistingServer: !process.env.CI,
       },
@@ -33,6 +36,7 @@ export default defineConfig({
     {
       name: 'chromium-desktop',
       testIgnore: [/pwa\.spec\.ts/, /onboarding-full\.spec\.ts/],
+      grepInvert: /@mobile/,
       use: { ...devices['Desktop Chrome'] },
     },
     {

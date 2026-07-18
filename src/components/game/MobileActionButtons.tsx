@@ -19,6 +19,7 @@ interface MobileActionButtonsProps {
   input: InputController;
   interactionLabel: string | null;
   isPaused: boolean;
+  isFollowingPlayer: boolean;
   onCenter: () => void;
   onTogglePause: () => void;
   autoThrottleAvailable?: boolean;
@@ -30,6 +31,7 @@ export function MobileActionButtons({
   input,
   interactionLabel,
   isPaused,
+  isFollowingPlayer,
   onCenter,
   onTogglePause,
   autoThrottleAvailable = false,
@@ -86,8 +88,11 @@ export function MobileActionButtons({
       <div className="touch-utilities">
         <button
           type="button"
-          className="touch-button touch-button--utility"
-          aria-label="Centrar cámara en el jugador"
+          className={`touch-button touch-button--utility ${!isFollowingPlayer ? 'touch-button--active' : ''}`}
+          aria-label={
+            isFollowingPlayer ? 'Explorar mapa' : 'Centrar cámara en el jugador'
+          }
+          aria-pressed={!isFollowingPlayer}
           onClick={onCenter}
         >
           <span aria-hidden="true">⌖</span>

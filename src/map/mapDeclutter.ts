@@ -1,12 +1,12 @@
 import type { LayerSpecification, Map as MapLibreMap } from 'maplibre-gl';
-import type { DrivingPresentationMode } from '../game/drivingPresentation';
-import { drivingDeclutterMode } from '../game/drivingPresentation';
+import type { MapDetailMode } from '../game/mapDetailMode';
 
 export type MapLayerPriority =
   | 'navigation'
   | 'road-primary'
   | 'road-secondary'
-  | 'area-label'
+  | 'area-major'
+  | 'area-local'
   | 'street-label'
   | 'poi-important'
   | 'poi-secondary'
@@ -19,16 +19,17 @@ export interface MapDeclutterProfile {
 }
 
 export const mapDeclutterProfiles: Readonly<
-  Record<'stopped' | 'driving' | 'fast', MapDeclutterProfile>
+  Record<MapDetailMode, MapDeclutterProfile>
 > = {
-  stopped: {
+  exploration: {
     // Reference values remain useful for diagnostics; the controller restores
     // the captured style instead of applying these generic values.
     labelOpacity: {
       navigation: 1,
       'road-primary': 0.95,
       'road-secondary': 0.28,
-      'area-label': 1,
+      'area-major': 1,
+      'area-local': 1,
       'street-label': 0.9,
       'poi-important': 1,
       'poi-secondary': 1,
@@ -37,30 +38,30 @@ export const mapDeclutterProfiles: Readonly<
     },
     layerVisibility: {},
   },
-  driving: {
+  'arcade-driving': {
     labelOpacity: {
-      navigation: 1,
       'road-primary': 1,
       'road-secondary': 0.18,
-      'area-label': 0.58,
-      'street-label': 0.22,
-      'poi-important': 0.9,
-      'poi-secondary': 0.06,
+      'area-major': 0.72,
       building: 0.3,
       decorative: 0.62,
     },
-    layerVisibility: {},
+    layerVisibility: {
+      'area-local': false,
+      'street-label': false,
+      'poi-secondary': false,
+      building: false,
+    },
   },
-  fast: {
+  'arcade-fast': {
     labelOpacity: {
-      navigation: 1,
       'road-primary': 1,
-      'area-label': 0.4,
-      'poi-important': 0.8,
+      'area-major': 0.48,
       decorative: 0.5,
     },
     layerVisibility: {
       'road-secondary': false,
+      'area-local': false,
       'street-label': false,
       'poi-secondary': false,
       building: false,
@@ -119,7 +120,8 @@ export function classifyMapLayer(
     if (id.includes('street') || id.includes('road-label')) {
       return 'street-label';
     }
-    return 'area-label';
+    if (id.includes('place-labels-local')) return 'area-local';
+    return 'area-major';
   }
   return 'decorative';
 }
@@ -192,7 +194,8 @@ function restorePaintProperty(
 }
 
 export interface MapDeclutterController {
-  apply: (mode: DrivingPresentationMode, immediate?: boolean) => void;
+  apply: (mode: MapDetailMode, immediate?: boolean) => void;
+  refresh: (immediate?: boolean) => void;
   dispose: () => void;
   readonly inventory: readonly MapLayerInventoryEntry[];
 }
@@ -204,18 +207,28 @@ export function createMapDeclutterController(
   let inventory = mapLayerInventory(map.getStyle().layers ?? []);
   const snapshots = new Map<string, LayerSnapshot>();
   const knownLayerIds = new Set(inventory.map((layer) => layer.id));
-  let activeProfile: 'stopped' | 'driving' | 'fast' | null = null;
-  let pendingProfile: 'stopped' | 'driving' | 'fast' | null = null;
+  let activeProfile: MapDetailMode | null = null;
+  let pendingProfile: MapDetailMode | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
-  let inventorySignature = '';
+  let inventorySignature = inventory
+    .map((layer) => `${layer.id}:${layer.type}:${layer.priority}`)
+    .join('|');
+  let inventoryDirty = false;
+  let styleRevision = 0;
   let disposed = false;
 
   const refreshInventory = () => {
-    inventory = mapLayerInventory(map.getStyle().layers ?? []);
-    for (const layer of inventory) knownLayerIds.add(layer.id);
-    return inventory
+    const nextInventory = mapLayerInventory(map.getStyle().layers ?? []);
+    const nextSignature = nextInventory
       .map((layer) => `${layer.id}:${layer.type}:${layer.priority}`)
       .join('|');
+    const changed = nextSignature !== inventorySignature;
+    inventory = nextInventory;
+    for (const layer of inventory) knownLayerIds.add(layer.id);
+    inventorySignature = nextSignature;
+    inventoryDirty = false;
+    if (changed) styleRevision += 1;
+    return changed;
   };
 
   const snapshotFor = (layer: MapLayerInventoryEntry): LayerSnapshot => {
@@ -244,17 +257,24 @@ export function createMapDeclutterController(
     }
   };
 
-  const commit = (profileName: 'stopped' | 'driving' | 'fast') => {
+  const commit = (profileName: MapDetailMode) => {
     if (disposed) return;
     const startedAt = performance.now();
-    const signature = refreshInventory();
+    const inventoryChanged = inventoryDirty ? refreshInventory() : false;
+    if (profileName === activeProfile && !inventoryChanged) {
+      pendingProfile = null;
+      return;
+    }
     const profile = mapDeclutterProfiles[profileName];
     const currentIds = new Set(inventory.map((layer) => layer.id));
     for (const id of knownLayerIds) {
       if (!currentIds.has(id)) snapshots.delete(id);
     }
     let visibleLayerCount = 0;
+    let visibleSymbolLayerCount = 0;
     let failedLayerCount = 0;
+    const successfulLayersByPriority = new Map<MapLayerPriority, number>();
+    const visibleLayersByPriority = new Map<MapLayerPriority, number>();
 
     for (const layer of inventory) {
       if (!map.getLayer(layer.id)) {
@@ -263,7 +283,7 @@ export function createMapDeclutterController(
       }
       try {
         const snapshot = snapshotFor(layer);
-        if (profileName === 'stopped') {
+        if (profileName === 'exploration') {
           restoreLayer(layer, snapshot);
         } else {
           const visible = profile.layerVisibility[layer.priority] !== false;
@@ -295,12 +315,21 @@ export function createMapDeclutterController(
             }
           }
         }
-        const originalVisibility = snapshot.presentation.visibility;
-        const profileHidesLayer =
-          profileName !== 'stopped' &&
-          profile.layerVisibility[layer.priority] === false;
-        if (!profileHidesLayer && originalVisibility !== 'none') {
+        const effectiveVisibility: unknown = map.getLayoutProperty(
+          layer.id,
+          'visibility',
+        );
+        successfulLayersByPriority.set(
+          layer.priority,
+          (successfulLayersByPriority.get(layer.priority) ?? 0) + 1,
+        );
+        if (effectiveVisibility !== 'none') {
           visibleLayerCount += 1;
+          if (layer.type === 'symbol') visibleSymbolLayerCount += 1;
+          visibleLayersByPriority.set(
+            layer.priority,
+            (visibleLayersByPriority.get(layer.priority) ?? 0) + 1,
+          );
         }
       } catch {
         failedLayerCount += 1;
@@ -312,9 +341,24 @@ export function createMapDeclutterController(
     ).length;
     activeProfile = profileName;
     pendingProfile = null;
-    inventorySignature = signature;
     const container = map.getContainer();
+    const effectivePriorityVisibility = (priority: MapLayerPriority) => {
+      if (!successfulLayersByPriority.has(priority)) return 'missing';
+      return (visibleLayersByPriority.get(priority) ?? 0) > 0
+        ? 'visible'
+        : 'none';
+    };
     container.dataset.mapDeclutterProfile = profileName;
+    container.dataset.mapPoiVisibility =
+      effectivePriorityVisibility('poi-secondary');
+    container.dataset.mapLocalPlaceVisibility =
+      effectivePriorityVisibility('area-local');
+    container.dataset.mapMajorPlaceVisibility =
+      effectivePriorityVisibility('area-major');
+    container.dataset.mapVisibleSymbolLayerCount = String(
+      visibleSymbolLayerCount,
+    );
+    container.dataset.mapStyleRevision = String(styleRevision);
     container.dataset.mapLayerCount = String(inventory.length);
     container.dataset.mapVisibleLayerCount = String(visibleLayerCount);
     container.dataset.mapMissingLayerCount = String(
@@ -325,43 +369,56 @@ export function createMapDeclutterController(
     ).toFixed(2);
   };
 
+  const schedule = (profile: MapDetailMode, immediate: boolean) => {
+    pendingProfile = profile;
+    if (timer) clearTimeout(timer);
+    timer = null;
+    if (immediate) {
+      commit(profile);
+      return;
+    }
+    timer = setTimeout(
+      () => {
+        timer = null;
+        if (pendingProfile) commit(pendingProfile);
+      },
+      Math.max(250, Math.min(400, debounceMilliseconds)),
+    );
+  };
+
+  const handleStyleData = () => {
+    if (disposed) return;
+    inventoryDirty = true;
+    if (activeProfile) schedule(activeProfile, false);
+  };
+  const eventMap = map as MapLibreMap & {
+    on?: (event: 'styledata', listener: () => void) => unknown;
+    off?: (event: 'styledata', listener: () => void) => unknown;
+  };
+  eventMap.on?.('styledata', handleStyleData);
+
   const controller: MapDeclutterController = {
     get inventory() {
       return inventory;
     },
     apply(mode, immediate = false) {
       if (disposed) return;
-      const profile = drivingDeclutterMode(mode);
-      const nextSignature = mapLayerInventory(map.getStyle().layers ?? [])
-        .map((layer) => `${layer.id}:${layer.type}:${layer.priority}`)
-        .join('|');
+      const profile = mode;
       if (
-        profile === activeProfile &&
-        profile !== pendingProfile &&
-        nextSignature === inventorySignature
-      ) {
+        !inventoryDirty &&
+        (profile === activeProfile || profile === pendingProfile)
+      )
         return;
-      }
-      if (profile === pendingProfile && nextSignature === inventorySignature) {
-        return;
-      }
-      pendingProfile = profile;
-      if (timer) clearTimeout(timer);
-      timer = null;
-      if (immediate) {
-        commit(profile);
-        return;
-      }
-      timer = setTimeout(
-        () => {
-          timer = null;
-          if (pendingProfile) commit(pendingProfile);
-        },
-        Math.max(250, Math.min(400, debounceMilliseconds)),
-      );
+      schedule(profile, immediate);
+    },
+    refresh(immediate = false) {
+      if (disposed) return;
+      inventoryDirty = true;
+      if (activeProfile) schedule(activeProfile, immediate);
     },
     dispose() {
       disposed = true;
+      eventMap.off?.('styledata', handleStyleData);
       if (timer) clearTimeout(timer);
       timer = null;
       pendingProfile = null;

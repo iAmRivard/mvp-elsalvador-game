@@ -5,6 +5,7 @@ import {
   type Page,
   test,
 } from '@playwright/test';
+import { routingConfig } from '../../src/config/routing.config';
 
 const settingsKey = 'el-salvador-rutas-perdidas:settings';
 
@@ -383,8 +384,11 @@ test('Arcade arranca de inmediato, mantiene crucero y usa reversa segura', async
   });
   await expect(page.locator('.map-frame')).toHaveAttribute(
     'data-player-renderer',
-    /^(ready|fallback)$/,
+    /^(ready|fallback|disabled)$/,
   );
+  await expect(
+    page.getByRole('img', { name: 'Vehículo del jugador' }),
+  ).toBeVisible();
   const positionWhenReleased = await gameMap.evaluate(
     (element) =>
       `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
@@ -1124,7 +1128,8 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
       !Number.isFinite(state.routeCoordinateCount) ||
       state.routeCoordinateCount < 2 ||
       !Number.isFinite(state.headingDifference) ||
-      state.headingDifference > 18
+      state.headingDifference >
+        routingConfig.tutorialRouteHeadingToleranceDegrees
     );
   let roadSteeringTouchId = 93;
   const roadFollowDeadline = Date.now() + 8_000;
@@ -1165,7 +1170,9 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     expect(completedRoadFollowState.routeCoordinateCount).toBeGreaterThanOrEqual(
       2,
     );
-    expect(completedRoadFollowState.headingDifference).toBeLessThanOrEqual(18);
+    expect(completedRoadFollowState.headingDifference).toBeLessThanOrEqual(
+      routingConfig.tutorialRouteHeadingToleranceDegrees,
+    );
   }
   await expect(page.getByTestId('mobile-driving-hud')).toBeVisible();
   await session.detach();

@@ -14,6 +14,7 @@ import {
   mobileCameraModeForSpeed,
   settledMobileCameraModeForSpeed,
   smoothFollowBearing,
+  smoothFollowBearingByElapsed,
   type FollowCameraOptions,
 } from '../src/game/followCamera';
 import { drivingPresentationThresholds } from '../src/game/drivingPresentation';
@@ -42,10 +43,12 @@ describe('cámara de seguimiento', () => {
     expect(drivingCameraProfile('driving', true)).toBe(
       drivingCameraProfiles.mobileDriving,
     );
-    expect(drivingCameraProfiles.mobileDriving.zoom).toBe(15.55);
-    expect(drivingCameraProfiles.mobileDriving.pitch).toBe(58);
-    expect(drivingCameraProfiles.mobileFast.zoom).toBe(15.4);
-    expect(drivingCameraProfiles.mobileFast.pitch).toBe(59.5);
+    expect(drivingCameraProfiles.mobileStopped.zoom).toBe(15.75);
+    expect(drivingCameraProfiles.mobileStopped.pitch).toBe(54);
+    expect(drivingCameraProfiles.mobileDriving.zoom).toBe(15.7);
+    expect(drivingCameraProfiles.mobileDriving.pitch).toBe(57);
+    expect(drivingCameraProfiles.mobileFast.zoom).toBe(15.55);
+    expect(drivingCameraProfiles.mobileFast.pitch).toBe(58.5);
     expect(drivingCameraProfiles.mobileStopped.updateIntervalMilliseconds).toBe(
       33,
     );
@@ -76,6 +79,12 @@ describe('cámara de seguimiento', () => {
     expect(smoothFollowBearing(20, 90, 12)).toBe(32);
     expect(smoothFollowBearing(355, 5, 12)).toBe(5);
     expect(smoothFollowBearing(Number.NaN, 180, 12)).toBe(180);
+  });
+
+  it('mantiene la misma velocidad angular entre cadencias', () => {
+    expect(smoothFollowBearingByElapsed(0, 90, 360, 50)).toBe(18);
+    expect(smoothFollowBearingByElapsed(0, 90, 360, 100)).toBe(36);
+    expect(smoothFollowBearingByElapsed(355, 5, 360, 50)).toBe(5);
   });
 
   it('omite cambios de cámara dentro de tolerancias configuradas', () => {

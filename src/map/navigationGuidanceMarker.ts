@@ -4,8 +4,8 @@ export interface NavigationGuidanceScreenPoint {
 }
 
 export const navigationGuidanceMinimumCenterDistancePixels = 62;
-// The marker is 18x28px and rotates with the map. Its half diagonal is
-// 16.7px; 20px also keeps the small drop shadow inside the canvas.
+// The marker is 14x20px and rotates with the map. Its half diagonal is
+// 12.2px; 20px also keeps the small drop shadow inside the canvas.
 export const navigationGuidanceViewportMarginPixels = 20;
 
 export function navigationGuidanceFitsViewport(

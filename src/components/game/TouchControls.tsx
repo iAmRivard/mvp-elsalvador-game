@@ -38,6 +38,7 @@ function TouchControlsContent({ input }: TouchControlsProps) {
       : controlViewportScale(window.innerHeight),
   );
   const isPaused = useGameStore((state) => state.isPaused);
+  const isFollowingPlayer = useGameStore((state) => state.isFollowingPlayer);
   const controlsDisabled = useGameStore(
     (state) =>
       state.isPaused ||
@@ -108,11 +109,7 @@ function TouchControlsContent({ input }: TouchControlsProps) {
       input.getMobileCruiseTarget().targetSpeedKilometersPerHour > 0;
     if (!hasPreservedCruiseTarget) input.clearAllInput();
     input.setMobileCruiseMode(
-      arcadeDriving
-        ? 'arcade'
-        : targetSpeedJoystick
-          ? 'target-speed'
-          : 'off',
+      arcadeDriving ? 'arcade' : targetSpeedJoystick ? 'target-speed' : 'off',
     );
   }, [arcadeDriving, controlMode, input, targetSpeedJoystick]);
 
@@ -156,7 +153,8 @@ function TouchControlsContent({ input }: TouchControlsProps) {
           input={input}
           interactionLabel={interactionLabel}
           isPaused={isPaused}
-          onCenter={() => setFollowingPlayer(true)}
+          isFollowingPlayer={isFollowingPlayer}
+          onCenter={() => setFollowingPlayer(!isFollowingPlayer)}
           onTogglePause={togglePaused}
           hapticsEnabled={hapticsEnabled}
           controlsDisabled={controlsDisabled}
@@ -196,9 +194,9 @@ function TouchControlsContent({ input }: TouchControlsProps) {
                     ? 'SUELTA PARA REVERSA'
                     : cruiseTarget.reverseState === 'reverse-armed'
                       ? 'BAJA OTRA VEZ'
-                  : cruiseTarget.braking
-                    ? 'FRENANDO'
-                    : cruiseGearLabels[cruiseTarget.selectedGear]}
+                      : cruiseTarget.braking
+                        ? 'FRENANDO'
+                        : cruiseGearLabels[cruiseTarget.selectedGear]}
               </span>
               {!cruiseTarget.reversing && (
                 <strong>
@@ -213,7 +211,8 @@ function TouchControlsContent({ input }: TouchControlsProps) {
               input={input}
               interactionLabel={interactionLabel}
               isPaused={isPaused}
-              onCenter={() => setFollowingPlayer(true)}
+              isFollowingPlayer={isFollowingPlayer}
+              onCenter={() => setFollowingPlayer(!isFollowingPlayer)}
               onTogglePause={togglePaused}
               controlsDisabled={controlsDisabled}
               autoThrottleAvailable={controlMode === 'joystick-auto-throttle'}

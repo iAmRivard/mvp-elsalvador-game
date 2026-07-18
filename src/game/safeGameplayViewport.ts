@@ -178,7 +178,13 @@ export function safeGameplayViewportFor(
     if (!intersectRect(corridor, occlusion.rect)) continue;
     const rect = occlusion.rect;
     const rectCenterY = rect.y + rect.height / 2;
-    if (rectCenterY <= baseCenterY) {
+    const roomAbove = rect.y - padding - top;
+    const roomBelow = bottom - (rect.y + rect.height + padding);
+    if (occlusion.kind === 'overlay' && roomAbove >= roomBelow) {
+      bottom = Math.min(bottom, rect.y - padding);
+    } else if (occlusion.kind === 'overlay') {
+      top = Math.max(top, rect.y + rect.height + padding);
+    } else if (rectCenterY <= baseCenterY) {
       top = Math.max(top, rect.y + rect.height + padding);
     } else {
       bottom = Math.min(bottom, rect.y - padding);

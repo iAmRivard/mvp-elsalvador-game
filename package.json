@@ -1,7 +1,7 @@
 {
   "name": "el-salvador-rutas-perdidas",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -14,7 +14,13 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:unit:changed": "vitest run --changed --passWithNoTests",
+    "test:unit:branch": "vitest run --changed origin/main --passWithNoTests",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "npm run build && node scripts/testing/run-focused-e2e.mjs smoke",
+    "test:e2e:camera": "npm run build && node scripts/testing/run-focused-e2e.mjs camera",
+    "test:e2e:map": "npm run build && node scripts/testing/run-focused-e2e.mjs map",
+    "test:e2e:last-failed": "npm run build && node scripts/testing/run-focused-e2e.mjs last-failed",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "generate:models": "node scripts/models/generate-models.mjs",
@@ -22,6 +28,7 @@
     "generate:icons": "node scripts/assets/generate-pwa-icons.mjs",
     "capture:driving-ux": "node scripts/visual/capture-driving-ux.mjs",
     "capture:arcade-five-minutes": "node scripts/visual/capture-arcade-five-minutes.mjs",
+    "capture:camera-map": "npm run build && node scripts/visual/capture-camera-map.mjs",
     "download:roads": "sh scripts/roads/download-source.sh",
     "build:roads": "node scripts/roads/build-road-network.mjs",
     "check:roads": "node scripts/roads/validate-road-network.mjs",
@@ -29,7 +36,10 @@
     "sync:map-assets": "node scripts/sync-map-assets.mjs",
     "check:external-resources": "node scripts/check-external-resources.mjs",
     "check:map": "node scripts/maps/validate-map.mjs",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run check:external-resources && npm run check:map && npm run check:roads && npm run check:mission-objectives && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run test && npm run check:external-resources && npm run check:map && npm run check:roads && npm run check:mission-objectives && npm run build",
+    "check:fast": "npm run typecheck && npm run test:unit:changed && npm run test:e2e:smoke",
+    "check:branch": "npm run lint && npm run typecheck && npm run test:unit:branch && npm run test:e2e:smoke",
+    "check:release": "npm run check && npm run test:e2e"
   },
   "dependencies": {
     "@fontsource-variable/noto-sans": "5.2.10",

@@ -20,6 +20,35 @@ const healthyWindow: CameraPerformanceWindow = {
 };
 
 describe('cadencia adaptativa de cámara', () => {
+  it('sube de inmediato a 30 Hz cuando la conducción lo exige', () => {
+    const controller = new AdaptiveCameraCadenceController({
+      initialHertz: 20,
+      maximumHertz: 30,
+    });
+
+    expect(controller.ensureMinimumHertz(30)).toBe(true);
+    expect(controller.state.hertz).toBe(30);
+    expect(controller.ensureMinimumHertz(30)).toBe(false);
+  });
+
+  it('nunca baja de 30 Hz durante conducción aunque las ventanas sean malas', () => {
+    const controller = new AdaptiveCameraCadenceController({
+      initialHertz: 30,
+      maximumHertz: 30,
+      windowDurationMilliseconds: 4_000,
+    });
+    controller.recordVisualFrame(0);
+    controller.recordCameraUpdate(4);
+    controller.recordVisualFrame(50);
+    controller.recordVisualFrame(4_000);
+    controller.recordCameraUpdate(4);
+    controller.recordVisualFrame(4_050);
+    controller.recordVisualFrame(8_000);
+
+    expect(controller.state.hertz).toBe(30);
+    expect(controller.ensureMinimumHertz(30)).toBe(false);
+  });
+
   it('conserva el residuo temporal para aproximar 45 aplicaciones por segundo sobre RAF de 60 Hz', () => {
     const interval = cameraCadenceIntervalMilliseconds(45);
     let deadline = 0;
@@ -182,10 +211,7 @@ describe('cadencia adaptativa de cámara', () => {
       cameraP95Milliseconds: 2.8,
     };
     for (let index = 0; index < 6; index += 1) {
-      baselineState = adaptiveCameraCadenceFor(
-        baselineState,
-        currentBaseline,
-      );
+      baselineState = adaptiveCameraCadenceFor(baselineState, currentBaseline);
     }
     expect(baselineState.hertz).toBe(30);
   });

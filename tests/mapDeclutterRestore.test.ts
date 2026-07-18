@@ -13,6 +13,9 @@ function fakeMap(initialLayers: MutableStyleLayer[]) {
   const layout = new Map<string, Map<string, unknown>>();
   const paint = new Map<string, Map<string, unknown>>();
   const container = { dataset: {} } as HTMLDivElement;
+  let getStyleCalls = 0;
+  let layoutUpdates = 0;
+  let paintUpdates = 0;
   const ensure = (
     collection: Map<string, Map<string, unknown>>,
     id: string,
@@ -22,11 +25,15 @@ function fakeMap(initialLayers: MutableStyleLayer[]) {
     return properties;
   };
   const map = {
-    getStyle: () => ({ layers }),
+    getStyle: () => {
+      getStyleCalls += 1;
+      return { layers };
+    },
     getLayer: (id: string) => layers.find((layer) => layer.id === id),
     getLayoutProperty: (id: string, property: string) =>
       ensure(layout, id).get(property),
     setLayoutProperty: (id: string, property: string, value: unknown) => {
+      layoutUpdates += 1;
       if (!layers.some((layer) => layer.id === id)) throw new Error('missing');
       const properties = ensure(layout, id);
       if (value === null) properties.delete(property);
@@ -35,6 +42,7 @@ function fakeMap(initialLayers: MutableStyleLayer[]) {
     getPaintProperty: (id: string, property: string) =>
       ensure(paint, id).get(property),
     setPaintProperty: (id: string, property: string, value: unknown) => {
+      paintUpdates += 1;
       if (!layers.some((layer) => layer.id === id)) throw new Error('missing');
       const properties = ensure(paint, id);
       if (value === null) properties.delete(property);
@@ -42,7 +50,16 @@ function fakeMap(initialLayers: MutableStyleLayer[]) {
     },
     getContainer: () => container,
   } as unknown as MapLibreMap;
-  return { map, layers, layout, paint, container, ensure };
+  return {
+    map,
+    layers,
+    layout,
+    paint,
+    container,
+    ensure,
+    getStyleCalls: () => getStyleCalls,
+    updateCalls: () => layoutUpdates + paintUpdates,
+  };
 }
 
 afterEach(() => vi.useRealTimers());
@@ -69,15 +86,15 @@ describe('restauraciÃ³n exacta del declutter', () => {
     fixture.ensure(fixture.paint, 'satellite').set('raster-opacity', 0.61);
 
     const controller = createMapDeclutterController(fixture.map, 300);
-    controller.apply('stopped', true);
-    controller.apply('driving', true);
-    controller.apply('fast', true);
+    controller.apply('exploration', true);
+    controller.apply('arcade-driving', true);
+    controller.apply('arcade-fast', true);
     expect(fixture.ensure(fixture.paint, 'roads').get('line-opacity')).toBe(1);
     expect(fixture.ensure(fixture.layout, 'poi-labels').get('visibility')).toBe(
       'none',
     );
 
-    controller.apply('stopped', true);
+    controller.apply('exploration', true);
     expect(fixture.ensure(fixture.layout, 'roads').get('visibility')).toBe(
       'visible',
     );
@@ -110,19 +127,20 @@ describe('restauraciÃ³n exacta del declutter', () => {
     const fixture = fakeMap([{ id: 'roads', type: 'line' }]);
     fixture.ensure(fixture.paint, 'roads').set('line-opacity', 0.5);
     const controller = createMapDeclutterController(fixture.map);
-    controller.apply('stopped', true);
+    controller.apply('exploration', true);
     fixture.layers.splice(0, 1);
     fixture.layers.push({ id: 'local-road-new', type: 'line' });
     fixture
       .ensure(fixture.paint, 'local-road-new')
       .set('line-opacity', ['match', ['get', 'kind'], 'road', 0.7, 0.2]);
+    controller.refresh(true);
 
-    expect(() => controller.apply('fast', true)).not.toThrow();
+    expect(() => controller.apply('arcade-fast', true)).not.toThrow();
     expect(
       fixture.ensure(fixture.layout, 'local-road-new').get('visibility'),
     ).toBe('none');
     expect(fixture.container.dataset.mapMissingLayerCount).toBe('1');
-    controller.apply('stopped', true);
+    controller.apply('exploration', true);
     expect(
       fixture.ensure(fixture.layout, 'local-road-new').has('visibility'),
     ).toBe(false);
@@ -131,11 +149,13 @@ describe('restauraciÃ³n exacta del declutter', () => {
     ).toEqual(['match', ['get', 'kind'], 'road', 0.7, 0.2]);
 
     fixture.layers.splice(0, 1);
-    controller.apply('fast', true);
+    controller.refresh(true);
+    controller.apply('arcade-fast', true);
     fixture.layers.push({ id: 'local-road-new', type: 'line' });
     fixture.ensure(fixture.paint, 'local-road-new').set('line-opacity', 0.81);
-    controller.apply('driving', true);
-    controller.apply('stopped', true);
+    controller.refresh(true);
+    controller.apply('arcade-driving', true);
+    controller.apply('exploration', true);
     expect(
       fixture.ensure(fixture.paint, 'local-road-new').get('line-opacity'),
     ).toBe(0.81);
@@ -145,14 +165,32 @@ describe('restauraciÃ³n exacta del declutter', () => {
     vi.useFakeTimers();
     const fixture = fakeMap([{ id: 'poi-labels', type: 'symbol' }]);
     const controller = createMapDeclutterController(fixture.map, 300);
-    controller.apply('driving');
-    controller.apply('fast');
+    controller.apply('arcade-driving');
+    controller.apply('arcade-fast');
     vi.advanceTimersByTime(300);
-    expect(fixture.container.dataset.mapDeclutterProfile).toBe('fast');
+    expect(fixture.container.dataset.mapDeclutterProfile).toBe('arcade-fast');
 
-    controller.apply('driving');
+    controller.apply('arcade-driving');
     controller.dispose();
     vi.runAllTimers();
-    expect(fixture.container.dataset.mapDeclutterProfile).toBe('fast');
+    expect(fixture.container.dataset.mapDeclutterProfile).toBe('arcade-fast');
+  });
+
+  it('no vuelve a consultar ni actualizar el estilo para el mismo modo', () => {
+    const fixture = fakeMap([
+      { id: 'place-labels-major', type: 'symbol' },
+      { id: 'place-labels-local', type: 'symbol' },
+      { id: 'poi-labels', type: 'symbol' },
+    ]);
+    const controller = createMapDeclutterController(fixture.map);
+    controller.apply('arcade-driving', true);
+    const styleCalls = fixture.getStyleCalls();
+    const updateCalls = fixture.updateCalls();
+
+    controller.apply('arcade-driving', true);
+
+    expect(fixture.getStyleCalls()).toBe(styleCalls);
+    expect(fixture.updateCalls()).toBe(updateCalls);
+    expect(fixture.container.dataset.mapVisibleSymbolLayerCount).toBe('1');
   });
 });

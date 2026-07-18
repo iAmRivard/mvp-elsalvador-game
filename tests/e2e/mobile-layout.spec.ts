@@ -54,7 +54,7 @@ test('mantiene controles y paneles utilizables en viewport táctil', async ({
   ).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Turbo' })).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Centrar cámara en el jugador' }),
+    page.getByRole('button', { name: 'Explorar mapa' }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Pausar partida' }).last(),

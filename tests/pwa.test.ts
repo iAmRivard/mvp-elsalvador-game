@@ -37,7 +37,7 @@ describe('experiencia PWA', () => {
       readFileSync(resolve('public/images/app-icon-512.png')).length,
     ).toBeGreaterThan(5_000);
     const serviceWorker = readFileSync(resolve('public/sw.js'), 'utf8');
-    expect(serviceWorker).toContain("RELEASE_VERSION = 'v0.3.0'");
+    expect(serviceWorker).toContain("RELEASE_VERSION = 'v0.3.1'");
     expect(serviceWorker).toContain("BUILD_VERSION = '__BUILD_SHA__'");
     expect(serviceWorker).toContain("'/precache-manifest.json'");
     expect(serviceWorker).toContain('manifest.buildIdentity !== BUILD_VERSION');

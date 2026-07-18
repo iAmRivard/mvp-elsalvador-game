@@ -202,14 +202,6 @@ export class DrivingPresentationController {
   }
 }
 
-export function drivingDeclutterMode(
-  mode: DrivingPresentationMode,
-): 'stopped' | 'driving' | 'fast' {
-  if (mode === 'fast') return 'fast';
-  if (mode === 'driving' || mode === 'alert') return 'driving';
-  return 'stopped';
-}
-
 export function effectiveDrivingSurfaceLabel(
   surface: RoadSurface,
   insideValidObjectiveZone: boolean,

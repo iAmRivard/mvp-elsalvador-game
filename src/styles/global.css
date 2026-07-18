@@ -3288,13 +3288,13 @@ html[data-tutorial-target='objective'] .map-canvas {
 
 .mission-route-arrow {
   display: flex;
-  width: 18px;
-  height: 28px;
+  width: 14px;
+  height: 20px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   color: rgb(255 224 138 / 78%);
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   font-weight: 850;
   line-height: 1;
   pointer-events: none;
@@ -3303,8 +3303,8 @@ html[data-tutorial-target='objective'] .map-canvas {
 
 .navigation-guidance-arrow__chevron {
   display: block;
-  width: 8px;
-  height: 7px;
+  width: 7px;
+  height: 5px;
   opacity: 0.38;
   transform: rotate(-90deg);
   animation: navigation-chevron-pulse 1.2s ease-in-out infinite;

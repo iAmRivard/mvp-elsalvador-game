@@ -467,7 +467,7 @@ export function addMissionRoute(
     element: maneuverMarkerElement,
     anchor: 'center',
     rotationAlignment: 'map',
-    pitchAlignment: 'map',
+    pitchAlignment: 'viewport',
   })
     .setLngLat(map.getCenter())
     .addTo(map);
@@ -586,15 +586,20 @@ export function addMissionRoute(
     const container = map.getContainer();
     container.dataset.missionRouteMode = mode ?? 'idle';
     container.dataset.missionRouteCoordinateCount = String(coordinateCount);
-    useGameStore
-      .getState()
-      .setMissionRouteVisualReady(mode !== null && coordinateCount >= 2);
+    const routeLayerId = mode === 'road' ? ROAD_LAYER_ID : FALLBACK_LAYER_ID;
+    const visualReady = Boolean(
+      mode &&
+      coordinateCount >= 2 &&
+      map.getSource(ROUTE_SOURCE_ID) &&
+      map.getLayer(routeLayerId) &&
+      map.getLayoutProperty(routeLayerId, 'visibility') !== 'none',
+    );
+    container.dataset.missionRouteVisualReady = String(visualReady);
+    useGameStore.getState().setMissionRouteVisualReady(visualReady);
   };
   const hideNavigationGuidance = (clearPosition = false) => {
     maneuverMarkerElement.hidden = true;
-    maneuverMarkerElement.classList.add(
-      'navigation-guidance-arrow--hidden',
-    );
+    maneuverMarkerElement.classList.add('navigation-guidance-arrow--hidden');
     maneuverMarkerElement.setAttribute('aria-hidden', 'true');
     mapContainer.dataset.navigationArrowVisible = 'false';
     if (!clearPosition) return;
@@ -767,12 +772,8 @@ export function addMissionRoute(
         fallback: routeMode === 'fallback',
       };
       const container = map.getContainer();
-      container.dataset.navigationArrowLongitude = String(
-        arrowPosition[0],
-      );
-      container.dataset.navigationArrowLatitude = String(
-        arrowPosition[1],
-      );
+      container.dataset.navigationArrowLongitude = String(arrowPosition[0]);
+      container.dataset.navigationArrowLatitude = String(arrowPosition[1]);
       container.dataset.navigationArrowFallback = String(
         activeNavigationGuidance.fallback,
       );
@@ -880,21 +881,24 @@ export function addMissionRoute(
     mapContainer.dataset.routeFallbackRoadRetryAttempts = String(
       scheduled.attempt,
     );
-    fallbackRoadRetryTimer = setTimeout(() => {
-      fallbackRoadRetryTimer = null;
-      fallbackRoadRetryState = settleBoundedRetry(fallbackRoadRetryState);
-      if (
-        disposed ||
-        routeMode !== 'fallback' ||
-        useGameStore.getState().driving.roadNetworkStatus !== 'ready'
-      ) {
-        return;
-      }
-      void calculateRoute();
-    }, boundedRetryDelayMilliseconds(
-      routingConfig.fallbackRoadRetryDelayMilliseconds,
-      scheduled.attempt,
-    ));
+    fallbackRoadRetryTimer = setTimeout(
+      () => {
+        fallbackRoadRetryTimer = null;
+        fallbackRoadRetryState = settleBoundedRetry(fallbackRoadRetryState);
+        if (
+          disposed ||
+          routeMode !== 'fallback' ||
+          useGameStore.getState().driving.roadNetworkStatus !== 'ready'
+        ) {
+          return;
+        }
+        void calculateRoute();
+      },
+      boundedRetryDelayMilliseconds(
+        routingConfig.fallbackRoadRetryDelayMilliseconds,
+        scheduled.attempt,
+      ),
+    );
   };
 
   const calculateRoute = async (): Promise<void> => {

@@ -210,20 +210,16 @@
       }
     },
     {
-      "id": "place-labels",
+      "id": "place-labels-major",
       "type": "symbol",
       "source": "el-salvador",
       "source-layer": "places",
       "minzoom": 6,
-      "filter": [
-        "in",
-        ["get", "kind_detail"],
-        ["literal", ["city", "town", "village", "municipality"]]
-      ],
+      "filter": ["in", ["get", "kind_detail"], ["literal", ["city", "town"]]],
       "layout": {
         "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
         "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 7, 11, 12, 15],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 7, 12, 12, 16],
         "text-letter-spacing": 0.04,
         "text-max-width": 9,
         "text-allow-overlap": false
@@ -232,6 +228,32 @@
         "text-color": "#ebe7d8",
         "text-halo-color": "#172522",
         "text-halo-width": 1.5,
+        "text-halo-blur": 0.5
+      }
+    },
+    {
+      "id": "place-labels-local",
+      "type": "symbol",
+      "source": "el-salvador",
+      "source-layer": "places",
+      "minzoom": 8,
+      "filter": [
+        "in",
+        ["get", "kind_detail"],
+        ["literal", ["village", "municipality"]]
+      ],
+      "layout": {
+        "text-field": ["coalesce", ["get", "name:es"], ["get", "name"]],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 8, 10, 12, 14],
+        "text-letter-spacing": 0.04,
+        "text-max-width": 9,
+        "text-allow-overlap": false
+      },
+      "paint": {
+        "text-color": "#d7d8ca",
+        "text-halo-color": "#172522",
+        "text-halo-width": 1.25,
         "text-halo-blur": 0.5
       }
     },

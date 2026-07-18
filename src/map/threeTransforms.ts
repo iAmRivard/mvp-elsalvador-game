@@ -23,9 +23,8 @@ export function threePlayerTargetPixels(
   quality: GraphicsQuality,
   mobile = false,
 ): number {
-  const mobileMultiplier = mobile ? 1.12 : 1;
-  if (quality === 'high') return 42 * mobileMultiplier;
-  if (quality === 'medium') return 34 * mobileMultiplier;
+  if (quality === 'high') return mobile ? 48 : 42;
+  if (quality === 'medium') return mobile ? 44 : 34;
   return 0;
 }
 

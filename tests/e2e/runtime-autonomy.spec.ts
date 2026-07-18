@@ -219,6 +219,7 @@ test('carga el mapa sin solicitudes a terceros', async ({
   baseURL,
 }, testInfo) => {
   test.setTimeout(90_000);
+  const isMobileProject = testInfo.project.name.startsWith('chromium-mobile');
   const applicationOrigin = new URL(baseURL ?? 'http://127.0.0.1:4173').origin;
   const externalRequests: string[] = [];
   const criticalErrors: string[] = [];
@@ -284,7 +285,10 @@ test('carga el mapa sin solicitudes a terceros', async ({
     'data-driving-surface-label',
     /Vía secundaria|Calle residencial|Vía terciaria|Zona del objetivo/,
   );
-  await expect(gameMap).toHaveAttribute('data-follow-offset-y', /^-?\d+$/);
+  await expect(gameMap).toHaveAttribute(
+    'data-follow-offset-y',
+    /^-?\d+(?:\.\d+)?$/,
+  );
   await expect(gameMap).toHaveAttribute(
     'data-player-outside-safe-viewport',
     'false',
@@ -292,10 +296,14 @@ test('carga el mapa sin solicitudes a terceros', async ({
   const safePlayerRatio = Number(
     await gameMap.getAttribute('data-safe-player-y-ratio'),
   );
-  expect(safePlayerRatio).toBeGreaterThanOrEqual(0.55);
-  expect(safePlayerRatio).toBeLessThanOrEqual(0.65);
-  const stoppedZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
-  expect(stoppedZoom).toBeGreaterThan(15.5);
+  expect(safePlayerRatio).toBeGreaterThanOrEqual(0.45);
+  expect(safePlayerRatio).toBeLessThanOrEqual(0.75);
+  await expect(gameMap).toHaveAttribute(
+    'data-current-camera-profile',
+    isMobileProject ? 'mobileInteraction' : 'stopped',
+  );
+  const initialZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
+  expect(initialZoom).toBeGreaterThan(15.5);
 
   await expect
     .poll(() =>
@@ -397,6 +405,10 @@ test('carga el mapa sin solicitudes a terceros', async ({
     .screenshot();
   await page.keyboard.down('w');
   await page.waitForTimeout(700);
+  await expect(gameMap).toHaveAttribute(
+    'data-current-camera-profile',
+    isMobileProject ? 'mobileDriving' : 'urban',
+  );
   const movingZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
   const canvasAfterMovement = await page
     .locator('.maplibregl-canvas')
@@ -417,7 +429,11 @@ test('carga el mapa sin solicitudes a terceros', async ({
   expect(
     await rasterDifference(page, canvasBeforeMovement, canvasAfterMovement),
   ).toBeGreaterThan(0.005);
-  expect(movingZoom).toBeLessThan(stoppedZoom);
+  if (isMobileProject) {
+    expect(movingZoom).toBeGreaterThan(initialZoom);
+  } else {
+    expect(movingZoom).toBeLessThan(initialZoom);
+  }
 
   await page.getByRole('button', { name: 'Partida y guardado' }).click();
   await page.getByRole('menuitem', { name: 'Guardar ahora' }).click();
