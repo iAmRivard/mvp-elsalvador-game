@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createNavigationGuidanceElement,
+  navigationGuidanceFitsViewport,
   navigationGuidanceMinimumCenterDistancePixels,
   navigationGuidanceOffsetForPlayerSeparation,
 } from '../src/map/navigationGuidanceMarker';
@@ -14,6 +15,10 @@ describe('claridad del vehículo y la navegación', () => {
 
     expect(vehicle.classList.contains('player-marker')).toBe(true);
     expect(guidance.classList.contains('navigation-guidance-arrow')).toBe(true);
+    expect(
+      guidance.classList.contains('navigation-guidance-arrow--hidden'),
+    ).toBe(true);
+    expect(guidance.getAttribute('aria-hidden')).toBe('true');
     expect(guidance.classList.contains('player-marker')).toBe(false);
     expect(vehicle.getAttribute('aria-label')).toBe('Vehículo del jugador');
     expect(guidance.getAttribute('aria-label')).toBe(
@@ -50,5 +55,48 @@ describe('claridad del vehículo y la navegación', () => {
         { x: 180, y: 100 },
       ),
     ).toEqual([0, 0]);
+  });
+
+  it('solo expone la guía cuando su centro ajustado cabe en el viewport', () => {
+    expect(
+      navigationGuidanceFitsViewport(
+        { x: 196, y: 425 },
+        [0, 0],
+        392,
+        850,
+      ),
+    ).toBe(true);
+    expect(
+      navigationGuidanceFitsViewport(
+        { x: 400, y: 508 },
+        [0, 0],
+        850,
+        392,
+      ),
+    ).toBe(false);
+    expect(
+      navigationGuidanceFitsViewport(
+        { x: 20, y: 20 },
+        [-18, 0],
+        392,
+        850,
+      ),
+    ).toBe(false);
+    expect(
+      navigationGuidanceFitsViewport(
+        { x: 19.9, y: 425 },
+        [0, 0],
+        392,
+        850,
+      ),
+    ).toBe(false);
+    expect(
+      navigationGuidanceFitsViewport(
+        { x: 20, y: 425 },
+        [0, 0],
+        392,
+        850,
+      ),
+    ).toBe(true);
   });
 });

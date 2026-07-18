@@ -4,6 +4,38 @@ export interface NavigationGuidanceScreenPoint {
 }
 
 export const navigationGuidanceMinimumCenterDistancePixels = 62;
+// The marker is 18x28px and rotates with the map. Its half diagonal is
+// 16.7px; 20px also keeps the small drop shadow inside the canvas.
+export const navigationGuidanceViewportMarginPixels = 20;
+
+export function navigationGuidanceFitsViewport(
+  guidance: NavigationGuidanceScreenPoint,
+  offset: readonly [number, number],
+  viewportWidth: number,
+  viewportHeight: number,
+  marginPixels = navigationGuidanceViewportMarginPixels,
+): boolean {
+  const adjustedX = guidance.x + offset[0];
+  const adjustedY = guidance.y + offset[1];
+  if (
+    !Number.isFinite(adjustedX) ||
+    !Number.isFinite(adjustedY) ||
+    !Number.isFinite(viewportWidth) ||
+    !Number.isFinite(viewportHeight) ||
+    !Number.isFinite(marginPixels) ||
+    viewportWidth <= 0 ||
+    viewportHeight <= 0
+  ) {
+    return false;
+  }
+  const margin = Math.max(0, marginPixels);
+  return (
+    adjustedX >= margin &&
+    adjustedX <= viewportWidth - margin &&
+    adjustedY >= margin &&
+    adjustedY <= viewportHeight - margin
+  );
+}
 
 export function navigationGuidanceOffsetForPlayerSeparation(
   player: NavigationGuidanceScreenPoint,
@@ -33,8 +65,10 @@ export function navigationGuidanceOffsetForPlayerSeparation(
 
 export function createNavigationGuidanceElement(): HTMLDivElement {
   const marker = document.createElement('div');
-  marker.className = 'mission-route-arrow navigation-guidance-arrow';
+  marker.className =
+    'mission-route-arrow navigation-guidance-arrow navigation-guidance-arrow--hidden';
   marker.setAttribute('role', 'img');
+  marker.setAttribute('aria-hidden', 'true');
   marker.setAttribute('aria-label', 'Chevrons de dirección de la ruta');
   for (let index = 0; index < 3; index += 1) {
     const chevron = document.createElement('span');
