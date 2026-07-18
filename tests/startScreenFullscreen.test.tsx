@@ -25,6 +25,9 @@ vi.mock('../src/roads/roadNetwork', () => ({
 vi.mock('../src/roads/roadWorkerClient', () => ({
   preloadRoadWorker: vi.fn(() => Promise.resolve(null)),
 }));
+vi.mock('../src/components/map/GameMap', () => ({
+  GameMap: () => null,
+}));
 vi.mock('../src/game/mapSourceAvailability', () => ({
   probeMapSourceAvailability: vi.fn(() => Promise.resolve(true)),
 }));
