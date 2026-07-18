@@ -14,7 +14,8 @@ async function dragMapToFreshTiles(
   page: import('@playwright/test').Page,
 ): Promise<void> {
   const canvasBounds = await page.locator('.maplibregl-canvas').boundingBox();
-  if (!canvasBounds) throw new Error('No se pudo localizar el canvas del mapa.');
+  if (!canvasBounds)
+    throw new Error('No se pudo localizar el canvas del mapa.');
   await page.mouse.move(
     canvasBounds.x + canvasBounds.width / 2,
     canvasBounds.y + canvasBounds.height / 2,
@@ -33,6 +34,7 @@ test('reintenta un fallo fatal sin recargar ni perder el estado de sesión', asy
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-desktop');
   let styleRequests = 0;
+  let runtimeStyleRequests = 0;
   const spriteRequests: string[] = [];
   page.on('request', (request) => {
     if (request.url().includes('/map-assets/sprites/')) {
@@ -41,7 +43,12 @@ test('reintenta un fallo fatal sin recargar ni perder el estado de sesión', asy
   });
   await page.route('**/map-assets/styles/el-salvador.json', async (route) => {
     styleRequests += 1;
-    if (styleRequests === 1) {
+    if (route.request().method() === 'HEAD') {
+      await route.continue();
+      return;
+    }
+    runtimeStyleRequests += 1;
+    if (runtimeStyleRequests === 1) {
       await route.fulfill({
         status: 503,
         contentType: 'application/json',
@@ -80,6 +87,7 @@ test('reintenta un fallo fatal sin recargar ni perder el estado de sesión', asy
     ),
   ).toBe('preservado');
   expect(styleRequests).toBeGreaterThanOrEqual(2);
+  expect(runtimeStyleRequests).toBeGreaterThanOrEqual(2);
   expect(spriteRequests).toEqual([]);
 });
 
@@ -88,9 +96,15 @@ test('reintenta PMTiles con una lectura nueva después de un 503 inicial', async
 }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-desktop');
   let archiveRequests = 0;
+  let runtimeArchiveRequests = 0;
   await page.route('**/maps/el-salvador.pmtiles*', async (route) => {
     archiveRequests += 1;
-    if (archiveRequests === 1) {
+    if (route.request().headers().range === 'bytes=0-1023') {
+      await route.continue();
+      return;
+    }
+    runtimeArchiveRequests += 1;
+    if (runtimeArchiveRequests === 1) {
       await route.fulfill({
         status: 503,
         contentType: 'application/octet-stream',
@@ -111,11 +125,12 @@ test('reintenta PMTiles con una lectura nueva después de un 503 inicial', async
     'fatal',
   );
   await expect(page.locator('.map-message--error > strong')).toBeVisible();
-  expect(archiveRequests).toBe(1);
+  expect(archiveRequests).toBeGreaterThanOrEqual(2);
+  expect(runtimeArchiveRequests).toBe(1);
 
   await page.getByRole('button', { name: 'Reintentar' }).click();
 
-  await expect.poll(() => archiveRequests).toBeGreaterThan(1);
+  await expect.poll(() => runtimeArchiveRequests).toBeGreaterThan(1);
   await expect(page.getByText('El mapa local está listo.')).toBeAttached({
     timeout: 20_000,
   });
