@@ -258,54 +258,76 @@ async function expectFastRouteAnticipation(page: Page, gameMap: Locator) {
   await expect(objectiveAndDistance).toBeVisible();
   await expect(objectiveAndDistance).toHaveText(/.+ · \d+(?:\.\d+)? (?:m|km)$/);
 
-  const guidanceSnapshot = await page.evaluate(() => {
-    const map = document.querySelector<HTMLElement>('[data-testid="game-map"]');
-    const arrow = document.querySelector<HTMLElement>('.mission-route-arrow');
-    const player = document.querySelector<HTMLElement>('.player-marker');
-    if (!map || !arrow || !player) return null;
-    const mapRect = map.getBoundingClientRect();
-    const arrowRect = arrow.getBoundingClientRect();
-    const playerRect = player.getBoundingClientRect();
-    const visible =
-      map.dataset.navigationArrowVisible === 'true' &&
-      !arrow.hidden &&
-      arrowRect.width > 0 &&
-      arrowRect.height > 0;
-    const tolerance = 1;
-    return {
-      visible,
-      hidden: arrow.hidden,
-      fallback: map.dataset.navigationArrowFallback ?? '',
-      nextDistance: Number(map.dataset.navigationNextDistance),
-      screenX: Number(map.dataset.navigationArrowScreenX),
-      screenY: Number(map.dataset.navigationArrowScreenY),
-      viewportWidth: Number(map.dataset.navigationArrowViewportWidth),
-      viewportHeight: Number(map.dataset.navigationArrowViewportHeight),
-      inside:
-        arrowRect.left >= mapRect.left - tolerance &&
-        arrowRect.top >= mapRect.top - tolerance &&
-        arrowRect.right <= mapRect.right + tolerance &&
-        arrowRect.bottom <= mapRect.bottom + tolerance,
-      separation: Math.hypot(
-        arrowRect.left +
-          arrowRect.width / 2 -
-          (playerRect.left + playerRect.width / 2),
-        arrowRect.top +
-          arrowRect.height / 2 -
-          (playerRect.top + playerRect.height / 2),
-      ),
-    };
-  });
+  const readGuidanceSnapshot = () =>
+    page.evaluate(() => {
+      const map = document.querySelector<HTMLElement>(
+        '[data-testid="game-map"]',
+      );
+      const arrow = document.querySelector<HTMLElement>(
+        '.mission-route-arrow',
+      );
+      const player = document.querySelector<HTMLElement>('.player-marker');
+      if (!map || !arrow || !player) return null;
+      const mapRect = map.getBoundingClientRect();
+      const arrowRect = arrow.getBoundingClientRect();
+      const playerRect = player.getBoundingClientRect();
+      const visible =
+        map.dataset.navigationArrowVisible === 'true' &&
+        !arrow.hidden &&
+        arrowRect.width > 0 &&
+        arrowRect.height > 0;
+      const tolerance = 1;
+      return {
+        visible,
+        hidden: arrow.hidden,
+        fallback: map.dataset.navigationArrowFallback ?? '',
+        nextDistance: Number(map.dataset.navigationNextDistance),
+        screenX: Number(map.dataset.navigationArrowScreenX),
+        screenY: Number(map.dataset.navigationArrowScreenY),
+        viewportWidth: Number(map.dataset.navigationArrowViewportWidth),
+        viewportHeight: Number(map.dataset.navigationArrowViewportHeight),
+        inside:
+          arrowRect.left >= mapRect.left - tolerance &&
+          arrowRect.top >= mapRect.top - tolerance &&
+          arrowRect.right <= mapRect.right + tolerance &&
+          arrowRect.bottom <= mapRect.bottom + tolerance,
+        separation: Math.hypot(
+          arrowRect.left +
+            arrowRect.width / 2 -
+            (playerRect.left + playerRect.width / 2),
+          arrowRect.top +
+            arrowRect.height / 2 -
+            (playerRect.top + playerRect.height / 2),
+        ),
+      };
+    });
+  const expectedVisibilityFor = (
+    snapshot: NonNullable<Awaited<ReturnType<typeof readGuidanceSnapshot>>>,
+  ) =>
+    snapshot.screenX >= navigationGuidanceViewportMarginPixels &&
+    snapshot.screenX <=
+      snapshot.viewportWidth - navigationGuidanceViewportMarginPixels &&
+    snapshot.screenY >= navigationGuidanceViewportMarginPixels &&
+    snapshot.screenY <=
+      snapshot.viewportHeight - navigationGuidanceViewportMarginPixels;
+  await expect
+    .poll(
+      async () => {
+        const snapshot = await readGuidanceSnapshot();
+        if (!snapshot) return false;
+        const expectedVisible = expectedVisibilityFor(snapshot);
+        return (
+          snapshot.visible === expectedVisible &&
+          (!expectedVisible || snapshot.inside)
+        );
+      },
+      { timeout: 2_000, intervals: [50, 100, 200] },
+    )
+    .toBe(true);
+  const guidanceSnapshot = await readGuidanceSnapshot();
   expect(guidanceSnapshot).not.toBeNull();
   expect(guidanceSnapshot!.nextDistance).toBeGreaterThanOrEqual(0);
-  const expectedVisible =
-    guidanceSnapshot!.screenX >= navigationGuidanceViewportMarginPixels &&
-    guidanceSnapshot!.screenX <=
-      guidanceSnapshot!.viewportWidth - navigationGuidanceViewportMarginPixels &&
-    guidanceSnapshot!.screenY >= navigationGuidanceViewportMarginPixels &&
-    guidanceSnapshot!.screenY <=
-      guidanceSnapshot!.viewportHeight -
-        navigationGuidanceViewportMarginPixels;
+  const expectedVisible = expectedVisibilityFor(guidanceSnapshot!);
   expect(guidanceSnapshot!.visible).toBe(expectedVisible);
   if (expectedVisible) {
     expect(guidanceSnapshot).toMatchObject({
