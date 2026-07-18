@@ -13,11 +13,11 @@ const captureSchemaVersion = 5;
 const referenceViewport = { width: 392, height: 850 };
 const referenceDeviceScaleFactor = 2;
 const deterministicCheckpoint = {
-  longitude: -89.2460003,
-  latitude: 13.8170917,
-  headingDegrees: 299.834,
+  longitude: -89.2698289,
+  latitude: 13.8254447,
+  headingDegrees: 244.8,
   expectedSurface: 'trunk',
-  acceptedEdgeIds: [9497, 10749],
+  acceptedEdgeIds: [10999],
 };
 const deterministicRandomSeed = 0x30a0c0de;
 const deterministicStorage = {
@@ -743,8 +743,8 @@ try {
     dynamicLoadContract.sampleCount < 80 ||
     dynamicLoadContract.averageSpeedKilometersPerHour < 52 ||
     dynamicLoadContract.averageSpeedKilometersPerHour > 70 ||
-    dynamicLoadContract.distanceMeters < 400 ||
-    dynamicLoadContract.distanceMeters > 600 ||
+    dynamicLoadContract.distanceMeters < 2_400 ||
+    dynamicLoadContract.distanceMeters > 3_200 ||
     dynamicLoadContract.trunkRatio < 0.95 ||
     dynamicLoadContract.acceptedEdgeRatio < 0.9 ||
     dynamicLoadContract.idleRouteRatio < 0.95 ||
