@@ -36,6 +36,7 @@ export default defineConfig({
     {
       name: 'chromium-desktop',
       testIgnore: [/pwa\.spec\.ts/, /onboarding-full\.spec\.ts/],
+      grepInvert: /@mobile/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
