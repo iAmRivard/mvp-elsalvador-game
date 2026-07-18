@@ -6,6 +6,10 @@ export interface DriveJoystickOutput {
   verticalIntent: number;
 }
 
+export interface ArcadeDriveJoystickOutput extends DriveJoystickOutput {
+  startRequested: boolean;
+}
+
 export function driveJoystickOutput(
   normalizedX: number,
   normalizedY: number,
@@ -32,7 +36,8 @@ export function driveJoystickOutput(
 export function arcadeDriveJoystickOutput(
   normalizedX: number,
   normalizedY: number,
-): DriveJoystickOutput {
+  displacementPixels: number,
+): ArcadeDriveJoystickOutput {
   return {
     turn: applyResponseCurve(
       applyDeadZone(normalizedX, driveJoystickConfig.horizontalDeadZone),
@@ -42,6 +47,13 @@ export function arcadeDriveJoystickOutput(
       applyDeadZone(-normalizedY, driveJoystickConfig.verticalDeadZone),
       driveJoystickConfig.throttleExponent,
     ),
+    startRequested:
+      Number.isFinite(displacementPixels) &&
+      displacementPixels >=
+        driveJoystickConfig.arcadeStartGestureMinimumPixels &&
+      Math.hypot(normalizedX, normalizedY) >=
+        driveJoystickConfig.arcadeStartGestureDeadZone &&
+      normalizedY <= driveJoystickConfig.arcadeNeutralDownTolerance,
   };
 }
 

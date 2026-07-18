@@ -17,7 +17,11 @@ describe('joystick virtual', () => {
     });
   });
 
-  function setup(driveMode = false) {
+  function setup(
+    driveMode = false,
+    targetSpeedMode = false,
+    arcadeMode = false,
+  ) {
     const input = new InputController();
     const view = render(
       <VirtualJoystick
@@ -31,10 +35,18 @@ describe('joystick virtual', () => {
         }
         positionMode="fixed"
         driveMode={driveMode}
+        targetSpeedMode={targetSpeedMode}
+        arcadeMode={arcadeMode}
       />,
     );
     const joystick = view.getByLabelText(
-      driveMode ? 'Joystick de conducción' : 'Joystick de dirección',
+      arcadeMode
+        ? 'Joystick de conducción arcade'
+        : targetSpeedMode
+          ? 'Joystick de velocidad objetivo'
+          : driveMode
+            ? 'Joystick de conducción'
+            : 'Joystick de dirección',
     );
     vi.spyOn(joystick, 'getBoundingClientRect').mockReturnValue({
       x: 0,
@@ -47,7 +59,7 @@ describe('joystick virtual', () => {
       height: 144,
       toJSON: () => ({}),
     });
-    return { input, joystick };
+    return { input, joystick, unmount: view.unmount };
   }
 
   it('inicia centrado y produce giro parcial continuo', () => {
@@ -144,6 +156,120 @@ describe('joystick virtual', () => {
       clientY: 24,
     });
     expect(input.snapshot()).toMatchObject({ throttle: 0, turn: 0 });
+  });
+
+  it('arcade arranca con un gesto corto visible y conserva el crucero al soltar', () => {
+    const { input, joystick } = setup(true, true, true);
+    input.setMobileCruiseMode('arcade');
+
+    fireEvent.pointerDown(joystick, {
+      pointerId: 11,
+      clientX: 72,
+      clientY: 72,
+    });
+    fireEvent.pointerMove(joystick, {
+      pointerId: 11,
+      clientX: 72,
+      clientY: 61,
+    });
+
+    expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(25);
+
+    fireEvent.pointerUp(joystick, {
+      pointerId: 11,
+      clientX: 72,
+      clientY: 61,
+    });
+    expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(25);
+  });
+
+  it('arcade arranca con giro lateral pero no con el primer gesto hacia abajo', () => {
+    const lateral = setup(true, true, true);
+    lateral.input.setMobileCruiseMode('arcade');
+    fireEvent.pointerDown(lateral.joystick, {
+      pointerId: 12,
+      clientX: 72,
+      clientY: 72,
+    });
+    fireEvent.pointerMove(lateral.joystick, {
+      pointerId: 12,
+      clientX: 92,
+      clientY: 72,
+    });
+    expect(
+      lateral.input.getMobileCruiseTarget().targetSpeedKilometersPerHour,
+    ).toBe(25);
+    lateral.unmount();
+
+    const braking = setup(true, true, true);
+    braking.input.setMobileCruiseMode('arcade');
+    fireEvent.pointerDown(braking.joystick, {
+      pointerId: 13,
+      clientX: 72,
+      clientY: 72,
+    });
+    fireEvent.pointerMove(braking.joystick, {
+      pointerId: 13,
+      clientX: 72,
+      clientY: 92,
+    });
+    expect(
+      braking.input.getMobileCruiseTarget().targetSpeedKilometersPerHour,
+    ).toBe(0);
+  });
+
+  it('cancela el puntero capturado y no rearma Arcade mientras está bloqueado', () => {
+    const input = new InputController();
+    input.setMobileCruiseMode('arcade');
+    const joystickProps = (disabled: boolean) => ({
+      input,
+      radiusPixels: virtualJoystickConfig.radiusPixels,
+      knobRadiusPixels: virtualJoystickConfig.knobRadiusPixels,
+      deadZone: virtualJoystickConfig.deadZone,
+      responseExponent: virtualJoystickConfig.responseExponent,
+      returnDurationMilliseconds:
+        virtualJoystickConfig.returnDurationMilliseconds,
+      positionMode: 'fixed' as const,
+      driveMode: true,
+      targetSpeedMode: true,
+      arcadeMode: true,
+      disabled,
+    });
+    const view = render(<VirtualJoystick {...joystickProps(false)} />);
+    const joystick = view.getByLabelText('Joystick de conducción arcade');
+    vi.spyOn(joystick, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 144,
+      bottom: 144,
+      width: 144,
+      height: 144,
+      toJSON: () => ({}),
+    });
+    fireEvent.pointerDown(joystick, {
+      pointerId: 14,
+      clientX: 72,
+      clientY: 72,
+    });
+    fireEvent.pointerMove(joystick, {
+      pointerId: 14,
+      clientX: 92,
+      clientY: 72,
+    });
+    expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(25);
+
+    input.clearAllInput();
+    view.rerender(<VirtualJoystick {...joystickProps(true)} />);
+    fireEvent.pointerMove(joystick, {
+      pointerId: 14,
+      clientX: 112,
+      clientY: 72,
+    });
+
+    expect(input.getDiagnostics().pointerActive).toBe(false);
+    expect(input.getMobileCruiseTarget().targetSpeedKilometersPerHour).toBe(0);
   });
 
   it('emite háptica al pasar de freno a reversa cerca de cero', () => {

@@ -38,6 +38,14 @@ function TouchControlsContent({ input }: TouchControlsProps) {
       : controlViewportScale(window.innerHeight),
   );
   const isPaused = useGameStore((state) => state.isPaused);
+  const controlsDisabled = useGameStore(
+    (state) =>
+      state.isPaused ||
+      state.activeNarrativeEventId !== null ||
+      state.activeMissionChoiceObjectiveId !== null ||
+      state.recoveryReason !== null ||
+      state.vehicle.condition <= 0,
+  );
   const togglePaused = useGameStore((state) => state.togglePaused);
   const setFollowingPlayer = useGameStore((state) => state.setFollowingPlayer);
   const activeMissionId = useGameStore((state) => state.activeMissionId);
@@ -124,8 +132,8 @@ function TouchControlsContent({ input }: TouchControlsProps) {
   }, [input, joystickDeadZone, joystickPositionMode, joystickSize]);
 
   useEffect(() => {
-    if (isPaused) input.clearAllInput();
-  }, [input, isPaused]);
+    if (controlsDisabled) input.clearAllInput();
+  }, [controlsDisabled, input]);
 
   useEffect(() => {
     if (cruiseTarget.reversing && !previousReversing.current) {
@@ -139,6 +147,7 @@ function TouchControlsContent({ input }: TouchControlsProps) {
       className={`touch-controls touch-controls--${controlMode}`}
       aria-label="Controles táctiles"
       data-control-mode={controlMode}
+      data-controls-disabled={String(controlsDisabled)}
       data-interaction-label={interactionLabel ?? undefined}
       onContextMenu={(event) => event.preventDefault()}
     >
@@ -154,6 +163,7 @@ function TouchControlsContent({ input }: TouchControlsProps) {
       ) : (
         <>
           <VirtualJoystick
+            key={controlsDisabled ? 'blocked' : 'active'}
             input={input}
             radiusPixels={virtualJoystickConfig.radiusPixels * sizeMultiplier}
             knobRadiusPixels={
@@ -170,6 +180,7 @@ function TouchControlsContent({ input }: TouchControlsProps) {
             arcadeMode={arcadeDriving}
             speedMetersPerSecond={telemetry.speedMetersPerSecond}
             hapticsEnabled={hapticsEnabled}
+            disabled={controlsDisabled}
           />
           {targetSpeedJoystick && (
             <output

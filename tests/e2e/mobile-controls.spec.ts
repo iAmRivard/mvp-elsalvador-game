@@ -103,6 +103,95 @@ async function openPauseSettings(page: Page) {
   return { pauseMenu, settings };
 }
 
+test('Arcade convierte un gesto corto visible en movimiento real', async ({
+  context,
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'chromium-mobile');
+  await startFreshExpedition(page);
+
+  const gameMap = page.getByTestId('game-map');
+  const joystickCenter = await centerOf(
+    page.getByLabel('Joystick de conducción arcade'),
+  );
+  const session = await context.newCDPSession(page);
+  const initialPosition = await gameMap.evaluate(
+    (element) =>
+      `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+  );
+
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [
+      { id: 70, x: joystickCenter.x, y: joystickCenter.y, force: 1 },
+    ],
+  });
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [
+      {
+        id: 70,
+        x: joystickCenter.x,
+        y: joystickCenter.y - joystickCenter.width * 0.075,
+        force: 1,
+      },
+    ],
+  });
+
+  await expect(gameMap).toHaveAttribute('data-input-pointer-active', 'true');
+  await expect
+    .poll(
+      () => gameMap.getAttribute('data-input-target-speed').then(Number),
+      { timeout: 1_000, intervals: [16, 25, 50] },
+    )
+    .toBe(25);
+  await expect
+    .poll(
+      () =>
+        gameMap.evaluate(
+          (element) =>
+            `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`,
+        ),
+      { timeout: 1_000, intervals: [16, 25, 50] },
+    )
+    .not.toBe(initialPosition);
+
+  await page.keyboard.press('Escape');
+  const pauseMenu = page.getByRole('dialog', { name: 'Partida en pausa' });
+  await expect(pauseMenu).toBeVisible();
+  await expect(page.getByLabel('Controles táctiles')).toHaveAttribute(
+    'data-controls-disabled',
+    'true',
+  );
+  await expect(gameMap).toHaveAttribute('data-input-target-speed', '0.0');
+  await expect(gameMap).toHaveAttribute('data-input-pointer-active', 'false');
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [
+      {
+        id: 70,
+        x: joystickCenter.x + joystickCenter.width * 0.3,
+        y: joystickCenter.y,
+        force: 1,
+      },
+    ],
+  });
+  await expect(gameMap).toHaveAttribute('data-input-target-speed', '0.0');
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+  await expect(gameMap).toHaveAttribute('data-input-pointer-active', 'false');
+  await pauseMenu.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.getByLabel('Controles táctiles')).toHaveAttribute(
+    'data-controls-disabled',
+    'false',
+  );
+  await expect(gameMap).toHaveAttribute('data-input-target-speed', '0.0');
+  await expect(gameMap).toHaveAttribute('data-input-throttle', '0.000');
+  await session.detach();
+});
+
 test('Arcade arranca de inmediato, mantiene crucero y usa reversa segura', async ({
   context,
   page,

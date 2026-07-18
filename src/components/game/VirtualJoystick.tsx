@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -32,6 +33,7 @@ interface VirtualJoystickProps {
   arcadeMode?: boolean;
   speedMetersPerSecond?: number;
   hapticsEnabled?: boolean;
+  disabled?: boolean;
 }
 
 interface Point {
@@ -71,6 +73,7 @@ export function VirtualJoystick({
   arcadeMode = false,
   speedMetersPerSecond = 0,
   hapticsEnabled = false,
+  disabled = false,
 }: VirtualJoystickProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const knobRef = useRef<HTMLDivElement>(null);
@@ -80,10 +83,16 @@ export function VirtualJoystick({
   const reverseHapticRef = useRef(false);
   const [floatingCenter, setFloatingCenter] = useState<Point | null>(null);
 
-  const reset = () => {
+  const reset = useCallback(() => {
     const pointerId = pointerIdRef.current;
-    if (pointerId !== null) input.setPointerActive(pointerId, false);
     pointerIdRef.current = null;
+    if (pointerId !== null) {
+      input.setPointerActive(pointerId, false);
+      const surface = surfaceRef.current;
+      if (surface?.hasPointerCapture(pointerId)) {
+        surface.releasePointerCapture(pointerId);
+      }
+    }
     driveThrottleRef.current = 0;
     reverseHapticRef.current = false;
     if (targetSpeedMode) input.setTargetSpeedJoystick(0, 0);
@@ -94,7 +103,13 @@ export function VirtualJoystick({
       knobRef.current.style.transform = 'translate3d(0, 0, 0)';
     }
     if (positionMode === 'floating') setFloatingCenter(null);
-  };
+  }, [
+    driveMode,
+    input,
+    positionMode,
+    returnDurationMilliseconds,
+    targetSpeedMode,
+  ]);
 
   useEffect(() => {
     const handleOrientationChange = () => reset();
@@ -103,9 +118,7 @@ export function VirtualJoystick({
       window.removeEventListener('orientationchange', handleOrientationChange);
       reset();
     };
-    // Reset uses the current input instance and configuration on unmount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [input, positionMode, returnDurationMilliseconds]);
+  }, [reset]);
 
   useEffect(() => {
     const reversing =
@@ -120,6 +133,11 @@ export function VirtualJoystick({
   }, [driveMode, hapticsEnabled, speedMetersPerSecond, targetSpeedMode]);
 
   const start = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (disabled) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (pointerIdRef.current !== null) return;
     if (
       positionMode === 'floating' &&
@@ -150,6 +168,7 @@ export function VirtualJoystick({
   };
 
   const move = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (disabled) return;
     if (pointerIdRef.current !== event.pointerId) return;
     const processingStartedAt = performance.now();
     event.preventDefault();
@@ -168,6 +187,7 @@ export function VirtualJoystick({
         ? arcadeDriveJoystickOutput(
             visualX / radiusPixels,
             visualY / radiusPixels,
+            Math.hypot(visualX, visualY),
           )
         : driveJoystickOutput(
             visualX / radiusPixels,
@@ -175,7 +195,13 @@ export function VirtualJoystick({
           );
       if (targetSpeedMode) {
         driveThrottleRef.current = output.verticalIntent;
-        input.setTargetSpeedJoystick(output.verticalIntent, output.turn);
+        input.setTargetSpeedJoystick(
+          output.verticalIntent,
+          output.turn,
+          arcadeMode &&
+            'startRequested' in output &&
+            output.startRequested === true,
+        );
       } else {
         const throttle = legacyDriveJoystickThrottle(visualY / radiusPixels);
         driveThrottleRef.current = throttle;
@@ -243,6 +269,8 @@ export function VirtualJoystick({
             ? 'Joystick de conducción'
             : 'Joystick de dirección'
       }
+      aria-disabled={disabled || undefined}
+      data-disabled={disabled ? 'true' : undefined}
       onPointerDown={start}
       onPointerMove={move}
       onPointerUp={release}

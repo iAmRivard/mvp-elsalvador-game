@@ -54,6 +54,9 @@ export const defaultMobileControlsSettings: MobileControlsSettings = {
 export const driveJoystickConfig = {
   horizontalDeadZone: 0.12,
   verticalDeadZone: 0.16,
+  arcadeStartGestureDeadZone: 0.12,
+  arcadeStartGestureMinimumPixels: 10,
+  arcadeNeutralDownTolerance: 0.04,
   steeringExponent: 1.4,
   throttleExponent: 1.25,
   verticalIntentDominanceRatio: 1.12,
