@@ -28,6 +28,7 @@
     "generate:icons": "node scripts/assets/generate-pwa-icons.mjs",
     "capture:driving-ux": "node scripts/visual/capture-driving-ux.mjs",
     "capture:arcade-five-minutes": "node scripts/visual/capture-arcade-five-minutes.mjs",
+    "capture:camera-map": "npm run build && node scripts/visual/capture-camera-map.mjs",
     "download:roads": "sh scripts/roads/download-source.sh",
     "build:roads": "node scripts/roads/build-road-network.mjs",
     "check:roads": "node scripts/roads/validate-road-network.mjs",
