@@ -39,6 +39,15 @@ export interface MobileCameraHysteresis {
   interactionMaximumKilometersPerHour: number;
 }
 
+export interface CameraFollowZoneConfig {
+  horizontalRadiusPixels: number;
+  verticalRadiusPixels: number;
+  maximumOverflowPixels: number;
+  responseTimeMilliseconds: number;
+  snapDistancePixels: number;
+  maximumElapsedMilliseconds: number;
+}
+
 export const drivingCameraProfiles: DrivingCameraProfiles = {
   stopped: {
     zoom: 15.55,
@@ -132,7 +141,16 @@ export const mobileCameraHysteresis: MobileCameraHysteresis = {
 
 export const followCameraConfig = {
   recenterDurationMilliseconds: 260,
-  maximumBearingChangeDegrees: 12,
+  maximumBearingChangeDegreesPerSecond: 360,
+  maximumBearingElapsedMilliseconds: 100,
   metricWindowMilliseconds: 1_000,
   maximumDurationSamples: 240,
+  mobileFollowZone: {
+    horizontalRadiusPixels: 16,
+    verticalRadiusPixels: 11,
+    maximumOverflowPixels: 8,
+    responseTimeMilliseconds: 90,
+    snapDistancePixels: 180,
+    maximumElapsedMilliseconds: 100,
+  } satisfies CameraFollowZoneConfig,
 };

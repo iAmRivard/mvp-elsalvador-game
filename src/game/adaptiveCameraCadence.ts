@@ -135,8 +135,7 @@ export function adaptiveCameraCadenceFor(
   }
 
   if (unhealthy) {
-    const consecutiveUnhealthyWindows =
-      state.consecutiveUnhealthyWindows + 1;
+    const consecutiveUnhealthyWindows = state.consecutiveUnhealthyWindows + 1;
     if (consecutiveUnhealthyWindows >= 2 && state.hertz > 30) {
       return {
         hertz: nextLowerCadence(state.hertz),
@@ -201,6 +200,16 @@ export class AdaptiveCameraCadenceController {
     return this.completedWindow;
   }
 
+  ensureMinimumHertz(minimumHertz: CameraCadenceHertz): boolean {
+    if (this.currentState.hertz >= minimumHertz) return false;
+    this.currentState = {
+      hertz: minimumHertz,
+      consecutiveHealthyWindows: 0,
+      consecutiveUnhealthyWindows: 0,
+    };
+    return true;
+  }
+
   resetSampling(timestampMilliseconds?: number): void {
     const timestamp =
       timestampMilliseconds !== undefined &&
@@ -227,7 +236,9 @@ export class AdaptiveCameraCadenceController {
     }
   }
 
-  recordVisualFrame(timestampMilliseconds: number): CameraPerformanceWindow | null {
+  recordVisualFrame(
+    timestampMilliseconds: number,
+  ): CameraPerformanceWindow | null {
     if (!Number.isFinite(timestampMilliseconds)) return null;
     if (this.windowStartedAt === null || this.lastFrameAt === null) {
       this.windowStartedAt = timestampMilliseconds;
@@ -243,8 +254,7 @@ export class AdaptiveCameraCadenceController {
       if (frameDuration > 100) this.framesOver100Milliseconds += 1;
     }
 
-    const durationMilliseconds =
-      timestampMilliseconds - this.windowStartedAt;
+    const durationMilliseconds = timestampMilliseconds - this.windowStartedAt;
     if (durationMilliseconds < this.windowDurationMilliseconds) return null;
 
     const window: CameraPerformanceWindow = {

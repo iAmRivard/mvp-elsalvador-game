@@ -130,8 +130,7 @@ export function buildFollowCameraUpdate(
         tolerances.minimumBearingDeltaDegrees,
     zoom:
       !previous ||
-      Math.abs(requested.zoom - previous.zoom) >=
-        tolerances.minimumZoomDelta,
+      Math.abs(requested.zoom - previous.zoom) >= tolerances.minimumZoomDelta,
     pitch:
       !previous ||
       Math.abs(requested.pitch - previous.pitch) >=
@@ -162,15 +161,11 @@ export function buildFollowCameraUpdate(
 
   const appliedOptions: FollowCameraOptions = previous
     ? {
-        center: changes.center
-          ? [...requested.center]
-          : [...previous.center],
+        center: changes.center ? [...requested.center] : [...previous.center],
         bearing: changes.bearing ? requested.bearing : previous.bearing,
         zoom: changes.zoom ? requested.zoom : previous.zoom,
         pitch: changes.pitch ? requested.pitch : previous.pitch,
-        offset: changes.offset
-          ? [...requested.offset]
-          : [...previous.offset],
+        offset: changes.offset ? [...requested.offset] : [...previous.offset],
       }
     : cloneFollowCameraOptions(requested);
   const mapOptions: FollowCameraMapOptions = {
@@ -335,4 +330,25 @@ export function smoothFollowBearing(
     Math.abs(maximumChangeDegrees),
   );
   return (((previousBearing + limited) % 360) + 360) % 360;
+}
+
+export function smoothFollowBearingByElapsed(
+  previousBearing: number,
+  targetBearing: number,
+  maximumDegreesPerSecond: number,
+  elapsedMilliseconds: number,
+  maximumElapsedMilliseconds = 100,
+): number {
+  const elapsed = clamp(
+    Number.isFinite(elapsedMilliseconds) ? elapsedMilliseconds : 0,
+    0,
+    Math.max(0, maximumElapsedMilliseconds),
+  );
+  const maximumChangeDegrees =
+    Math.max(0, maximumDegreesPerSecond) * (elapsed / 1_000);
+  return smoothFollowBearing(
+    previousBearing,
+    targetBearing,
+    maximumChangeDegrees,
+  );
 }

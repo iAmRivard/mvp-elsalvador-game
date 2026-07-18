@@ -15,6 +15,7 @@ import {
 import {
   followCameraConfig,
   followCameraTolerances,
+  mobileCameraHysteresis,
 } from '../../config/followCamera.config';
 import { mapSourceConfig, mapViewConfig } from '../../config/map.config';
 import { movementSubstepConfig } from '../../config/movementSubstep.config';
@@ -41,10 +42,14 @@ import {
   mobileCameraModeForSpeed,
   mobileCameraTransitionCandidate,
   settledMobileCameraModeForSpeed,
-  smoothFollowBearing,
+  smoothFollowBearingByElapsed,
   type FollowCameraOptions,
   type MobileCameraMode,
 } from '../../game/followCamera';
+import {
+  advanceCameraFollowSpring,
+  initialCameraFollowSpringState,
+} from '../../game/cameraFollowSpring';
 import { runtimeGateFor } from '../../game/runtimeGate';
 import { deriveMapDetailMode } from '../../game/mapDetailMode';
 import {
@@ -400,6 +405,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let wasFollowing = false;
     let recenterUntil = 0;
     let lastCameraBearing = Number.NaN;
+    let lastCameraBearingUpdateTimestamp = performance.now();
+    let cameraFollowSpringState = { ...initialCameraFollowSpringState };
+    let lastCameraFollowSpringTimestamp = performance.now();
     let mobileCameraMode: MobileCameraMode = 'stopped';
     let mobileCameraCandidateMode: MobileCameraMode = 'stopped';
     let mobileCameraCandidateSince = performance.now();
@@ -755,6 +763,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       player: PlayerRuntime,
       timestampMilliseconds = performance.now(),
       settleMobileModeImmediately = false,
+      snapFollowState = false,
     ) => {
       const presentationMode = useGameStore.getState().presentationMode;
       const speedKilometersPerHour =
@@ -792,24 +801,71 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         profileOverride,
       );
       const canvas = map.getCanvas();
+      const offset = deviceProfile.isTouch
+        ? followCameraOffsetForSafeViewport(
+            safeCanvasRect,
+            safeGameplayViewport,
+            profile.safeAnchorYRatio,
+          )
+        : followCameraOffset(
+            canvas.clientWidth,
+            canvas.clientHeight,
+            profile.offsetYRatio,
+          );
+      const playerCoordinate: [number, number] = [
+        player.longitude,
+        player.latitude,
+      ];
+      let followCenter: [number, number] = playerCoordinate;
+      if (deviceProfile.isTouch) {
+        const projectedPlayer = map.project(playerCoordinate);
+        if (containerRef.current) {
+          containerRef.current.dataset.playerProjectedX = (
+            safeCanvasRect.x + projectedPlayer.x
+          ).toFixed(2);
+          containerRef.current.dataset.playerProjectedY = (
+            safeCanvasRect.y + projectedPlayer.y
+          ).toFixed(2);
+        }
+        const anchorX = canvas.clientWidth / 2 + offset[0];
+        const anchorY = canvas.clientHeight / 2 + offset[1];
+        const spring = advanceCameraFollowSpring(cameraFollowSpringState, {
+          observedOffsetXPixels: projectedPlayer.x - anchorX,
+          observedOffsetYPixels: projectedPlayer.y - anchorY,
+          elapsedMilliseconds:
+            timestampMilliseconds - lastCameraFollowSpringTimestamp,
+          zone: followCameraConfig.mobileFollowZone,
+          snap: snapFollowState,
+          reducedMotion: deviceProfile.reducedMotion,
+        });
+        cameraFollowSpringState = spring.state;
+        lastCameraFollowSpringTimestamp = timestampMilliseconds;
+        const targetPoint = new maplibregl.Point(
+          projectedPlayer.x - spring.state.offsetXPixels,
+          projectedPlayer.y - spring.state.offsetYPixels,
+        );
+        const target = map.unproject(targetPoint);
+        followCenter = [target.lng, target.lat];
+        if (containerRef.current) {
+          containerRef.current.dataset.followZoneOffsetX =
+            spring.state.offsetXPixels.toFixed(2);
+          containerRef.current.dataset.followZoneOffsetY =
+            spring.state.offsetYPixels.toFixed(2);
+          containerRef.current.dataset.followZoneSnapped = String(
+            spring.snapped,
+          );
+        }
+      }
       return {
         options: {
-          center: [player.longitude, player.latitude] as [number, number],
+          center: followCenter,
           bearing: player.heading,
           zoom: Math.min(camera.zoom, mapSourceConfig.maxZoom),
           pitch: Math.min(camera.pitch, deviceProfile.maximumInitialPitch),
-          offset: deviceProfile.isTouch
-            ? followCameraOffsetForSafeViewport(
-                safeCanvasRect,
-                safeGameplayViewport,
-                profile.safeAnchorYRatio,
-              )
-            : followCameraOffset(
-                canvas.clientWidth,
-                canvas.clientHeight,
-                profile.offsetYRatio,
-              ),
+          offset,
         },
+        playerCoordinate,
+        timestampMilliseconds,
         profile,
         profileName: deviceProfile.isTouch
           ? profileOverride === 'recovery'
@@ -888,11 +944,11 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       cameraWindowAppliedUpdates = 0;
       cameraMetricsStartedAt = timestampMilliseconds;
     };
-    const exposeAppliedProjection = (center: [number, number]) => {
+    const exposeAppliedProjection = (playerCoordinate: [number, number]) => {
       const container = containerRef.current;
       if (!container) return;
       const canvas = map.getCanvas();
-      const projected = map.project(center);
+      const projected = map.project(playerCoordinate);
       container.dataset.cameraAppliedScreenOffsetX = (
         projected.x -
         canvas.clientWidth / 2
@@ -903,6 +959,8 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       ).toFixed(1);
       const playerX = safeCanvasRect.x + projected.x;
       const playerY = safeCanvasRect.y + projected.y;
+      container.dataset.playerProjectedX = playerX.toFixed(2);
+      container.dataset.playerProjectedY = playerY.toFixed(2);
       const playerHalfWidth = 24;
       const playerHalfHeight = 30;
       const safeRight = safeGameplayViewport.x + safeGameplayViewport.width;
@@ -944,7 +1002,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           lastAppliedCameraOptions &&
           lastExposedSafeViewportRevision !== safeViewportRevision
         ) {
-          exposeAppliedProjection(lastAppliedCameraOptions.center);
+          exposeAppliedProjection(camera.playerCoordinate);
         }
         return update;
       }
@@ -983,19 +1041,12 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         }
         map.jumpTo(jumpOptions);
       }
-      const projectionChanged =
-        lastExposedSafeViewportRevision !== safeViewportRevision ||
-        update.changes.offset ||
-        update.changes.zoom ||
-        update.changes.pitch;
-      if (projectionChanged) {
-        if (durationMilliseconds > 0) {
-          void map.once('moveend', () =>
-            exposeAppliedProjection(update.appliedOptions!.center),
-          );
-        } else {
-          exposeAppliedProjection(update.appliedOptions.center);
-        }
+      if (durationMilliseconds > 0) {
+        void map.once('moveend', () =>
+          exposeAppliedProjection(camera.playerCoordinate),
+        );
+      } else {
+        exposeAppliedProjection(camera.playerCoordinate);
       }
 
       if (
@@ -1007,6 +1058,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       lastAppliedCameraProfileName = camera.profileName;
       lastAppliedCameraOptions = update.appliedOptions;
       lastCameraBearing = update.appliedOptions.bearing;
+      lastCameraBearingUpdateTimestamp = camera.timestampMilliseconds;
       cameraOffsetAppliedUpdates += 1;
       exposeCameraTarget(camera, update.appliedOptions);
       if (containerRef.current) {
@@ -1173,7 +1225,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       const player = gameLoop?.getPlayer();
       if (!player || !useGameStore.getState().isFollowingPlayer) return;
       const timestamp = performance.now();
-      const update = applyFollowCamera(cameraForPlayer(player, timestamp));
+      const update = applyFollowCamera(
+        cameraForPlayer(player, timestamp, false, true),
+      );
       if (update.mapOptions) resetCameraUpdateDeadline(timestamp);
     };
     const scheduleSafeViewportMeasurement = () => {
@@ -1593,6 +1647,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         initialPlayer,
         initialCameraTimestamp,
         true,
+        true,
       );
       applyFollowCamera(initialCamera, { force: true });
       resetCameraUpdateDeadline(initialCameraTimestamp);
@@ -1830,6 +1885,15 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             player.heading !== lastFollowedHeading;
           const speedKilometersPerHour =
             Math.abs(player.speedMetersPerSecond) * 3.6;
+          if (
+            deviceProfile.isTouch &&
+            speedKilometersPerHour >
+              mobileCameraHysteresis.stoppedEnterKilometersPerHour &&
+            adaptiveCameraCadence.ensureMinimumHertz(30) &&
+            containerRef.current
+          ) {
+            containerRef.current.dataset.cameraCadenceHertz = '30';
+          }
           const speedChanged = cameraProfileSpeedChangedSignificantly(
             lastFollowedSpeedKilometersPerHour,
             speedKilometersPerHour,
@@ -1863,19 +1927,27 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             );
             const isRecentering = !wasFollowing;
             const cameraStartedAt = performance.now();
-            const camera = cameraForPlayer(player, timestamp);
+            const camera = cameraForPlayer(
+              player,
+              timestamp,
+              false,
+              isRecentering,
+            );
             const duration = deviceProfile.reducedMotion
               ? 0
               : isRecentering
                 ? followCameraConfig.recenterDurationMilliseconds
                 : 0;
-            camera.options.bearing = smoothFollowBearing(
-              lastCameraBearing,
-              player.heading,
-              deviceProfile.reducedMotion
-                ? 360
-                : followCameraConfig.maximumBearingChangeDegrees,
-            );
+            camera.options.bearing =
+              deviceProfile.reducedMotion || isRecentering
+                ? player.heading
+                : smoothFollowBearingByElapsed(
+                    lastCameraBearing,
+                    player.heading,
+                    followCameraConfig.maximumBearingChangeDegreesPerSecond,
+                    timestamp - lastCameraBearingUpdateTimestamp,
+                    followCameraConfig.maximumBearingElapsedMilliseconds,
+                  );
             const cameraUpdate = applyFollowCamera(camera, {
               durationMilliseconds: duration,
               force: isRecentering,
@@ -2270,6 +2342,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         const restoredCamera = cameraForPlayer(
           restoredPlayer,
           restoredCameraTimestamp,
+          true,
           true,
         );
         applyFollowCamera(restoredCamera, { force: true });
