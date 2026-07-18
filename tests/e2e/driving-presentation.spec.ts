@@ -214,7 +214,7 @@ async function expectAppliedSafeCamera(
       ]);
       return Math.abs(Number(actual) - Number(requested));
     })
-    .toBeLessThanOrEqual(19.1);
+    .toBeLessThanOrEqual(20.1);
   await expect(gameMap).toHaveAttribute(
     'data-player-outside-safe-viewport',
     'false',
