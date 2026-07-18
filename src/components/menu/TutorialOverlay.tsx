@@ -110,8 +110,7 @@ export function TutorialOverlay({
     telemetry.speedMetersPerSecond > 0 &&
     coastConditionIsMet(diagnostics, telemetry.speedKilometersPerHour);
   const fallbackRoute = routeStatus === 'fallback';
-  const routeVisible =
-    routeVisualReady && (routeStatus === 'road' || fallbackRoute);
+  const routeVisible = routeVisualReady && routeStatus === 'road';
   const routeFollowingValid =
     !hasBlockingOverlay &&
     !isPaused &&
@@ -229,9 +228,11 @@ export function TutorialOverlay({
       },
       {
         id: 'route',
-        title: fallbackRoute ? 'Sigue la guía directa' : 'Sigue la línea cian',
+        title: fallbackRoute
+          ? 'Esperando la línea cian'
+          : 'Sigue la línea cian',
         description: fallbackRoute
-          ? 'No hay una ruta vial disponible; avanza con la guía directa para continuar.'
+          ? 'La guía directa mantiene la navegación mientras preparamos una ruta vial. Este paso solo se completa sobre la línea cian; también puedes omitir el tutorial.'
           : 'Conduce sobre el tramo brillante de la ruta.',
         completed: routeFollowCompleted && routeFollowingValid,
         available: routeVisible,

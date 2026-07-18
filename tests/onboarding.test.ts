@@ -169,69 +169,7 @@ describe('reglas de onboarding', () => {
       routeFollowingIsValid({ ...valid, headingDifferenceDegrees: 18.01 }),
     ).toBe(false);
     expect(routeFollowingIsValid({ ...valid, reversing: true })).toBe(false);
-    expect(
-      routeFollowingIsValid({
-        ...valid,
-        roadNetworkReady: false,
-        fallbackMode: true,
-        surface: 'offroad',
-      }),
-    ).toBe(true);
-    expect(
-      routeFollowingIsValid({
-        ...valid,
-        roadNetworkReady: false,
-        fallbackMode: true,
-        surface: 'offroad',
-        requiresRejoin: true,
-      }),
-    ).toBe(true);
-    expect(
-      routeFollowingIsValid({
-        ...valid,
-        roadNetworkReady: false,
-        fallbackMode: true,
-        surface: 'offroad',
-        distanceToRouteMeters: null,
-      }),
-    ).toBe(true);
-    expect(
-      routeFollowingIsValid({
-        ...valid,
-        roadNetworkReady: false,
-        fallbackMode: true,
-        surface: 'offroad',
-        headingDifferenceDegrees: null,
-      }),
-    ).toBe(false);
-    expect(
-      routeFollowingIsValid({
-        ...valid,
-        fallbackMode: true,
-        roadNetworkReady: true,
-        surface: 'offroad',
-        maximumHeadingDifferenceDegrees: 45,
-        headingDifferenceDegrees: 45,
-      }),
-    ).toBe(true);
-    expect(
-      routeFollowingIsValid({
-        ...valid,
-        fallbackMode: true,
-        roadNetworkReady: true,
-        surface: 'offroad',
-        maximumHeadingDifferenceDegrees: 45,
-        headingDifferenceDegrees: 45.01,
-      }),
-    ).toBe(false);
-    expect(
-      routeFollowingIsValid({
-        ...valid,
-        fallbackMode: true,
-        roadNetworkReady: true,
-        headingDifferenceDegrees: Number.NaN,
-      }),
-    ).toBe(false);
+    expect(routeFollowingIsValid({ ...valid, fallbackMode: true })).toBe(false);
   });
 
   it('reconoce solo el objetivo de misión por proximidad o visibilidad sostenida', () => {

@@ -127,6 +127,7 @@ export interface RouteFollowingObservation {
 export function routeFollowingIsValid(
   observation: RouteFollowingObservation,
 ): boolean {
+  if (observation.fallbackMode) return false;
   const movementIsValid =
     observation.routeVisible &&
     observation.speedKilometersPerHour >= 5 &&
@@ -142,9 +143,6 @@ export function routeFollowingIsValid(
     Number.isFinite(observation.headingDifferenceDegrees) &&
     Math.abs(observation.headingDifferenceDegrees) <=
       observation.maximumHeadingDifferenceDegrees;
-  if (observation.fallbackMode) {
-    return movementIsValid && routeHeadingIsValid;
-  }
   return (
     movementIsValid &&
     !observation.offRoute &&

@@ -577,7 +577,7 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     { timeout: 8_000 },
   );
   await expect(
-    page.getByRole('heading', { name: 'Sigue la guía directa' }),
+    page.getByRole('heading', { name: 'Esperando la línea cian' }),
   ).toBeVisible();
   await release();
   await expect(gameMap).toHaveAttribute(
@@ -624,26 +624,12 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     )
     .toBeGreaterThanOrEqual(5);
   const tutorialCard = page.locator('[data-tutorial-card="mobile"]');
-  let fallbackSteeringTouchId = 44;
-  const fallbackFollowDeadline = Date.now() + 5_000;
-  while (
-    (await tutorialCard.count()) > 0 &&
-    Date.now() < fallbackFollowDeadline
-  ) {
-    await steerTowardRoute(
-      page,
-      session,
-      joystickCenter,
-      fallbackSteeringTouchId,
-    );
-    fallbackSteeringTouchId += 1;
-  }
-  await expect(gameMap).toHaveAttribute(
-    'data-navigation-requires-rejoin',
-    'false',
+  await page.waitForTimeout(1_400);
+  await expect(tutorialCard).toHaveCount(1);
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-tutorial-target',
+    'route',
   );
-  await expect(tutorialCard).toHaveCount(0);
-  await expect(page.getByTestId('mobile-driving-hud')).toBeVisible();
   await drag(
     90,
     joystickCenter.x,
@@ -657,6 +643,12 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   await expect(gameMap).toHaveAttribute('data-road-network-status', 'ready', {
     timeout: 20_000,
   });
+  await expect(gameMap).toHaveAttribute('data-mission-route-mode', 'road', {
+    timeout: 20_000,
+  });
+  await expect(
+    page.getByRole('heading', { name: 'Sigue la línea cian' }),
+  ).toBeVisible();
   const promotionObservation = await gameMap.evaluate(async (element) => {
     const positionFor = () =>
       `${element.dataset.playerLongitude},${element.dataset.playerLatitude}`;
@@ -691,8 +683,9 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
 
   if (testInfo.project.name === 'chromium-mobile') {
     await page.getByRole('button', { name: 'Pausar partida' }).click();
-    const pauseMenu = page.getByRole('dialog', { name: 'Partida en pausa' });
-    const resumeButton = pauseMenu.getByRole('button', { name: 'Continuar' });
+    const resumeButton = page.getByRole('button', {
+      name: 'Reanudar partida',
+    });
     await expect(resumeButton).toBeVisible();
     await page.waitForTimeout(1_600);
     await expect(gameMap).toHaveAttribute(
@@ -717,10 +710,6 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     );
     expect(resumedAssistElapsedMilliseconds).toBe(
       pausedAssistElapsedMilliseconds,
-    );
-    await expect(gameMap).toHaveAttribute(
-      'data-road-promotion-assist-ramp',
-      'active',
     );
   }
 
@@ -799,16 +788,31 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     .not.toBe(positionBeforeRoadFollow);
   await expect(gameMap).toHaveAttribute('data-drive-enabled', 'true');
   await expect(gameMap).toHaveAttribute('data-runtime-blocked-by', '');
+  const roadFollowIsInvalid = async () => {
+    const [offRoute, requiresRejoin, surface, recommended, physical] =
+      await Promise.all([
+        gameMap.getAttribute('data-navigation-off-route'),
+        gameMap.getAttribute('data-navigation-requires-rejoin'),
+        gameMap.getAttribute('data-road-contact-surface'),
+        gameMap
+          .getAttribute('data-navigation-recommended-heading')
+          .then(Number),
+        gameMap.getAttribute('data-navigation-physical-heading').then(Number),
+      ]);
+    const headingDifference = Math.abs(
+      ((recommended - physical + 540) % 360) - 180,
+    );
+    return (
+      offRoute === 'true' ||
+      requiresRejoin === 'true' ||
+      surface === 'offroad' ||
+      !Number.isFinite(headingDifference) ||
+      headingDifference > 18
+    );
+  };
   let roadSteeringTouchId = 92;
   const roadFollowDeadline = Date.now() + 5_000;
-  while (
-    ((await gameMap.getAttribute('data-navigation-off-route')) === 'true' ||
-      (await gameMap.getAttribute('data-navigation-requires-rejoin')) ===
-        'true' ||
-      (await gameMap.getAttribute('data-road-contact-surface')) ===
-        'offroad') &&
-    Date.now() < roadFollowDeadline
-  ) {
+  while ((await roadFollowIsInvalid()) && Date.now() < roadFollowDeadline) {
     await steerTowardRoute(
       page,
       session,
@@ -826,7 +830,8 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     'data-road-contact-surface',
     'offroad',
   );
-  await expect(tutorialCard).toHaveCount(0);
+  await expect.poll(roadFollowIsInvalid).toBe(false);
+  await expect(tutorialCard).toHaveCount(0, { timeout: 3_000 });
   await expect(page.getByTestId('mobile-driving-hud')).toBeVisible();
   await session.detach();
 });
