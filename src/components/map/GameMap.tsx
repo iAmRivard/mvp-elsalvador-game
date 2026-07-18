@@ -1335,14 +1335,16 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         scheduleSafeViewportMeasurement,
       );
     }
-    const mapStage = containerRef.current.closest('.map-stage');
-    if (mapStage && 'MutationObserver' in window) {
+    const safeViewportMutationRoot =
+      containerRef.current.closest('.game-shell') ??
+      containerRef.current.closest('.map-stage');
+    if (safeViewportMutationRoot && 'MutationObserver' in window) {
       safeViewportMutationObserver = new MutationObserver((records) => {
         if (records.some(mutationAffectsSafeViewport)) {
           scheduleSafeViewportMeasurement();
         }
       });
-      safeViewportMutationObserver.observe(mapStage, {
+      safeViewportMutationObserver.observe(safeViewportMutationRoot, {
         childList: true,
         subtree: true,
         attributes: true,

@@ -132,6 +132,35 @@ describe('viewport jugable seguro', () => {
     expect(safe.y + safe.height).toBeLessThanOrEqual(600);
   });
 
+  it('conserva el lado más amplio cuando un overlay arrastrable cruza el centro', () => {
+    const safe = safeGameplayViewportFor({
+      canvas: canvas(392, 850),
+      visibleViewport: canvas(392, 850),
+      safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
+      playerFootprint: { width: 48, height: 60 },
+      paddingPixels: 10,
+      occlusions: [
+        {
+          id: 'topbar',
+          kind: 'hud',
+          rect: { x: 0, y: 0, width: 392, height: 61 },
+        },
+        {
+          id: 'bottom-controls',
+          kind: 'actions',
+          rect: { x: 0, y: 540, width: 392, height: 310 },
+        },
+        {
+          id: 'dragged-tutorial',
+          kind: 'overlay',
+          rect: { x: 9, y: 338, width: 371, height: 127 },
+        },
+      ],
+    });
+
+    expect(safe).toMatchObject({ y: 71, height: 257, obstructed: false });
+  });
+
   it('marca un overlay central que deja un área imposible', () => {
     const safe = safeGameplayViewportFor({
       canvas: canvas(392, 850),
