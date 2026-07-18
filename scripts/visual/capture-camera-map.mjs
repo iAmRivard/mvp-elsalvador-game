@@ -146,6 +146,9 @@ try {
     );
   });
   await page.waitForTimeout(warmupMilliseconds);
+  await page.screenshot({
+    path: resolve(outputDirectory, '00-stopped.png'),
+  });
 
   await page.evaluate(() => {
     const map = document.querySelector('[data-testid="game-map"]');
@@ -218,9 +221,6 @@ try {
     requestAnimationFrame(sample);
   });
 
-  await page.screenshot({
-    path: resolve(outputDirectory, '00-stopped.png'),
-  });
   const observationStartedAt = Date.now();
   const waitUntilElapsed = async (targetMilliseconds) => {
     const remaining = targetMilliseconds - (Date.now() - observationStartedAt);
