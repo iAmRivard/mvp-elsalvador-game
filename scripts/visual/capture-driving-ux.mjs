@@ -5,7 +5,7 @@ import { chromium, devices } from '@playwright/test';
 
 const baseUrl = process.argv[2] ?? 'http://127.0.0.1:5173';
 const outputDirectory = resolve(
-  process.argv[3] ?? 'test-results/driving-ux-v0.2.5.3',
+  process.argv[3] ?? 'test-results/arcade-core-v0.3.0',
 );
 const observationMilliseconds = 30_000;
 const warmupMilliseconds = 10_000;
@@ -789,7 +789,7 @@ try {
       touchGesture: {
         source: 'cdp-touch',
         verticalTravelJoystickRatio: 0.44,
-        targetKilometersPerHour: 58,
+        releaseThresholdKilometersPerHour: 58,
       },
       storage: {
         gameSaveVersion: deterministicStorage.save.version,
