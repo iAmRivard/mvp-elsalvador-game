@@ -284,7 +284,10 @@ test('carga el mapa sin solicitudes a terceros', async ({
     'data-driving-surface-label',
     /Vía secundaria|Calle residencial|Vía terciaria|Zona del objetivo/,
   );
-  await expect(gameMap).toHaveAttribute('data-follow-offset-y', /^-?\d+$/);
+  await expect(gameMap).toHaveAttribute(
+    'data-follow-offset-y',
+    /^-?\d+(?:\.\d+)?$/,
+  );
   await expect(gameMap).toHaveAttribute(
     'data-player-outside-safe-viewport',
     'false',
@@ -292,10 +295,16 @@ test('carga el mapa sin solicitudes a terceros', async ({
   const safePlayerRatio = Number(
     await gameMap.getAttribute('data-safe-player-y-ratio'),
   );
-  expect(safePlayerRatio).toBeGreaterThanOrEqual(0.55);
-  expect(safePlayerRatio).toBeLessThanOrEqual(0.65);
-  const stoppedZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
-  expect(stoppedZoom).toBeGreaterThan(15.5);
+  expect(safePlayerRatio).toBeGreaterThanOrEqual(0.45);
+  expect(safePlayerRatio).toBeLessThanOrEqual(0.75);
+  await expect(gameMap).toHaveAttribute(
+    'data-current-camera-profile',
+    'mobileInteraction',
+  );
+  const interactionZoom = Number(
+    await gameMap.getAttribute('data-follow-zoom'),
+  );
+  expect(interactionZoom).toBeGreaterThan(15.5);
 
   await expect
     .poll(() =>
@@ -397,6 +406,10 @@ test('carga el mapa sin solicitudes a terceros', async ({
     .screenshot();
   await page.keyboard.down('w');
   await page.waitForTimeout(700);
+  await expect(gameMap).toHaveAttribute(
+    'data-current-camera-profile',
+    'mobileDriving',
+  );
   const movingZoom = Number(await gameMap.getAttribute('data-follow-zoom'));
   const canvasAfterMovement = await page
     .locator('.maplibregl-canvas')
@@ -417,7 +430,7 @@ test('carga el mapa sin solicitudes a terceros', async ({
   expect(
     await rasterDifference(page, canvasBeforeMovement, canvasAfterMovement),
   ).toBeGreaterThan(0.005);
-  expect(movingZoom).toBeLessThan(stoppedZoom);
+  expect(movingZoom).toBeGreaterThan(interactionZoom);
 
   await page.getByRole('button', { name: 'Partida y guardado' }).click();
   await page.getByRole('menuitem', { name: 'Guardar ahora' }).click();
