@@ -1,5 +1,14 @@
 # Guia de prueba fisica v0.3.0
 
+## Estado
+
+- Pendiente: la automatizacion no aprueba esta guia.
+- Evidencia visual de referencia:
+  `artifacts/five-minutes/final-3c2b65a/run-1..3`.
+- Repetir en telefono la promocion de guia directa a linea cian: conducir en
+  fallback, esperar la red vial, pausar/reanudar y confirmar que el paso 5 se
+  completa manteniendo seguimiento real. El E2E de este caso sigue inestable.
+
 ## Preparacion
 
 - Ideal: cinco personas que no conozcan los controles.
