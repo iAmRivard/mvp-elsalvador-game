@@ -488,6 +488,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let lastValidSafeGameplayViewport = safeGameplayViewport;
     let safeViewportObstructed = false;
     let safeViewportMeasurementFrame: number | null = null;
+    let safeViewportMeasurementTimer: number | null = null;
     let safeViewportResizeObserver: ResizeObserver | null = null;
     let safeViewportMutationObserver: MutationObserver | null = null;
     let safeViewportMeasurementCount = 0;
@@ -1317,10 +1318,16 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       if (update.mapOptions) resetCameraUpdateDeadline(timestamp);
     };
     const scheduleSafeViewportMeasurement = () => {
-      if (safeViewportMeasurementFrame !== null) return;
-      safeViewportMeasurementFrame = window.requestAnimationFrame(
-        updateCameraForSafeViewport,
-      );
+      if (safeViewportMeasurementTimer !== null) {
+        window.clearTimeout(safeViewportMeasurementTimer);
+      }
+      safeViewportMeasurementTimer = window.setTimeout(() => {
+        safeViewportMeasurementTimer = null;
+        if (safeViewportMeasurementFrame !== null) return;
+        safeViewportMeasurementFrame = window.requestAnimationFrame(
+          updateCameraForSafeViewport,
+        );
+      }, 120);
     };
 
     if ('ResizeObserver' in window) {
@@ -2538,6 +2545,9 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       window.cancelAnimationFrame(loadingFrame);
       if (safeViewportMeasurementFrame !== null) {
         window.cancelAnimationFrame(safeViewportMeasurementFrame);
+      }
+      if (safeViewportMeasurementTimer !== null) {
+        window.clearTimeout(safeViewportMeasurementTimer);
       }
       safeViewportResizeObserver?.disconnect();
       safeViewportMutationObserver?.disconnect();
