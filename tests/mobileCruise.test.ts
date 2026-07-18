@@ -42,6 +42,27 @@ describe('velocidad objetivo móvil', () => {
     expect(input.snapshot().throttle).toBeGreaterThan(0);
   });
 
+  it('saliendo de reverse-armed con gesto lateral lateral en arcade vuelve a avanzar', () => {
+    const input = new InputController();
+    input.setMobileCruiseMode('arcade');
+    input.setTargetSpeedJoystick(1, 0);
+    input.advanceMobileCruise(0, 0.5);
+    input.setTargetSpeedJoystick(-1, 0);
+    input.advanceMobileCruise(9, 0.35);
+    input.setTargetSpeedJoystick(0, 0);
+    input.advanceMobileCruise(0, 1);
+
+    expect(input.getMobileCruiseTarget().reverseState).toBe('reverse-armed');
+
+    input.setTargetSpeedJoystick(0, 0.35, true);
+    input.advanceMobileCruise(0, 1 / 60);
+    expect(input.getMobileCruiseTarget()).toMatchObject({
+      reverseState: 'forward',
+      targetSpeedKilometersPerHour: 25,
+      reversing: false,
+    });
+  });
+
   it('un gesto hacia abajo no puede solicitar el arranque arcade', () => {
     const input = new InputController();
     input.setMobileCruiseMode('arcade');

@@ -56,6 +56,8 @@ export const driveJoystickConfig = {
   verticalDeadZone: 0.16,
   arcadeStartGestureDeadZone: 0.12,
   arcadeStartGestureMinimumPixels: 10,
+  arcadeStartGestureMinimumPixelRatio: 0.14,
+  arcadeStartGestureMinimumPixelsFloor: 5,
   arcadeNeutralDownTolerance: 0.04,
   steeringExponent: 1.4,
   throttleExponent: 1.25,

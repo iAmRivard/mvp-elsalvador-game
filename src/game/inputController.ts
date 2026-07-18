@@ -429,6 +429,15 @@ export class InputController {
   ): void {
     const nextIntent = clampAnalogInput(verticalIntent);
     const nextTurn = clampAnalogInput(turn);
+    const shouldExitReverseArmedByArcadeStart =
+      this.mobileCruiseMode === 'arcade' &&
+      this.mobileReverseState === 'reverse-armed' &&
+      arcadeStartRequested &&
+      nextIntent >= 0;
+    if (shouldExitReverseArmedByArcadeStart) {
+      this.mobileReverseState = 'forward';
+      this.reverseIntentMilliseconds = 0;
+    }
     const shouldLatchArcadeTarget =
       this.mobileCruiseMode === 'arcade' &&
       this.mobileReverseState === 'forward' &&

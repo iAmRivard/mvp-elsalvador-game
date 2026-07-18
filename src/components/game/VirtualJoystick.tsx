@@ -188,6 +188,7 @@ export function VirtualJoystick({
             visualX / radiusPixels,
             visualY / radiusPixels,
             Math.hypot(visualX, visualY),
+            radiusPixels,
           )
         : driveJoystickOutput(
             visualX / radiusPixels,

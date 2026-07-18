@@ -799,11 +799,19 @@ export function addMissionRoute(
       Math.round(progress.distanceToNextInstructionMeters ?? 0),
     );
   };
+  const navigationUpdateIntervalMilliseconds = Math.max(
+    200,
+    minimumUpdateIntervalMilliseconds * 2,
+  );
   const navigationUpdates = createTrailingUpdateScheduler(
-    Math.max(200, minimumUpdateIntervalMilliseconds * 2),
+    navigationUpdateIntervalMilliseconds,
     (sample: { position: RoadCoordinates; heading: number }) => {
       updateNavigation(sample.position, sample.heading);
     },
+  );
+  const refreshNavigationGuidanceScheduler = createTrailingUpdateScheduler(
+    navigationUpdateIntervalMilliseconds,
+    () => refreshNavigationGuidance(),
   );
   const clearRoute = () => {
     navigationUpdates.cancel();
@@ -1089,7 +1097,10 @@ export function addMissionRoute(
     }
   };
 
-  map.on('moveend', refreshNavigationGuidance);
+  const scheduleNavigationRefreshFromMoveEnd = () => {
+    refreshNavigationGuidanceScheduler.schedule(undefined);
+  };
+  map.on('moveend', scheduleNavigationRefreshFromMoveEnd);
   map.on('resize', refreshNavigationGuidance);
   updateTargets(map);
   void calculateRoute();
@@ -1151,9 +1162,10 @@ export function addMissionRoute(
     disposed = true;
     calculationToken += 1;
     cancelFallbackRoadRetry();
+    refreshNavigationGuidanceScheduler.cancel();
     navigationUpdates.cancel();
     unsubscribe();
-    map.off('moveend', refreshNavigationGuidance);
+    map.off('moveend', scheduleNavigationRefreshFromMoveEnd);
     map.off('resize', refreshNavigationGuidance);
     maneuverMarker.remove();
     if (map.getLayer(TARGETS_LAYER_ID)) map.removeLayer(TARGETS_LAYER_ID);

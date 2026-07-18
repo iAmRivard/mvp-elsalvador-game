@@ -159,6 +159,7 @@ function TouchControlsContent({ input }: TouchControlsProps) {
           onCenter={() => setFollowingPlayer(true)}
           onTogglePause={togglePaused}
           hapticsEnabled={hapticsEnabled}
+          controlsDisabled={controlsDisabled}
         />
       ) : (
         <>
@@ -214,6 +215,7 @@ function TouchControlsContent({ input }: TouchControlsProps) {
               isPaused={isPaused}
               onCenter={() => setFollowingPlayer(true)}
               onTogglePause={togglePaused}
+              controlsDisabled={controlsDisabled}
               autoThrottleAvailable={controlMode === 'joystick-auto-throttle'}
               hapticsEnabled={hapticsEnabled}
             />
@@ -221,6 +223,7 @@ function TouchControlsContent({ input }: TouchControlsProps) {
               <MobilePedals
                 input={input}
                 showAccelerator={controlMode === 'joystick-pedals'}
+                controlsDisabled={controlsDisabled}
                 hapticsEnabled={hapticsEnabled}
               />
             )}

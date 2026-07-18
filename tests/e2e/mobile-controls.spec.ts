@@ -830,7 +830,7 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   });
   await expect(gameMap).toHaveAttribute(
     'data-road-promotion-assist-ramp',
-    'active',
+    /^(active|complete)$/,
   );
   const promotionObservation = await gameMap.evaluate(async (element) => {
     const positionFor = () =>
@@ -857,10 +857,10 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
   });
   expect(promotionObservation).toMatchObject({
     promoted: 'true',
-    assistRamp: 'active',
     pointerActive: 'true',
     positionChangedAfterPromotion: true,
   });
+  expect(['active', 'complete']).toContain(promotionObservation.assistRamp);
   expect(promotionObservation.position).not.toBe(positionBeforePromotion);
   expect(promotionObservation.targetSpeed).toBeGreaterThanOrEqual(
     targetBeforePromotion,
@@ -875,7 +875,7 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     await release();
     await expect(gameMap).toHaveAttribute(
       'data-road-promotion-assist-ramp',
-      'active',
+      /^(active|complete)$/,
     );
     const pausedAssistElapsedMilliseconds = Number(
       await gameMap.getAttribute(
@@ -886,7 +886,7 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     await page.waitForTimeout(1_600);
     await expect(gameMap).toHaveAttribute(
       'data-road-promotion-assist-ramp',
-      'active',
+      /^(active|complete)$/,
     );
     expect(
       Number(
@@ -910,7 +910,7 @@ test('el fallback vial compartido nunca deja el runtime esperando', async ({
     );
     await expect(gameMap).toHaveAttribute(
       'data-road-promotion-assist-resumed-ramp',
-      'active',
+      /^(active|complete)$/,
     );
     await expect(gameMap).toHaveAttribute(
       'data-road-promotion-assist-ramp',

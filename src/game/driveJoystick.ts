@@ -37,7 +37,16 @@ export function arcadeDriveJoystickOutput(
   normalizedX: number,
   normalizedY: number,
   displacementPixels: number,
+  joystickRadiusPixels = 72,
 ): ArcadeDriveJoystickOutput {
+  const minimumGesturePixels = Math.min(
+    driveJoystickConfig.arcadeStartGestureMinimumPixels,
+    Math.max(
+      driveJoystickConfig.arcadeStartGestureMinimumPixelsFloor,
+      driveJoystickConfig.arcadeStartGestureMinimumPixelRatio *
+        joystickRadiusPixels,
+    ),
+  );
   return {
     turn: applyResponseCurve(
       applyDeadZone(normalizedX, driveJoystickConfig.horizontalDeadZone),
@@ -49,8 +58,7 @@ export function arcadeDriveJoystickOutput(
     ),
     startRequested:
       Number.isFinite(displacementPixels) &&
-      displacementPixels >=
-        driveJoystickConfig.arcadeStartGestureMinimumPixels &&
+      displacementPixels >= minimumGesturePixels &&
       Math.hypot(normalizedX, normalizedY) >=
         driveJoystickConfig.arcadeStartGestureDeadZone &&
       normalizedY <= driveJoystickConfig.arcadeNeutralDownTolerance,

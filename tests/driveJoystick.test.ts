@@ -53,6 +53,18 @@ describe('joystick único de conducción', () => {
     expect(arcadeDriveJoystickOutput(0.11, 0, 8).startRequested).toBe(false);
   });
 
+  it('escala el umbral mínimo con el tamaño del joystick', () => {
+    expect(
+      arcadeDriveJoystickOutput(0.13, -0.03, 8, 54).startRequested,
+    ).toBe(true);
+    expect(
+      arcadeDriveJoystickOutput(0.13, -0.03, 6, 20).startRequested,
+    ).toBe(true);
+    expect(
+      arcadeDriveJoystickOutput(0.13, -0.03, 6, 72).startRequested,
+    ).toBe(false);
+  });
+
   it('aplica zonas muertas horizontal y vertical por separado', () => {
     expect(driveJoystickOutput(0.11, -0.15)).toEqual({
       verticalIntent: 0,
