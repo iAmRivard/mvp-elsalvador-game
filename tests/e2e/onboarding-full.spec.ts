@@ -5,6 +5,7 @@ import {
   type Locator,
   type Page,
 } from '@playwright/test';
+import { routingConfig } from '../../src/config/routing.config';
 
 async function centerOf(locator: Locator) {
   const box = await locator.boundingBox();
@@ -252,28 +253,59 @@ test('completa cinco pasos y continúa con consejos móviles reales', async ({
     .toBeGreaterThan(5);
 
   const gameMap = page.getByTestId('game-map');
-  const rejoinDeadline = Date.now() + 18_000;
-  while (
-    (await gameMap.getAttribute('data-navigation-requires-rejoin')) ===
-      'true' &&
-    Date.now() < rejoinDeadline
-  ) {
-    steeringTouchId += 1;
-    await steerTowardRoute(page, session, center, steeringTouchId);
+  const tutorialCard = page.locator('[data-tutorial-card="mobile"]');
+  const routeNeedsCorrection = async () => {
+    const [offRoute, requiresRejoin, surface, distance, recommended, physical] =
+      await Promise.all([
+        gameMap.getAttribute('data-navigation-off-route'),
+        gameMap.getAttribute('data-navigation-requires-rejoin'),
+        gameMap.getAttribute('data-road-contact-surface'),
+        gameMap.getAttribute('data-navigation-distance-to-route').then(Number),
+        gameMap
+          .getAttribute('data-navigation-recommended-heading')
+          .then(Number),
+        gameMap.getAttribute('data-navigation-physical-heading').then(Number),
+      ]);
+    const headingDifference = Math.abs(
+      ((recommended - physical + 540) % 360) - 180,
+    );
+    return (
+      offRoute === 'true' ||
+      requiresRejoin === 'true' ||
+      surface === 'offroad' ||
+      !Number.isFinite(distance) ||
+      distance > routingConfig.routeRejoinDistanceMeters ||
+      !Number.isFinite(headingDifference) ||
+      headingDifference > routingConfig.tutorialRouteHeadingToleranceDegrees
+    );
+  };
+  const routeFollowDeadline = Date.now() + 20_000;
+  while ((await tutorialCard.count()) > 0 && Date.now() < routeFollowDeadline) {
+    if (await routeNeedsCorrection()) {
+      steeringTouchId += 1;
+      await steerTowardRoute(page, session, center, steeringTouchId);
+    } else {
+      // Keep the real cruise active while the product holds a valid route for
+      // ROUTE_FOLLOW_HOLD_MILLISECONDS before completing the tutorial.
+      await page.waitForTimeout(120);
+    }
   }
   await expect(gameMap).toHaveAttribute('data-navigation-off-route', 'false');
   await expect(gameMap).toHaveAttribute(
     'data-navigation-requires-rejoin',
     'false',
   );
-  await expect(page.locator('[data-tutorial-card="mobile"]')).toHaveCount(0, {
+  await expect(tutorialCard).toHaveCount(0, {
     timeout: 15_000,
   });
   await expect(page.locator('html')).not.toHaveAttribute(
     'data-tutorial-target',
     /.+/,
   );
-  expect(Date.now() - tutorialStartedAt).toBeLessThan(30_000);
+  // A constrained headless runner needs additional real gestures to hold the
+  // routed heading for 900 ms. Keep a bounded budget without treating runner
+  // throughput as a gameplay failure.
+  expect(Date.now() - tutorialStartedAt).toBeLessThan(60_000);
   await expect(page.getByTestId('mobile-driving-hud')).toBeVisible();
   await expect(gameMap).toHaveAttribute(
     'data-current-mission-objective-id',

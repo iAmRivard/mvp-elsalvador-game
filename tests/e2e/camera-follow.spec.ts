@@ -35,6 +35,17 @@ test.describe(
         await page.addInitScript(() => {
           window.localStorage.clear();
           window.sessionStorage.clear();
+          // This focused scenario validates the medium-quality Three.js cues.
+          // GitHub's constrained runner reports four logical cores and would
+          // otherwise select the intentional low-quality marker fallback.
+          Object.defineProperty(window.navigator, 'hardwareConcurrency', {
+            configurable: true,
+            value: 8,
+          });
+          Object.defineProperty(window.navigator, 'deviceMemory', {
+            configurable: true,
+            value: 8,
+          });
         });
         await page.goto('/');
         await page.getByRole('button', { name: /Comenzar expedición/ }).click();
