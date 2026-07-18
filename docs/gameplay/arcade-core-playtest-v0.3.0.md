@@ -176,9 +176,10 @@ seguimiento real. Tres intentos reversibles dieron 3/5, 4/5 y 1/5. Se
 revirtieron al no demostrar mejora.
 
 El problema pendiente es del escenario E2E, no evidencia confirmada de que el
-runtime quede bloqueado. Aun así impide declarar la suite estable. CI usa
-retries y podría ocultarlo; la aceptación final exige una corrida serial con
-cero retries.
+runtime quede bloqueado. Aun así impide declarar la suite estable. Desde
+`b7610bb`, Playwright usa cero retries también en CI, conserva la traza del
+primer fallo y Docker Actions publica `test-results` durante siete días. La
+aceptación final sigue exigiendo una corrida serial completamente aprobada.
 
 ### Flake E2E de geometría de navegación rápida
 
@@ -207,6 +208,10 @@ diseñar un controlador E2E de seguimiento vial que mantenga la maniobra real
 bajo carga; no se considera evidencia de regresión del runtime.
 
 ## Riesgos y límites
+
+Validación local posterior sobre `b7610bb`: `npm run check` aprobado con 97
+archivos y 542 pruebas unitarias, además de lint, typecheck, recursos locales,
+PMTiles, red vial, objetivos y build.
 
 - Crucero: frames >33 ms aumentan por mediana; medir en teléfono.
 - La suite completa sigue bloqueada por dos escenarios E2E de seguimiento vial:

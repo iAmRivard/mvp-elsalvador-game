@@ -196,8 +196,10 @@ deadline o usar clicks sintéticos:
 
 Los cambios experimentales se revirtieron según el límite de tres intentos. No
 hay evidencia confirmada de deadlock de producción, pero sí un P1 de validación
-que puede fallar en la suite serial. CI configura retries; por eso el cierre
-exige además una corrida local con un worker y `--retries=0`.
+que puede fallar en la suite serial. Desde `b7610bb`, la configuración global y
+CI usan cero retries; la primera falla conserva su traza y Docker Actions sube
+`test-results` con retención de siete días. El cierre exige una corrida serial
+completamente aprobada.
 
 ### P1 adicional: escenario visual de ruta rápida
 
@@ -219,6 +221,9 @@ geométrica permanece en 1 px y el runtime no cambió. Este punto requiere un
 controlador E2E vial dedicado antes de repetir la suite completa.
 
 ## Límites
+
+`npm run check` sobre `b7610bb` aprobó 97 archivos y 542 unitarias, junto con
+lint, typecheck, recursos, PMTiles, red vial, objetivos y build.
 
 Tiempo preciso de carga/cambio de vehículo, escrituras Zustand, GPU, repaints
 MapLibre, memoria total, batería, temperatura, audio real, hápticos y diversión:
