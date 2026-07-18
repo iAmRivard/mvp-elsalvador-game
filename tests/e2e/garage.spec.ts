@@ -3,6 +3,14 @@ import { expect, test } from '@playwright/test';
 const saveKey = 'el-salvador-rutas-perdidas:save';
 
 function installGarageSave(): void {
+  Object.defineProperty(navigator, 'hardwareConcurrency', {
+    configurable: true,
+    value: 8,
+  });
+  Object.defineProperty(navigator, 'deviceMemory', {
+    configurable: true,
+    value: 8,
+  });
   if (
     window.sessionStorage.getItem('arcade-garage-save-installed') === 'true'
   ) {
