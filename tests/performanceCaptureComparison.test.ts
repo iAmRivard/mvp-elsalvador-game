@@ -5,19 +5,18 @@ import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const temporaryDirectories: string[] = [];
-const comparator = resolve(
-  'scripts/performance/compare-arcade-captures.mjs',
-);
+const comparator = resolve('scripts/performance/compare-arcade-captures.mjs');
 
 function capture(
   repositorySha: string,
   buildSha = repositorySha,
-  runtime = { roadNetworkStatus: 'ready', missionRouteMode: 'road' },
+  runtime = { roadNetworkStatus: 'ready', missionRouteMode: 'idle' },
+  surface = 'trunk',
 ) {
   const viewport = { width: 392, height: 850 };
   return {
     captureMetadata: {
-      schemaVersion: 4,
+      schemaVersion: 5,
       measuredSha: buildSha,
       repositorySha,
       buildSha,
@@ -27,15 +26,30 @@ function capture(
       performanceProfilingEnabled: false,
       diagnosticsEnabled: false,
       scenario: {
-        id: 'arcade-core-road-cruise-v1',
+        id: 'arcade-core-trunk-cruise-v2',
         viewport,
         deviceScaleFactor: 2,
         ...runtime,
       },
     },
     userAgent: 'capture-contract-test',
+    observationMilliseconds: 30_000,
     viewport,
     deviceScaleFactor: 2,
+    dynamicLoad: {
+      samples: Array.from({ length: 120 }, (_, index) => ({
+        elapsedMilliseconds: index * 250,
+        longitude: -89.2460003 - index * 0.00005,
+        latitude: 13.8170917 + index * 0.000025,
+        speedKilometersPerHour: 60,
+        targetSpeedKilometersPerHour: 65,
+        headingDegrees: 299.834,
+        totalDistanceMeters: 1_250 + index * 4,
+        surface,
+        selectedEdgeId: surface === 'trunk' ? 9497 : null,
+        routeMode: 'idle',
+      })),
+    },
   };
 }
 
@@ -79,11 +93,9 @@ describe('contrato de capturas arcade', () => {
     );
     const final = fixtureDirectory('final', capture('b'.repeat(40)));
 
-    const result = spawnSync(
-      process.execPath,
-      [comparator, baseline, final],
-      { encoding: 'utf8' },
-    );
+    const result = spawnSync(process.execPath, [comparator, baseline, final], {
+      encoding: 'utf8',
+    });
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('identidad repo/build inválida');
@@ -105,5 +117,25 @@ describe('contrato de capturas arcade', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('escenario no coincide');
+  });
+
+  it('rechaza cargas dinamicas con superficies y trayectorias distintas', () => {
+    const baseline = fixtureDirectory('baseline', capture('a'.repeat(40)));
+    const final = fixtureDirectory(
+      'final',
+      capture(
+        'b'.repeat(40),
+        'b'.repeat(40),
+        { roadNetworkStatus: 'ready', missionRouteMode: 'idle' },
+        'offroad',
+      ),
+    );
+
+    const result = spawnSync(process.execPath, [comparator, baseline, final], {
+      encoding: 'utf8',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('carga dinamica');
   });
 });

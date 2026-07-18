@@ -9,9 +9,81 @@ const outputDirectory = resolve(
 );
 const observationMilliseconds = 30_000;
 const warmupMilliseconds = 10_000;
-const captureSchemaVersion = 4;
+const captureSchemaVersion = 5;
 const referenceViewport = { width: 392, height: 850 };
 const referenceDeviceScaleFactor = 2;
+const deterministicCheckpoint = {
+  longitude: -89.2460003,
+  latitude: 13.8170917,
+  headingDegrees: 299.834,
+  expectedSurface: 'trunk',
+  acceptedEdgeIds: [9497, 10749],
+};
+const deterministicRandomSeed = 0x30a0c0de;
+const deterministicStorage = {
+  save: {
+    version: 5,
+    savedAt: '2026-07-17T00:00:00.000Z',
+    game: {
+      onboardingState: 'completed',
+      player: {
+        longitude: deterministicCheckpoint.longitude,
+        latitude: deterministicCheckpoint.latitude,
+        heading: deterministicCheckpoint.headingDegrees,
+        speedMetersPerSecond: 0,
+        fuel: 75,
+        totalDistanceMeters: 1_250,
+      },
+      energy: 100,
+      maxEnergy: 100,
+      experience: 0,
+      activeMissionId: null,
+      activeMissionCompletedObjectiveIds: [],
+      activeMissionObjectiveProgress: {},
+      missionChoiceSelections: {},
+      storyLogEntries: [],
+      completedMissionIds: [],
+      discoveredLocationIds: [],
+      unlockedLocationIds: ['san-salvador'],
+      specialItemIds: [],
+      unlockedStoryIds: [],
+      inventory: [],
+      vehicle: { condition: 100, fuel: 75, maximumFuel: 100 },
+      currentChapterId: 'chapter-1',
+      completedChapterIds: [],
+      navigationTarget: null,
+      roadNetworkVersion: 2,
+      isPaused: false,
+      isFollowingPlayer: true,
+    },
+  },
+  settings: {
+    version: 8,
+    settings: {
+      graphicsQuality: 'medium',
+      reduceMotion: false,
+      ambientFog: true,
+      tutorialSeen: true,
+      steeringSensitivity: 'medium',
+      roadAssistMode: 'strong',
+      audioMasterVolume: 0,
+      audioEffectsVolume: 0,
+      audioMusicVolume: 0,
+      audioMuted: true,
+      musicMuted: true,
+      reduceAudioEffects: true,
+      recommendedControlsPromptDismissed: true,
+      singleDriveJoystickPromptDismissed: true,
+      targetSpeedJoystickPromptDismissed: true,
+      controlMode: 'target-speed-joystick',
+      joystickPositionMode: 'fixed',
+      joystickSize: 'medium',
+      joystickDeadZone: 0.12,
+      autoThrottleDefault: false,
+      hapticsEnabled: false,
+    },
+  },
+};
 const repositorySha = (() => {
   try {
     return execFileSync('git', ['rev-parse', 'HEAD'], {
@@ -80,35 +152,58 @@ try {
     deviceScaleFactor: referenceDeviceScaleFactor,
   });
   const page = await context.newPage();
-  await page.addInitScript(() => {
-    window.localStorage.clear();
-    window.__v0251LongTasks = [];
-    window.__v0251FrameDurations = [];
-    let previousFrameTimestamp = null;
-    const sampleFrame = (timestamp) => {
-      if (previousFrameTimestamp !== null) {
-        window.__v0251FrameDurations.push(timestamp - previousFrameTimestamp);
-      }
-      previousFrameTimestamp = timestamp;
+  await page.addInitScript(
+    ({ randomSeed, storage }) => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      window.localStorage.setItem(
+        'el-salvador-rutas-perdidas:save',
+        JSON.stringify(storage.save),
+      );
+      window.localStorage.setItem(
+        'el-salvador-rutas-perdidas:settings',
+        JSON.stringify(storage.settings),
+      );
+      let seed = randomSeed >>> 0;
+      Math.random = () => {
+        seed += 0x6d2b79f5;
+        let value = seed;
+        value = Math.imul(value ^ (value >>> 15), value | 1);
+        value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+        return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+      };
+      window.__v0251LongTasks = [];
+      window.__v0251FrameDurations = [];
+      let previousFrameTimestamp = null;
+      const sampleFrame = (timestamp) => {
+        if (previousFrameTimestamp !== null) {
+          window.__v0251FrameDurations.push(timestamp - previousFrameTimestamp);
+        }
+        previousFrameTimestamp = timestamp;
+        window.requestAnimationFrame(sampleFrame);
+      };
       window.requestAnimationFrame(sampleFrame);
-    };
-    window.requestAnimationFrame(sampleFrame);
-    if ('PerformanceObserver' in window) {
-      try {
-        const observer = new PerformanceObserver((list) => {
-          for (const entry of list.getEntries()) {
-            window.__v0251LongTasks.push({
-              startTime: entry.startTime,
-              duration: entry.duration,
-            });
-          }
-        });
-        observer.observe({ type: 'longtask', buffered: true });
-      } catch {
-        // Long Tasks API no está disponible en todos los navegadores.
+      if ('PerformanceObserver' in window) {
+        try {
+          const observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+              window.__v0251LongTasks.push({
+                startTime: entry.startTime,
+                duration: entry.duration,
+              });
+            }
+          });
+          observer.observe({ type: 'longtask', buffered: true });
+        } catch {
+          // Long Tasks API no está disponible en todos los navegadores.
+        }
       }
-    }
-  });
+    },
+    {
+      randomSeed: deterministicRandomSeed,
+      storage: deterministicStorage,
+    },
+  );
   await page.goto(baseUrl);
   const buildIdentityElement = page.locator('[data-build-sha]').first();
   let buildSha =
@@ -130,29 +225,24 @@ try {
       `La captura no corresponde al checkout actual: repo=${repositorySha ?? 'n/d'}, build=${buildSha ?? 'n/d'}.`,
     );
   }
-  await page.getByRole('button', { name: 'Comenzar expedición' }).click();
-  const beginMission = page.getByRole('button', {
-    name: /Comenzar investigación/,
-  });
-  await beginMission.waitFor({ state: 'visible' });
-  await beginMission.click();
-  const skipTutorial = page.getByRole('button', { name: 'Omitir' });
-  await skipTutorial.waitFor({ state: 'visible' });
-  await skipTutorial.click();
+  await page.getByRole('button', { name: 'Continuar expedición' }).click();
   await page.waitForFunction(() => {
     const map = document.querySelector('[data-testid="game-map"]');
     return (
       map instanceof HTMLElement &&
       map.dataset.roadNetworkStatus === 'ready' &&
-      map.dataset.missionRouteMode === 'road'
+      map.dataset.missionRouteMode === 'idle' &&
+      map.dataset.roadContactSurface === 'trunk'
     );
   });
-  const closeRadio = page.getByRole('button', { name: 'Cerrar transmisión' });
-  if (await closeRadio.isVisible()) await closeRadio.click();
+  const keepCurrentControls = page.getByRole('button', {
+    name: 'Mantener controles actuales',
+  });
+  if ((await keepCurrentControls.count()) > 0) {
+    await keepCurrentControls.click();
+  }
 
-  const joystick = page.getByLabel(
-    /Joystick de (conducción arcade|velocidad objetivo)/,
-  );
+  const joystick = page.getByLabel(/Joystick de velocidad objetivo/);
   const joystickBox = await joystick.boundingBox();
   if (!joystickBox) throw new Error('No se encontró el joystick móvil.');
   const centerX = joystickBox.x + joystickBox.width / 2;
@@ -188,131 +278,203 @@ try {
   });
   await page.getByTestId('game-map').waitFor({ state: 'visible' });
   await page.screenshot({
-    path: resolve(outputDirectory, 'v0.2.5.3-mobile-after.png'),
+    path: resolve(outputDirectory, 'arcade-core-mobile-after.png'),
   });
 
   await page.waitForTimeout(warmupMilliseconds);
 
-  const initial = await page.evaluate(() => {
-    const count = (selector, key = 'renderCount') => {
-      const element = document.querySelector(selector);
-      return element instanceof HTMLElement
-        ? Number(element.dataset[key] ?? 0)
-        : 0;
-    };
-    const map = document.querySelector('[data-testid="game-map"]');
-    window.__v0251LongTasks = [];
-    window.__v0251FrameDurations = [];
-    window.__v0251CameraDurations = [];
-    window.__v0251RoadTrackerDurations = [];
-    window.__v0251MemorySamples = [];
-    window.__v0251MapCounters = {
-      cameraUpdates: 0,
-      renderedFeatureQueries: 0,
-      telemetryTicks: 0,
-      geoJsonSourceUpdates: 0,
-    };
-    const memory = performance.memory;
-    if (memory) window.__v0251MemorySamples.push(memory.usedJSHeapSize);
-    window.__v0251MemoryInterval = window.setInterval(() => {
-      const currentMemory = performance.memory;
-      if (currentMemory) {
-        window.__v0251MemorySamples.push(currentMemory.usedJSHeapSize);
-      }
-    }, 100);
-    window.__v0251DeclutterChanges = 0;
-    if (map instanceof HTMLElement) {
-      const observer = new MutationObserver((records) => {
-        for (const record of records) {
-          if (!(record.target instanceof HTMLElement)) continue;
-          switch (record.attributeName) {
-            case 'data-map-declutter-profile':
-              window.__v0251DeclutterChanges += 1;
-              break;
-            case 'data-camera-update-ms': {
-              const value = Number(record.target.dataset.cameraUpdateMs);
-              if (Number.isFinite(value)) {
-                window.__v0251CameraDurations.push(value);
-                window.__v0251MapCounters.cameraUpdates += 1;
-              }
-              break;
-            }
-            case 'data-road-search-last-ms': {
-              const value = Number(record.target.dataset.roadSearchLastMs);
-              if (Number.isFinite(value)) {
-                window.__v0251RoadTrackerDurations.push(value);
-              }
-              break;
-            }
-            case 'data-rendered-symbol-count':
-              window.__v0251MapCounters.renderedFeatureQueries += 1;
-              break;
-            case 'data-player-longitude':
-              window.__v0251MapCounters.telemetryTicks += 1;
-              break;
-            case 'data-geo-json-source-updates':
-              window.__v0251MapCounters.geoJsonSourceUpdates += 1;
-              break;
-          }
+  const initial = await page.evaluate(
+    ({ fallbackHeadingDegrees, initialDistanceMeters }) => {
+      const count = (selector, key = 'renderCount') => {
+        const element = document.querySelector(selector);
+        return element instanceof HTMLElement
+          ? Number(element.dataset[key] ?? 0)
+          : 0;
+      };
+      const map = document.querySelector('[data-testid="game-map"]');
+      window.__v0251LongTasks = [];
+      window.__v0251FrameDurations = [];
+      window.__v0251CameraDurations = [];
+      window.__v0251RoadTrackerDurations = [];
+      window.__v0251MemorySamples = [];
+      window.__v0251MapCounters = {
+        cameraUpdates: 0,
+        renderedFeatureQueries: 0,
+        telemetryTicks: 0,
+        geoJsonSourceUpdates: 0,
+      };
+      const coordinateDistanceMeters = (first, second) => {
+        const radians = Math.PI / 180;
+        const latitudeDelta = (second.latitude - first.latitude) * radians;
+        const longitudeDelta = (second.longitude - first.longitude) * radians;
+        const firstLatitude = first.latitude * radians;
+        const secondLatitude = second.latitude * radians;
+        const haversine =
+          Math.sin(latitudeDelta / 2) ** 2 +
+          Math.cos(firstLatitude) *
+            Math.cos(secondLatitude) *
+            Math.sin(longitudeDelta / 2) ** 2;
+        return 6_371_000 * 2 * Math.asin(Math.sqrt(haversine));
+      };
+      window.__arcadeDynamicLoadSamples = [];
+      const dynamicLoadStartedAt = performance.now();
+      let previousPosition = null;
+      let observedTotalDistanceMeters = initialDistanceMeters;
+      const sampleDynamicLoad = () => {
+        if (!(map instanceof HTMLElement)) return;
+        const longitude = Number(map.dataset.playerLongitude);
+        const latitude = Number(map.dataset.playerLatitude);
+        const speedKilometersPerHour = Number(
+          map.dataset.playerSpeedKilometersPerHour,
+        );
+        const targetSpeedKilometersPerHour = Number(
+          map.dataset.inputTargetSpeed,
+        );
+        const exposedHeading = Number(map.dataset.navigationPhysicalHeading);
+        if (
+          !Number.isFinite(longitude) ||
+          !Number.isFinite(latitude) ||
+          !Number.isFinite(speedKilometersPerHour) ||
+          !Number.isFinite(targetSpeedKilometersPerHour)
+        ) {
+          return;
         }
-      });
-      observer.observe(map, {
-        attributes: true,
-        attributeFilter: [
-          'data-map-declutter-profile',
-          'data-camera-update-ms',
-          'data-road-search-last-ms',
-          'data-rendered-symbol-count',
-          'data-player-longitude',
-          'data-geo-json-source-updates',
-        ],
-      });
-      window.__v0251MapObserver = observer;
-    }
-    return {
-      mobileDrivingHud: count('.mobile-driving-hud'),
-      playerHud: count('.player-hud'),
-      missionPanel: count('.mission-panel'),
-      missionPanelHeavy: count('.mission-panel', 'sheetRenderCount'),
-      radio: count('.radio-message'),
-      cameraRequestedUpdates:
-        map instanceof HTMLElement
-          ? Number(map.dataset.cameraRequestedUpdates ?? 0)
-          : 0,
-      cameraAppliedUpdates:
-        map instanceof HTMLElement
-          ? Number(map.dataset.cameraAppliedUpdates ?? 0)
-          : 0,
-      cameraSkippedByInterval:
-        map instanceof HTMLElement
-          ? Number(map.dataset.cameraSkippedByInterval ?? 0)
-          : 0,
-      cameraSkippedByTolerance:
-        map instanceof HTMLElement
-          ? Number(map.dataset.cameraSkippedByTolerance ?? 0)
-          : 0,
-      cameraOffsetAppliedUpdates:
-        map instanceof HTMLElement
-          ? Number(map.dataset.cameraOffsetAppliedUpdates ?? 0)
-          : 0,
-      cameraProfileTransitions:
-        map instanceof HTMLElement
-          ? Number(map.dataset.cameraProfileTransitions ?? 0)
-          : 0,
-      cameraFallbackMarkerUpdates:
-        map instanceof HTMLElement
-          ? Number(map.dataset.cameraFallbackMarkerUpdates ?? 0)
-          : 0,
-      cameraThreePlayerUpdates:
-        map instanceof HTMLElement
-          ? Number(map.dataset.cameraThreePlayerUpdates ?? 0)
-          : 0,
-      threeDrivingEffectsUpdates:
-        map instanceof HTMLElement
-          ? Number(map.dataset.threeDrivingEffectsUpdates ?? 0)
-          : 0,
-    };
-  });
+        const position = { longitude, latitude };
+        if (previousPosition) {
+          observedTotalDistanceMeters += coordinateDistanceMeters(
+            previousPosition,
+            position,
+          );
+        }
+        previousPosition = position;
+        const edgeId = Number.parseInt(map.dataset.roadSelectedEdge ?? '', 10);
+        window.__arcadeDynamicLoadSamples.push({
+          elapsedMilliseconds: performance.now() - dynamicLoadStartedAt,
+          longitude,
+          latitude,
+          speedKilometersPerHour,
+          targetSpeedKilometersPerHour,
+          headingDegrees: Number.isFinite(exposedHeading)
+            ? exposedHeading
+            : fallbackHeadingDegrees,
+          totalDistanceMeters: observedTotalDistanceMeters,
+          surface: map.dataset.roadContactSurface ?? 'unknown',
+          selectedEdgeId: Number.isFinite(edgeId) ? edgeId : null,
+          routeMode: map.dataset.missionRouteMode ?? 'unknown',
+        });
+      };
+      window.__arcadeDynamicLoadSample = sampleDynamicLoad;
+      sampleDynamicLoad();
+      window.__arcadeDynamicLoadInterval = window.setInterval(
+        sampleDynamicLoad,
+        250,
+      );
+      const memory = performance.memory;
+      if (memory) window.__v0251MemorySamples.push(memory.usedJSHeapSize);
+      window.__v0251MemoryInterval = window.setInterval(() => {
+        const currentMemory = performance.memory;
+        if (currentMemory) {
+          window.__v0251MemorySamples.push(currentMemory.usedJSHeapSize);
+        }
+      }, 100);
+      window.__v0251DeclutterChanges = 0;
+      if (map instanceof HTMLElement) {
+        const observer = new MutationObserver((records) => {
+          for (const record of records) {
+            if (!(record.target instanceof HTMLElement)) continue;
+            switch (record.attributeName) {
+              case 'data-map-declutter-profile':
+                window.__v0251DeclutterChanges += 1;
+                break;
+              case 'data-camera-update-ms': {
+                const value = Number(record.target.dataset.cameraUpdateMs);
+                if (Number.isFinite(value)) {
+                  window.__v0251CameraDurations.push(value);
+                  window.__v0251MapCounters.cameraUpdates += 1;
+                }
+                break;
+              }
+              case 'data-road-search-last-ms': {
+                const value = Number(record.target.dataset.roadSearchLastMs);
+                if (Number.isFinite(value)) {
+                  window.__v0251RoadTrackerDurations.push(value);
+                }
+                break;
+              }
+              case 'data-rendered-symbol-count':
+                window.__v0251MapCounters.renderedFeatureQueries += 1;
+                break;
+              case 'data-player-longitude':
+                window.__v0251MapCounters.telemetryTicks += 1;
+                break;
+              case 'data-geo-json-source-updates':
+                window.__v0251MapCounters.geoJsonSourceUpdates += 1;
+                break;
+            }
+          }
+        });
+        observer.observe(map, {
+          attributes: true,
+          attributeFilter: [
+            'data-map-declutter-profile',
+            'data-camera-update-ms',
+            'data-road-search-last-ms',
+            'data-rendered-symbol-count',
+            'data-player-longitude',
+            'data-geo-json-source-updates',
+          ],
+        });
+        window.__v0251MapObserver = observer;
+      }
+      return {
+        mobileDrivingHud: count('.mobile-driving-hud'),
+        playerHud: count('.player-hud'),
+        missionPanel: count('.mission-panel'),
+        missionPanelHeavy: count('.mission-panel', 'sheetRenderCount'),
+        radio: count('.radio-message'),
+        cameraRequestedUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraRequestedUpdates ?? 0)
+            : 0,
+        cameraAppliedUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraAppliedUpdates ?? 0)
+            : 0,
+        cameraSkippedByInterval:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraSkippedByInterval ?? 0)
+            : 0,
+        cameraSkippedByTolerance:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraSkippedByTolerance ?? 0)
+            : 0,
+        cameraOffsetAppliedUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraOffsetAppliedUpdates ?? 0)
+            : 0,
+        cameraProfileTransitions:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraProfileTransitions ?? 0)
+            : 0,
+        cameraFallbackMarkerUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraFallbackMarkerUpdates ?? 0)
+            : 0,
+        cameraThreePlayerUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.cameraThreePlayerUpdates ?? 0)
+            : 0,
+        threeDrivingEffectsUpdates:
+          map instanceof HTMLElement
+            ? Number(map.dataset.threeDrivingEffectsUpdates ?? 0)
+            : 0,
+      };
+    },
+    {
+      fallbackHeadingDegrees: deterministicCheckpoint.headingDegrees,
+      initialDistanceMeters: 1_250,
+    },
+  );
 
   await page.waitForTimeout(observationMilliseconds);
 
@@ -338,8 +500,10 @@ try {
         : 0;
     };
     const longTasks = window.__v0251LongTasks ?? [];
+    window.__arcadeDynamicLoadSample?.();
     window.__v0251MapObserver?.disconnect();
     window.clearInterval(window.__v0251MemoryInterval);
+    window.clearInterval(window.__arcadeDynamicLoadInterval);
     return {
       observationMilliseconds: 30_000,
       warmupMilliseconds: 10_000,
@@ -403,6 +567,9 @@ try {
         memoryBytes: window.__v0251MemorySamples ?? [],
       },
       mapCounters: window.__v0251MapCounters ?? {},
+      dynamicLoad: {
+        samples: window.__arcadeDynamicLoadSamples ?? [],
+      },
       longTasks: {
         count: longTasks.length,
         totalMilliseconds: longTasks.reduce(
@@ -513,9 +680,58 @@ try {
   )
     ? inputConsumptionLatency
     : null;
+  const dynamicLoadSamples = metrics.dynamicLoad.samples;
+  const dynamicLoadRatio = (predicate) =>
+    dynamicLoadSamples.filter(predicate).length / dynamicLoadSamples.length;
+  const averageDynamicSpeed =
+    dynamicLoadSamples.reduce(
+      (total, sample) => total + sample.speedKilometersPerHour,
+      0,
+    ) / dynamicLoadSamples.length;
+  const dynamicDistanceMeters =
+    (dynamicLoadSamples.at(-1)?.totalDistanceMeters ?? 0) -
+    (dynamicLoadSamples[0]?.totalDistanceMeters ?? 0);
+  const headingDistance = (first, second) =>
+    Math.abs(((first - second + 540) % 360) - 180);
+  const dynamicLoadContract = {
+    sampleCount: dynamicLoadSamples.length,
+    averageSpeedKilometersPerHour: averageDynamicSpeed,
+    distanceMeters: dynamicDistanceMeters,
+    trunkRatio: dynamicLoadRatio(
+      (sample) => sample.surface === deterministicCheckpoint.expectedSurface,
+    ),
+    acceptedEdgeRatio: dynamicLoadRatio((sample) =>
+      deterministicCheckpoint.acceptedEdgeIds.includes(sample.selectedEdgeId),
+    ),
+    idleRouteRatio: dynamicLoadRatio((sample) => sample.routeMode === 'idle'),
+    alignedHeadingRatio: dynamicLoadRatio(
+      (sample) =>
+        headingDistance(
+          sample.headingDegrees,
+          deterministicCheckpoint.headingDegrees,
+        ) <= 8,
+    ),
+  };
+  if (
+    dynamicLoadContract.sampleCount < 80 ||
+    dynamicLoadContract.averageSpeedKilometersPerHour < 52 ||
+    dynamicLoadContract.averageSpeedKilometersPerHour > 70 ||
+    dynamicLoadContract.distanceMeters < 400 ||
+    dynamicLoadContract.distanceMeters > 600 ||
+    dynamicLoadContract.trunkRatio < 0.95 ||
+    dynamicLoadContract.acceptedEdgeRatio < 0.9 ||
+    dynamicLoadContract.idleRouteRatio < 0.95 ||
+    dynamicLoadContract.alignedHeadingRatio < 0.9
+  ) {
+    throw new Error(
+      `La carga dinámica abandonó el corredor determinista: ${JSON.stringify(dynamicLoadContract)}.`,
+    );
+  }
   if (
     metrics.mapDataset.roadNetworkStatus !== 'ready' ||
-    metrics.mapDataset.missionRouteMode !== 'road'
+    metrics.mapDataset.missionRouteMode !== 'idle' ||
+    metrics.mapDataset.roadContactSurface !==
+      deterministicCheckpoint.expectedSurface
   ) {
     throw new Error(
       'El escenario vial cambió de red o ruta durante la captura.',
@@ -538,7 +754,7 @@ try {
       metrics.mapDataset.performanceProfilingEnabled === 'true',
     diagnosticsEnabled: metrics.mapDataset.diagnosticsEnabled === 'true',
     scenario: {
-      id: 'arcade-core-road-cruise-v1',
+      id: 'arcade-core-trunk-cruise-v2',
       viewport: referenceViewport,
       deviceScaleFactor: referenceDeviceScaleFactor,
       warmupMilliseconds,
@@ -548,8 +764,15 @@ try {
         verticalTravelJoystickRatio: 0.44,
         targetKilometersPerHour: 58,
       },
-      storage: 'clean',
-      onboarding: 'narrative-closed-tutorial-skipped',
+      storage: {
+        gameSaveVersion: deterministicStorage.save.version,
+        settingsVersion: deterministicStorage.settings.version,
+      },
+      onboarding: 'completed-save',
+      controlMode: 'target-speed-joystick',
+      randomSeed: deterministicRandomSeed,
+      checkpoint: deterministicCheckpoint,
+      route: { kind: 'none', expectedMode: 'idle' },
       roadNetworkStatus: metrics.mapDataset.roadNetworkStatus,
       missionRouteMode: metrics.mapDataset.missionRouteMode,
     },
@@ -577,7 +800,7 @@ try {
     });
     await page.waitForTimeout(250);
     await page.screenshot({
-      path: resolve(outputDirectory, `v0.2.5.3-mobile-${viewport.name}.png`),
+      path: resolve(outputDirectory, `arcade-core-mobile-${viewport.name}.png`),
     });
   }
   await session.detach();
