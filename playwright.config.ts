@@ -9,14 +9,14 @@ export default defineConfig({
   workers: process.env.CI ? 1 : 2,
   timeout: 45_000,
   forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 2 : 0,
+  retries: 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL: externalBaseUrl ?? 'http://127.0.0.1:4173',
     // Las pruebas interceptan fallos de red de forma deliberada. Un SW de una
     // ejecución previa puede responder antes que page.route y falsear el caso.
     serviceWorkers: 'block',
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
   expect: {
