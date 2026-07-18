@@ -65,6 +65,11 @@ import {
   type SafeGameplayViewport,
 } from '../../game/safeGameplayViewport';
 import {
+  safeViewportMutationRootFor,
+  safeViewportOccluderObserverOptions,
+  safeViewportTreeObserverOptions,
+} from '../../game/safeViewportObservers';
+import {
   effectiveDrivingSurfaceLabel,
   type DrivingPresentationMode,
 } from '../../game/drivingPresentation';
@@ -470,6 +475,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let safeViewportMeasurementFrame: number | null = null;
     let safeViewportResizeObserver: ResizeObserver | null = null;
     let safeViewportMutationObserver: MutationObserver | null = null;
+    let safeViewportOccluderMutationObserver: MutationObserver | null = null;
     let safeViewportMeasurementCount = 0;
     let safeViewportRevision = 0;
     let lastExposedSafeViewportRevision = -1;
@@ -1043,6 +1049,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         document
           .querySelectorAll<HTMLElement>(selector)
           .forEach((element, index) => {
+            elements.push(element);
             const rect = element.getBoundingClientRect();
             const style = window.getComputedStyle(element);
             if (
@@ -1053,7 +1060,6 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
             ) {
               return;
             }
-            elements.push(element);
             occlusions.push({
               id: `${selector}:${String(index)}`,
               kind,
@@ -1126,6 +1132,13 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
           safeViewportObservedElements.add(element);
         }
       }
+      safeViewportOccluderMutationObserver?.disconnect();
+      for (const element of elements) {
+        safeViewportOccluderMutationObserver?.observe(
+          element,
+          safeViewportOccluderObserverOptions,
+        );
+      }
 
       const container = containerRef.current;
       if (container) {
@@ -1187,19 +1200,19 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         scheduleSafeViewportMeasurement,
       );
     }
-    const mapStage = containerRef.current.closest('.map-stage');
-    if (mapStage && 'MutationObserver' in window) {
+    if ('MutationObserver' in window) {
+      safeViewportOccluderMutationObserver = new MutationObserver(
+        scheduleSafeViewportMeasurement,
+      );
       safeViewportMutationObserver = new MutationObserver((records) => {
         if (records.some(mutationAffectsSafeViewport)) {
           scheduleSafeViewportMeasurement();
         }
       });
-      safeViewportMutationObserver.observe(mapStage, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['class', 'style'],
-      });
+      safeViewportMutationObserver.observe(
+        safeViewportMutationRootFor(containerRef.current),
+        safeViewportTreeObserverOptions,
+      );
     }
     window.visualViewport?.addEventListener(
       'resize',
@@ -2357,6 +2370,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
       }
       safeViewportResizeObserver?.disconnect();
       safeViewportMutationObserver?.disconnect();
+      safeViewportOccluderMutationObserver?.disconnect();
       window.visualViewport?.removeEventListener(
         'resize',
         scheduleSafeViewportMeasurement,
