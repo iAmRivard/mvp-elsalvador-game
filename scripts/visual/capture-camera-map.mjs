@@ -10,7 +10,7 @@ const host = '127.0.0.1';
 const port = 4173;
 const baseUrl = `http://${host}:${port}`;
 const warmupMilliseconds = 5_000;
-const observationMilliseconds = 15_000;
+const observationMilliseconds = 30_000;
 const viewport = { width: 392, height: 850 };
 const repositorySha = execFileSync('git', ['rev-parse', 'HEAD'], {
   encoding: 'utf8',
@@ -313,6 +313,11 @@ try {
       deviceScaleFactor: devicePixelRatio,
     };
   });
+  if (capture.capturedMilliseconds < observationMilliseconds) {
+    throw new Error(
+      `La observación fue demasiado corta: ${capture.capturedMilliseconds.toFixed(1)} ms.`,
+    );
+  }
   await session.detach();
 
   const projectionDistances = capture.projections
