@@ -62,8 +62,8 @@ async function enterMobileTutorial(page: Page) {
   );
 }
 
-async function expectTutorialOutsidePlayer(page: Page) {
-  const geometry = await page.evaluate(() => {
+async function tutorialPlayerGeometry(page: Page) {
+  return page.evaluate(() => {
     const map = document.querySelector<HTMLElement>('[data-testid="game-map"]');
     const tutorial = document.querySelector<HTMLElement>(
       '.mobile-tutorial-card',
@@ -100,6 +100,10 @@ async function expectTutorialOutsidePlayer(page: Page) {
       },
     };
   });
+}
+
+async function expectTutorialOutsidePlayer(page: Page) {
+  const geometry = await tutorialPlayerGeometry(page);
   expect(geometry).not.toBeNull();
   expect(geometry!.outside, JSON.stringify(geometry)).toBe(true);
   return geometry!;
@@ -714,8 +718,9 @@ for (const viewport of [
       'false',
     );
     await expect
-      .poll(() => expectTutorialOutsidePlayer(page).then(() => true))
+      .poll(async () => (await tutorialPlayerGeometry(page))?.outside ?? false)
       .toBe(true);
+    await expectTutorialOutsidePlayer(page);
   });
 }
 
