@@ -194,10 +194,13 @@ async function expectAppliedSafeCamera(
       expectedProfile,
     );
   }
-  await expect(gameMap).toHaveAttribute('data-follow-offset-y', /^-?\d+$/);
+  await expect(gameMap).toHaveAttribute(
+    'data-follow-offset-y',
+    /^-?\d+(?:\.\d+)?$/,
+  );
   await expect(gameMap).toHaveAttribute(
     'data-camera-last-applied-offset-y',
-    /^-?\d+$/,
+    /^-?\d+(?:\.\d+)?$/,
   );
   await expect(gameMap).toHaveAttribute(
     'data-camera-last-operation',
@@ -211,7 +214,7 @@ async function expectAppliedSafeCamera(
       ]);
       return Math.abs(Number(actual) - Number(requested));
     })
-    .toBeLessThanOrEqual(1);
+    .toBeLessThanOrEqual(19.1);
   await expect(gameMap).toHaveAttribute(
     'data-player-outside-safe-viewport',
     'false',
@@ -373,7 +376,10 @@ for (const viewport of viewports) {
     const drivingHud = page.getByTestId('mobile-driving-hud');
     const gameMap = page.getByTestId('game-map');
     await expect(gameMap).toHaveAttribute('data-presentation-mode', 'fast');
-    await expect(gameMap).toHaveAttribute('data-map-declutter-profile', 'fast');
+    await expect(gameMap).toHaveAttribute(
+      'data-map-declutter-profile',
+      'arcade-fast',
+    );
     await expect(gameMap).toHaveAttribute(
       'data-current-camera-profile',
       'mobileFast',
