@@ -139,7 +139,9 @@ function captureSummary(metrics) {
     threePlayerUpdates: metrics.cameraCounterDeltas?.threePlayerUpdates,
     mobileHudRenders: metrics.renderDeltas?.mobileDrivingHud,
     heapFinalMb: metrics.memoryMegabytes?.final,
-    target58Ms: metrics.timeToSelect58KphTargetMilliseconds,
+    target58Ms:
+      metrics.timeToSelectTargetMilliseconds ??
+      metrics.timeToSelect58KphTargetMilliseconds,
     inputStoredMs: metrics.inputStoredLatencyMilliseconds,
     inputConsumedMs: metrics.inputConsumptionLatencyMilliseconds,
     usefulMapAreaRatio: Number(metrics.mapDataset?.usefulMapAreaRatio),

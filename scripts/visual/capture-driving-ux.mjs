@@ -6,6 +6,7 @@ import {
   startArcadeTrace,
   stopArcadeTrace,
 } from '../performance/cdp-trace-stream.mjs';
+import { arcadeCaptureScenarioFor } from '../performance/arcade-capture-scenarios.mjs';
 
 const baseUrl = process.argv[2] ?? 'http://127.0.0.1:5173';
 const outputDirectory = resolve(
@@ -14,10 +15,11 @@ const outputDirectory = resolve(
 const traceOutputPath = process.env.ARCADE_TRACE_PATH
   ? resolve(process.env.ARCADE_TRACE_PATH)
   : null;
+const captureScenario = arcadeCaptureScenarioFor(
+  process.env.ARCADE_CAPTURE_SCENARIO,
+);
 const observationMilliseconds = 30_000;
 const warmupMilliseconds = 10_000;
-const targetSelectionHoldMilliseconds = 2_200;
-const targetSelectionVerticalTravelJoystickRatio = 0.28;
 const captureSchemaVersion = 5;
 const referenceViewport = { width: 392, height: 850 };
 const referenceDeviceScaleFactor = 2;
@@ -299,30 +301,39 @@ try {
         x: centerX,
         y:
           centerY -
-          joystickBox.width * targetSelectionVerticalTravelJoystickRatio,
+          joystickBox.width * captureScenario.verticalTravelJoystickRatio,
         force: 1,
       },
     ],
   });
-  await page.waitForTimeout(targetSelectionHoldMilliseconds);
+  await page.waitForTimeout(captureScenario.holdMilliseconds);
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchEnd',
     touchPoints: [],
   });
-  await page.waitForFunction(() => {
+  await page.waitForFunction((releaseThresholdKilometersPerHour) => {
     const map = document.querySelector('[data-testid="game-map"]');
     return (
       map instanceof HTMLElement &&
-      Number.parseFloat(map.dataset.inputTargetSpeed ?? '0') >= 58
+      Number.parseFloat(map.dataset.inputTargetSpeed ?? '0') >=
+        releaseThresholdKilometersPerHour
     );
-  });
-  const timeToSelect58KphTargetMilliseconds = Date.now() - inputStartedAt;
+  }, captureScenario.releaseThresholdKilometersPerHour);
+  const timeToSelectTargetMilliseconds = Date.now() - inputStartedAt;
   await page.getByTestId('game-map').waitFor({ state: 'visible' });
   await page.screenshot({
     path: resolve(outputDirectory, 'arcade-core-mobile-after.png'),
   });
 
   await page.waitForTimeout(warmupMilliseconds);
+  await page.waitForFunction((expectedCameraProfile) => {
+    const map = document.querySelector('[data-testid="game-map"]');
+    return (
+      map instanceof HTMLElement &&
+      map.dataset.currentCameraProfile === expectedCameraProfile &&
+      map.dataset.playerOutsideSafeViewport !== 'true'
+    );
+  }, captureScenario.expectedCameraProfile);
   if (traceOutputPath) {
     await startArcadeTrace(session);
     traceSession = session;
@@ -709,8 +720,8 @@ try {
     initial: memoryMegabytes.at(0) ?? null,
     final: memoryMegabytes.at(-1) ?? null,
   };
-  metrics.timeToSelect58KphTargetMilliseconds =
-    timeToSelect58KphTargetMilliseconds;
+  metrics.timeToSelectTargetMilliseconds = timeToSelectTargetMilliseconds;
+  metrics.timeToSelect58KphTargetMilliseconds = timeToSelectTargetMilliseconds;
   const inputNextAnimationFrameLatency = Number(
     metrics.mapDataset.inputNextAnimationFrameLatencyMs ?? Number.NaN,
   );
@@ -768,10 +779,14 @@ try {
   };
   if (
     dynamicLoadContract.sampleCount < 80 ||
-    dynamicLoadContract.averageSpeedKilometersPerHour < 52 ||
-    dynamicLoadContract.averageSpeedKilometersPerHour > 70 ||
-    dynamicLoadContract.distanceMeters < 2_400 ||
-    dynamicLoadContract.distanceMeters > 3_200 ||
+    dynamicLoadContract.averageSpeedKilometersPerHour <
+      captureScenario.averageSpeedKilometersPerHour.minimum ||
+    dynamicLoadContract.averageSpeedKilometersPerHour >
+      captureScenario.averageSpeedKilometersPerHour.maximum ||
+    dynamicLoadContract.distanceMeters <
+      captureScenario.distanceMeters.minimum ||
+    dynamicLoadContract.distanceMeters >
+      captureScenario.distanceMeters.maximum ||
     dynamicLoadContract.trunkRatio < 0.95 ||
     dynamicLoadContract.acceptedEdgeRatio < 0.9 ||
     dynamicLoadContract.idleRouteRatio < 0.95 ||
@@ -785,7 +800,10 @@ try {
     metrics.mapDataset.roadNetworkStatus !== 'ready' ||
     metrics.mapDataset.missionRouteMode !== 'idle' ||
     metrics.mapDataset.roadContactSurface !==
-      deterministicCheckpoint.expectedSurface
+      deterministicCheckpoint.expectedSurface ||
+    metrics.mapDataset.currentCameraProfile !==
+      captureScenario.expectedCameraProfile ||
+    metrics.mapDataset.playerOutsideSafeViewport === 'true'
   ) {
     throw new Error(
       'El escenario vial cambió de red o ruta durante la captura.',
@@ -816,17 +834,20 @@ try {
         }
       : null,
     scenario: {
-      id: 'arcade-core-trunk-cruise-v3',
+      id: captureScenario.id,
       viewport: referenceViewport,
       deviceScaleFactor: referenceDeviceScaleFactor,
       warmupMilliseconds,
       observationMilliseconds,
       touchGesture: {
         source: 'cdp-touch',
-        verticalTravelJoystickRatio: targetSelectionVerticalTravelJoystickRatio,
-        holdMilliseconds: targetSelectionHoldMilliseconds,
-        releaseThresholdKilometersPerHour: 58,
+        verticalTravelJoystickRatio:
+          captureScenario.verticalTravelJoystickRatio,
+        holdMilliseconds: captureScenario.holdMilliseconds,
+        releaseThresholdKilometersPerHour:
+          captureScenario.releaseThresholdKilometersPerHour,
       },
+      expectedCameraProfile: captureScenario.expectedCameraProfile,
       storage: {
         gameSaveVersion: deterministicStorage.save.version,
         settingsVersion: deterministicStorage.settings.version,
