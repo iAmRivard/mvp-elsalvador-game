@@ -307,7 +307,7 @@ function assertDynamicLoadsComparable(first, second, label) {
       second.averageHeadingDegrees,
     ) > 3 ||
     distanceDifference > 0.1 ||
-    coordinateDistanceMeters(first.start, second.start) > 5 ||
+    coordinateDistanceMeters(first.start, second.start) > 25 ||
     coordinateDistanceMeters(first.end, second.end) > 100 ||
     distributionDistance(first.surfaces, second.surfaces) > 0.05 ||
     distributionDistance(first.selectedEdges, second.selectedEdges) > 0.15 ||

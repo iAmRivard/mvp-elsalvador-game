@@ -12,6 +12,7 @@ function capture(
   buildSha = repositorySha,
   runtime = { roadNetworkStatus: 'ready', missionRouteMode: 'idle' },
   surface = 'trunk',
+  longitudeOffset = 0,
 ) {
   const viewport = { width: 392, height: 850 };
   return {
@@ -39,7 +40,7 @@ function capture(
     dynamicLoad: {
       samples: Array.from({ length: 120 }, (_, index) => ({
         elapsedMilliseconds: index * 250,
-        longitude: -89.2460003 - index * 0.00005,
+        longitude: -89.2460003 - index * 0.00005 + longitudeOffset,
         latitude: 13.8170917 + index * 0.000025,
         speedKilometersPerHour: 60,
         targetSpeedKilometersPerHour: 65,
@@ -128,6 +129,47 @@ describe('contrato de capturas arcade', () => {
         'b'.repeat(40),
         { roadNetworkStatus: 'ready', missionRouteMode: 'idle' },
         'offroad',
+      ),
+    );
+
+    const result = spawnSync(process.execPath, [comparator, baseline, final], {
+      encoding: 'utf8',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('carga dinamica');
+  });
+
+  it('acepta una deriva menor de calentamiento sobre el mismo corredor', () => {
+    const baseline = fixtureDirectory('baseline', capture('a'.repeat(40)));
+    const final = fixtureDirectory(
+      'final',
+      capture(
+        'b'.repeat(40),
+        'b'.repeat(40),
+        { roadNetworkStatus: 'ready', missionRouteMode: 'idle' },
+        'trunk',
+        0.00015,
+      ),
+    );
+
+    const result = spawnSync(process.execPath, [comparator, baseline, final], {
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(0);
+  });
+
+  it('rechaza una trayectoria separada aunque conserve la superficie', () => {
+    const baseline = fixtureDirectory('baseline', capture('a'.repeat(40)));
+    const final = fixtureDirectory(
+      'final',
+      capture(
+        'b'.repeat(40),
+        'b'.repeat(40),
+        { roadNetworkStatus: 'ready', missionRouteMode: 'idle' },
+        'trunk',
+        0.001,
       ),
     );
 
