@@ -23,13 +23,25 @@ describe('declutter dinámico del mapa', () => {
       'building',
       'navigation',
     ]);
-    expect(classifyMapLayer({ id: 'place-labels', type: 'symbol' })).toBe(
-      'area-label',
+    expect(classifyMapLayer({ id: 'place-labels-major', type: 'symbol' })).toBe(
+      'area-major',
+    );
+    expect(classifyMapLayer({ id: 'place-labels-local', type: 'symbol' })).toBe(
+      'area-local',
     );
   });
 
-  it('mantiene navegación y oculta detalle secundario al ir rápido', () => {
+  it('mantiene navegación y oculta POI y lugares locales al conducir', () => {
     expect(mapDeclutterProfiles.fast.layerVisibility.navigation).not.toBe(
+      false,
+    );
+    expect(mapDeclutterProfiles.driving.layerVisibility['poi-secondary']).toBe(
+      false,
+    );
+    expect(mapDeclutterProfiles.driving.layerVisibility['area-local']).toBe(
+      false,
+    );
+    expect(mapDeclutterProfiles.driving.layerVisibility['area-major']).not.toBe(
       false,
     );
     expect(mapDeclutterProfiles.fast.layerVisibility['poi-secondary']).toBe(
@@ -39,8 +51,8 @@ describe('declutter dinámico del mapa', () => {
       false,
     );
     expect(
-      mapDeclutterProfiles.driving.labelOpacity['poi-secondary'],
-    ).toBeLessThan(mapDeclutterProfiles.stopped.labelOpacity['poi-secondary']!);
+      mapDeclutterProfiles.driving.labelOpacity.navigation,
+    ).toBeUndefined();
   });
 
   it('conserva declutter de conducción durante una alerta', () => {

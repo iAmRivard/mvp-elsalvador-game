@@ -13,6 +13,9 @@ function fakeMap(initialLayers: MutableStyleLayer[]) {
   const layout = new Map<string, Map<string, unknown>>();
   const paint = new Map<string, Map<string, unknown>>();
   const container = { dataset: {} } as HTMLDivElement;
+  let getStyleCalls = 0;
+  let layoutUpdates = 0;
+  let paintUpdates = 0;
   const ensure = (
     collection: Map<string, Map<string, unknown>>,
     id: string,
@@ -22,11 +25,15 @@ function fakeMap(initialLayers: MutableStyleLayer[]) {
     return properties;
   };
   const map = {
-    getStyle: () => ({ layers }),
+    getStyle: () => {
+      getStyleCalls += 1;
+      return { layers };
+    },
     getLayer: (id: string) => layers.find((layer) => layer.id === id),
     getLayoutProperty: (id: string, property: string) =>
       ensure(layout, id).get(property),
     setLayoutProperty: (id: string, property: string, value: unknown) => {
+      layoutUpdates += 1;
       if (!layers.some((layer) => layer.id === id)) throw new Error('missing');
       const properties = ensure(layout, id);
       if (value === null) properties.delete(property);
@@ -35,6 +42,7 @@ function fakeMap(initialLayers: MutableStyleLayer[]) {
     getPaintProperty: (id: string, property: string) =>
       ensure(paint, id).get(property),
     setPaintProperty: (id: string, property: string, value: unknown) => {
+      paintUpdates += 1;
       if (!layers.some((layer) => layer.id === id)) throw new Error('missing');
       const properties = ensure(paint, id);
       if (value === null) properties.delete(property);
@@ -42,7 +50,16 @@ function fakeMap(initialLayers: MutableStyleLayer[]) {
     },
     getContainer: () => container,
   } as unknown as MapLibreMap;
-  return { map, layers, layout, paint, container, ensure };
+  return {
+    map,
+    layers,
+    layout,
+    paint,
+    container,
+    ensure,
+    getStyleCalls: () => getStyleCalls,
+    updateCalls: () => layoutUpdates + paintUpdates,
+  };
 }
 
 afterEach(() => vi.useRealTimers());
@@ -116,6 +133,7 @@ describe('restauraciÃ³n exacta del declutter', () => {
     fixture
       .ensure(fixture.paint, 'local-road-new')
       .set('line-opacity', ['match', ['get', 'kind'], 'road', 0.7, 0.2]);
+    controller.refresh(true);
 
     expect(() => controller.apply('fast', true)).not.toThrow();
     expect(
@@ -131,9 +149,11 @@ describe('restauraciÃ³n exacta del declutter', () => {
     ).toEqual(['match', ['get', 'kind'], 'road', 0.7, 0.2]);
 
     fixture.layers.splice(0, 1);
+    controller.refresh(true);
     controller.apply('fast', true);
     fixture.layers.push({ id: 'local-road-new', type: 'line' });
     fixture.ensure(fixture.paint, 'local-road-new').set('line-opacity', 0.81);
+    controller.refresh(true);
     controller.apply('driving', true);
     controller.apply('stopped', true);
     expect(
@@ -154,5 +174,23 @@ describe('restauraciÃ³n exacta del declutter', () => {
     controller.dispose();
     vi.runAllTimers();
     expect(fixture.container.dataset.mapDeclutterProfile).toBe('fast');
+  });
+
+  it('no vuelve a consultar ni actualizar el estilo para el mismo modo', () => {
+    const fixture = fakeMap([
+      { id: 'place-labels-major', type: 'symbol' },
+      { id: 'place-labels-local', type: 'symbol' },
+      { id: 'poi-labels', type: 'symbol' },
+    ]);
+    const controller = createMapDeclutterController(fixture.map);
+    controller.apply('driving', true);
+    const styleCalls = fixture.getStyleCalls();
+    const updateCalls = fixture.updateCalls();
+
+    controller.apply('driving', true);
+
+    expect(fixture.getStyleCalls()).toBe(styleCalls);
+    expect(fixture.updateCalls()).toBe(updateCalls);
+    expect(fixture.container.dataset.mapVisibleSymbolLayerCount).toBe('1');
   });
 });
