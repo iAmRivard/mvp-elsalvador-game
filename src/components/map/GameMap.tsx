@@ -409,6 +409,7 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
     let lastCameraBearingUpdateTimestamp = performance.now();
     let cameraFollowSpringState = { ...initialCameraFollowSpringState };
     let lastCameraFollowSpringTimestamp = performance.now();
+    const cameraFollowTargetPoint = new maplibregl.Point(0, 0);
     let mobileCameraMode: MobileCameraMode = 'stopped';
     let mobileCameraCandidateMode: MobileCameraMode = 'stopped';
     let mobileCameraCandidateSince = performance.now();
@@ -875,11 +876,11 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         });
         cameraFollowSpringState = spring.state;
         lastCameraFollowSpringTimestamp = timestampMilliseconds;
-        const targetPoint = new maplibregl.Point(
-          projectedPlayer.x - spring.state.offsetXPixels,
-          projectedPlayer.y - spring.state.offsetYPixels,
-        );
-        const target = map.unproject(targetPoint);
+        cameraFollowTargetPoint.x =
+          projectedPlayer.x - spring.state.offsetXPixels;
+        cameraFollowTargetPoint.y =
+          projectedPlayer.y - spring.state.offsetYPixels;
+        const target = map.unproject(cameraFollowTargetPoint);
         followCenter = [target.lng, target.lat];
         if (containerRef.current) {
           containerRef.current.dataset.followZoneOffsetX =
@@ -1076,12 +1077,19 @@ export function GameMap({ inputController, onExitToTitle }: GameMapProps) {
         }
         map.jumpTo(jumpOptions);
       }
-      if (durationMilliseconds > 0) {
-        void map.once('moveend', () =>
-          exposeAppliedProjection(camera.playerCoordinate),
-        );
-      } else {
-        exposeAppliedProjection(camera.playerCoordinate);
+      const projectionChanged =
+        lastExposedSafeViewportRevision !== safeViewportRevision ||
+        update.changes.offset ||
+        update.changes.zoom ||
+        update.changes.pitch;
+      if (projectionChanged) {
+        if (durationMilliseconds > 0) {
+          void map.once('moveend', () =>
+            exposeAppliedProjection(camera.playerCoordinate),
+          );
+        } else {
+          exposeAppliedProjection(camera.playerCoordinate);
+        }
       }
 
       if (
